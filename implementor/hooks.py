@@ -5,6 +5,12 @@ app_description = "Implementor"
 app_email = "support@erpgulf.com"
 app_license = "mit"
 
+
+fixtures = [
+    "Role",
+    "Role Profile",
+    {"dt": "Custom Field", "filters": [["dt", "in", ["Project", "Task", "ToDo", "User", "Customer"]]]},
+]
 # Apps
 # ------------------
 
@@ -146,6 +152,17 @@ app_license = "mit"
 # 	}
 # }
 
+doc_events = {
+	"ToDo": {
+		"after_insert": "implementor.rollup.on_todo",
+		"on_update": "implementor.rollup.on_todo",
+		"on_trash": "implementor.rollup.on_todo",
+	},
+	"Task": {
+		"on_update": "implementor.rollup.on_task",
+	},
+}
+
 # Scheduled Tasks
 # ---------------
 
@@ -166,6 +183,12 @@ app_license = "mit"
 # 		"implementor.tasks.monthly"
 # 	],
 # }
+
+scheduler_events = {
+	"cron": {
+		"*/15 * * * *": ["implementor.escalation.run"],
+	}
+}
 
 # Testing
 # -------
