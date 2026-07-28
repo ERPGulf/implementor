@@ -1458,10 +1458,6 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		showFilteredTasks();
 
 	}
-	async function cretae_dummy_data() {
-		var res = await frappe.xcall("implementor.api.seed_dummy_projects")
-
-	}
 	var testProjects = []
 	var testTasks = [];
 	var testTodos = []

@@ -113,7 +113,7 @@ def get_tasks(project=None):
 		filters=filters,
 		fields=[
 			"name", "subject as title", "project", "imp_stage as stage",
-			"imp_division as division", "imp_division_lead as lead",
+			"imp_division as division",
 			"status", "imp_urgency as urgency", "progress as percent",
 			"imp_deadline as deadline", "imp_started_on as started_on",
 			"imp_doing as doing", "imp_escalated as escalated",
