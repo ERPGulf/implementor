@@ -1,6 +1,7 @@
 # implementor/escalation.py
 import frappe
 from frappe.utils import now_datetime, add_to_date
+from implementor.api import _strip_html
 
 
 def run():
@@ -24,12 +25,12 @@ def _escalate_tasks(threshold):
 			"imp_last_moved": ["<=", threshold],
 			"imp_escalated": 0,
 		},
-		fields=["name", "subject", "imp_division_lead", "project"],
+		fields=["name", "subject", "imp_division_lead", "project", "imp_deadline"],
 	)
 	for t in tasks:
 		project_manager = frappe.db.get_value("Project", t.project, "imp_project_manager")
 		recipients = [r for r in [t.imp_division_lead, project_manager] if r]
-		_notify(recipients, "Task", t.name, t.subject or t.name)
+		_notify(recipients, "Task", t.name, t.subject or t.name, deadline=t.imp_deadline)
 		frappe.db.set_value("Task", t.name, "imp_escalated", 1)
 
 
@@ -40,25 +41,28 @@ def _escalate_todos(threshold):
 			"imp_urgency": "Emergency",
 			"imp_done": 0,
 			"reference_type": "Task",
+			"imp_escalated": 0,
 		},
-		fields=["name", "description", "allocated_to", "reference_name", "modified"],
+		fields=["name", "description", "allocated_to", "reference_name", "modified", "date"],
 	)
 	for td in todos:
 		if td.modified and td.modified <= threshold:
 			task = frappe.db.get_value("Task", td.reference_name, ["project", "imp_division_lead"], as_dict=True)
 			project_manager = frappe.db.get_value("Project", task.project, "imp_project_manager") if task else None
 			recipients = [r for r in [td.allocated_to, project_manager] if r]
-			_notify(recipients, "ToDo", td.name, td.description or td.name)
+			_notify(recipients, "ToDo", td.name, td.description or td.name, deadline=td.date)
 			frappe.db.set_value("ToDo", td.name, "imp_escalated", 1)
 
 
-def _notify(recipients, doctype, name, subject):
+def _notify(recipients, doctype, name, subject, deadline=None):
+	clean_subject = _strip_html(subject)
 	for user in set(recipients):
 		frappe.get_doc({
 			"doctype": "Notification Log",
-			"subject": f"Escalated: {subject}",
+			"subject": f"Escalated: {clean_subject}",
 			"for_user": user,
 			"type": "Alert",
 			"document_type": doctype,
 			"document_name": name,
+			"imp_deadline": deadline,
 		}).insert(ignore_permissions=True)

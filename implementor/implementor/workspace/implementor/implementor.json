@@ -1,0 +1,40 @@
+{
+ "app": "implementor",
+ "charts": [],
+ "content": "[{\"id\":\"yjPqhcNAgo\",\"type\":\"header\",\"data\":{\"text\":\"<span style=\\\"font-size: 16px;\\\">Welcome to Implementor Workspace</span>\",\"col\":12}},{\"id\":\"lM_MtIfYm4\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Implementor Board\",\"col\":4}}]",
+ "creation": "2026-07-29 09:09:35.132696",
+ "custom_blocks": [],
+ "docstatus": 0,
+ "doctype": "Workspace",
+ "for_user": "",
+ "hide_custom": 0,
+ "icon": "layout-list",
+ "idx": 1,
+ "indicator_color": "green",
+ "is_hidden": 0,
+ "label": "Implementor",
+ "link_type": "DocType",
+ "links": [],
+ "modified": "2026-07-29 12:12:45.859078",
+ "modified_by": "Administrator",
+ "module": "Implementor",
+ "name": "Implementor",
+ "number_cards": [],
+ "owner": "Administrator",
+ "parent_page": "Implementor",
+ "public": 1,
+ "quick_lists": [],
+ "roles": [],
+ "sequence_id": 0.0,
+ "shortcuts": [
+  {
+   "color": "Grey",
+   "doc_view": "List",
+   "label": "Implementor Board",
+   "link_to": "implementor_board",
+   "type": "Page"
+  }
+ ],
+ "title": "Implementor",
+ "type": "Workspace"
+}

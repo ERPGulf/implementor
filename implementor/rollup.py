@@ -35,9 +35,8 @@ def _auto_assign_technical(doc):
     next_user = candidates[next_index]
 
     assign_to_add(
-        {"assign_to": [next_user], "doctype": "Task", "name": doc.name},
-        doc,
-    )
+    {"assign_to": [next_user], "doctype": "Task", "name": doc.name}
+)
     frappe.db.set_single_value("Implementor Settings", "last_technical_assignee", next_user)
 
 

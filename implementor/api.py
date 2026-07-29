@@ -115,7 +115,7 @@ def get_tasks(project=None):
 			"name", "subject as title", "project", "imp_stage as stage",
 			"imp_division as division",
 			"status", "imp_urgency as urgency", "progress as percent",
-			"imp_deadline as deadline", "imp_started_on as started_on",
+			"imp_deadline as deadline", "imp_division_lead as lead","imp_started_on as started_on",
 			"imp_doing as doing", "imp_escalated as escalated",
 			"description", "_assign",
 		],
@@ -311,7 +311,6 @@ def set_division(task, division):
 	lead = frappe.db.get_value(
 		"User", {"imp_division": division, "imp_is_division_lead": 1}, "name"
 	)
-
 	doc = frappe.get_doc("Task", task)
 	doc.imp_division = division
 	doc.imp_division_lead = lead
@@ -337,16 +336,6 @@ def assign_todo(todo, user):
 @frappe.whitelist()
 def set_pm(project, user):
 	frappe.db.set_value("Project", project, "imp_project_manager", user)
-	return {"ok": True}
-
-
-@frappe.whitelist()
-def set_progress(task, percent):
-	frappe.db.set_value("Task", task, "progress", percent)
-	from implementor.rollup import _recompute_project_percent
-	proj = frappe.db.get_value("Task", task, "project")
-	if proj:
-		_recompute_project_percent(proj)
 	return {"ok": True}
 
 
@@ -519,13 +508,21 @@ def dashboard_summary(group_by=None):
 
 @frappe.whitelist()
 def notifications():
-	return frappe.get_list(
+	rows = frappe.get_list(
 		"Notification Log",
 		filters={"for_user": frappe.session.user, "read": 0},
-		fields=["name", "subject", "document_type", "document_name", "creation"],
+		fields=["name", "subject", "document_type", "document_name", "creation","type"],
 		order_by="creation desc",
 		limit_page_length=50,
 	)
+	for r in rows:
+		r["deadline"] = None
+		if r.document_type == "Task":
+			r["deadline"] = frappe.db.get_value("Task", r.document_name, "imp_deadline")
+		elif r.document_type == "ToDo":
+			r["deadline"] = frappe.db.get_value("ToDo", r.document_name, "date")
+
+	return rows
 
 
 @frappe.whitelist()

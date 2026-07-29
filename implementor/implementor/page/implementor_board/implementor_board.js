@@ -5,9 +5,12 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		single_column: true
 	});
 	var dashboardData = null;
+	var notifications = null;
 	var currentUser = frappe.session.user;
 	page.set_title('Implementor');
 	var state = {
+		notifyPanelOpen: false,
+		emergencyPanelOpen: false,
 		view: "board",
 		selectedProject: null,
 		selectToDo: null,
@@ -44,10 +47,23 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 	}
 	function remDays(dueDateString) {
 		var today = new Date();
+		today.setHours(0, 0, 0, 0);
 		var due_date = new Date(dueDateString);
-		var mesPerDay = 1000 * 60 * 60 * 24;
+		due_date.setHours(0, 0, 0, 0);
+		var msPerDay = 1000 * 60 * 60 * 24;
 		var diff = due_date - today;
-		return Math.round(diff / mesPerDay)
+		return Math.round(diff / msPerDay);
+	}
+	function remDaysHours(dueDateString) {
+		var now = new Date();                     // real "right now" — not zeroed
+		var due_date = new Date(dueDateString);
+		var msPerHour = 1000 * 60 * 60;
+		var totalHours = Math.round((due_date - now) / msPerHour);
+		var isOverdue = totalHours < 0;
+		var absHours = Math.abs(totalHours);
+		var days = Math.floor(absHours / 24);
+		var hours = absHours % 24;
+		return { isOverdue: isOverdue, days: days, hours: hours, totalHours: totalHours };
 	}
 	function sortedBy(arr) {
 		if (state.sortFilter === "name") {
@@ -58,10 +74,15 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		}
 		return arr;
 	}
+	function isMine(value, currentUser) {
+		if (!value) return false;
+		var names = Array.isArray(value) ? value : String(value).split(",");
+		return names.some(function (n) { return n.trim() === currentUser; });
+	}
 
 	function showFilteredProjects() {
 		var filtered = testProjects.filter(function (project) {
-			var mineOnly = !state.mineOnly || project.pm === currentUser
+			var mineOnly = !state.mineOnly || isMine(project.pm, currentUser)
 			var match_pct = ppct(project) >= state.minPct && ppct(project) <= state.maxPct;
 			var match_name = state.namedFilter === "" || project.name.toLowerCase().includes(state.namedFilter.toLowerCase());
 			var match_person_name = state.personFilter === "" || (project.pm || "").toLowerCase().includes(state.personFilter.toLowerCase());
@@ -69,28 +90,18 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		}
 		)
 		var sorted = sortedBy(filtered);
-		if (state.selectedProject) {
-			var selectedIndex = sorted.findIndex(function (p) {
-				return p.id === state.selectedProject;
-			})
-			if (selectedIndex > 0) {
-				var selectedProject = sorted[selectedIndex];
-				sorted.splice(selectedIndex, 1);
-				sorted.unshift(selectedProject)
-			}
-		}
 		document.getElementById("project-count").textContent = sorted.length + " projects shown";
 		document.getElementById("d-projects").innerHTML = renderProjectsColumn(sorted);
 
 	}
 	function showFilteredTasks() {
 		var filtered = testTasks.filter(function (task) {
-			var mineOnly = !state.mineOnly || task.assigned_to === currentUser
+			var mineOnly = !state.mineOnly || isMine(task.lead, currentUser)
 			var match_project = state.selectedProject === null || task.project == state.selectedProject;
 			var match_pct = pct(task) >= state.minPct && pct(task) <= state.maxPct;
 			var match_name = state.namedFilter === "" || task.name.toLowerCase().includes(state.namedFilter.toLowerCase());
 			var match_urgency = state.urgencyFilter === "" || task.urgency == state.urgencyFilter;
-			var match_person = state.personFilter === "" || task.assigned_to && String(task.assigned_to).toLowerCase().includes(state.personFilter.toLowerCase());
+			var match_person = state.personFilter === "" || task.lead && String(task.lead).toLowerCase().includes(state.personFilter.toLowerCase());
 			return match_pct && mineOnly && match_project && match_name && match_urgency && match_person;
 		});
 		var sorted = sortedBy(filtered);
@@ -99,7 +110,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 	}
 	function showToDosForSelectedTasks() {
 		var filtered = testTodos.filter(function (todo) {
-			var mineOnly = !state.mineOnly || todo.who === currentUser
+			var mineOnly = !state.mineOnly || isMine(todo.who, currentUser)
 			var todo_filtered = state.selectedTask === null || todo.task == state.selectedTask;
 			var match_name = state.namedFilter === "" || todo.description.toLowerCase().includes(state.namedFilter.toLowerCase());
 			var match_person = state.personFilter === "" || (todo.who || "").toLowerCase().includes(state.personFilter.toLowerCase());
@@ -122,20 +133,23 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		loadTodos(id);
 	};
 	async function selectToDo(id) {
-		var todo = testTodos.find(function (t) {
-			return t.id === id;
-		});
+		var todo = testTodos.find(function (t) { return t.id === id; });
 		todo.done = !todo.done;
 		showToDosForSelectedTasks();
-		var result = await frappe.xcall("implementor.api.toggle_todo_done", { todo: id });
-		var task = testTasks.find(function (t) { return t.id === result.task; });
-		if (task) task.percent = result.task_percent;
-		var project = testProjects.find(function (p) { return p.id === result.project; });
-		if (project) project.percent = result.project_percent;
-
+		try {
+			var result = await frappe.xcall("implementor.api.toggle_todo_done", { todo: id });
+			var task = testTasks.find(function (t) { return t.id === result.task; });
+			if (task) task.percent = result.task_percent;
+			var project = testProjects.find(function (p) { return p.id === result.project; });
+			if (project) project.percent = result.project_percent;
+		} catch (err) {
+			todo.done = !todo.done;   // revert optimistic UI update
+			frappe.msgprint("Could not update to-do: " + (err.message || "unknown error"));
+		}
 		showFilteredTasks();
 		showFilteredProjects();
-	};
+		showToDosForSelectedTasks();
+	}
 	function renderReactions(item) {
 		var defs = [
 			["bookmark", "🔖"],
@@ -194,61 +208,13 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
     </div>
   `;
 	}
-	var sampleDeadlinesSoon = [
-		{
-			name: "TASK-2026-00021",
-			doctype: "Task",
-			title: "Inventory data migration",
-			imp_deadline: "2026-07-26",
-			escalated: 0
-		},
-		{
-			name: "TASK-2026-00014",
-			doctype: "Task",
-			title: "Bank gateway integration",
-			imp_deadline: "2026-07-30",
-			escalated: 1
-		},
-		{
-			name: "TASK-2026-00014",
-			doctype: "Task",
-			title: "Bank gateway integration",
-			imp_deadline: "2026-07-30",
-			escalated: 1
-		}
-	];
-
-	var sampleEmergencies = [
-		{
-			name: "TASK-2026-00007",
-			doctype: "Task",
-			title: "Production CSID onboarding",
-			imp_deadline: "2026-07-25",
-			escalated: 1
-		},
-		{
-			name: "TASK-2026-00007",
-			doctype: "Task",
-			title: "Production CSID onboarding",
-			imp_deadline: "2026-07-25",
-			escalated: 1
-		},
-		{
-			name: "TASK-2026-00019",
-			doctype: "Task",
-			title: "ZATCA compliance validation failure",
-			imp_deadline: "2026-07-24",
-			escalated: 0
-		}
-
-	];
 	function oneStatusBar(progressState, name, count, max) {
 		var pct = Math.round((count / max) * 100);
 		return `
 		<div class="dbar-row">
 		<div class="dbar-lbl">${name}</div>
 		<div class="dbar-trk"><div class="dbar-fill" style="width:${pct}%"></div></div>
-		<div style="width:36px; text-align:right; color:var(--text-secondary)">${!progressState ? count : pct + "%"}</div>
+		<div style="width:36px; text-align:right; color:var(--text-secondary)">${!progressState ? count : count + "%"}</div>
 		</div>
 		`;
 	}
@@ -297,6 +263,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 
 	async function loadDashboard() {
 		dashboardData = await frappe.xcall("implementor.api.dashboard_summary");
+		loadEmergencyCount();
 		renderDashBoard();
 	}
 
@@ -313,8 +280,22 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			</div>
 			<div style="display:flex; align-items:center; gap:10px">
 			<div style="position:relative">
-			<button id="btn-add" class="d-menu">${frappe.utils.icon("plus", "xs")} Add</button>
-			<div id="add-menu" class="add-popover" style="display:none;right:0;"></div>
+			<button id="btn-notif" class="icon-btn-lg">
+				${frappe.utils.icon("bell")}
+				<span class="badge" id="notif-badge" style="display:none">0</span>
+			</button>
+			<div id="notification-panel" class="header-panel" style="display:none;"></div>
+			</div>
+			<div style="position:relative">
+			<button id="btn-emergency" class="icon-btn-lg">
+				${frappe.utils.icon("triangle-alert")}
+				<span class="badge" id="emergency-badge" style="display:none">0</span>
+			</button>
+			<div id="emergency-panel" class="header-panel" style="display:none;"></div>
+			</div>
+			<div style="position:relative">
+				<button id="btn-add">${frappe.utils.icon("plus", "xs")} Add</button>
+				<div id="add-menu" class="add-popover" style="display:none;right:0;"></div>
 			</div>
 			</div>
 		</div>
@@ -384,6 +365,138 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		state.view = "dashboard";
 		loadDashboard().then(function () { updateView(); });
 	});
+	document.getElementById("btn-emergency").addEventListener("click", async function () {
+		state.emergencyPanelOpen = !state.emergencyPanelOpen;
+		if (state.emergencyPanelOpen && !dashboardData) {
+			dashboardData = await frappe.xcall("implementor.api.dashboard_summary");
+			console.log(dashboardData)
+		}
+		renderEmergencyPanel();
+	})
+	document.getElementById("btn-notif").addEventListener("click", async function () {
+		state.notifyPanelOpen = !state.notifyPanelOpen;
+		if (state.notifyPanelOpen) {
+			notifications = await frappe.xcall("implementor.api.notifications");
+		}
+		renderNotifyPanel();
+	})
+	function renderEmergencyPanel() {
+		var el = document.getElementById("emergency-panel");
+		if (!state.emergencyPanelOpen) {
+			el.style.display = "none";
+			return;
+		}
+		el.style.display = "block";
+		var items = (dashboardData && dashboardData.emergencies) || [];
+		console.log(items)
+		var rows = (!items || (items.length === 0)) ?
+			`<div class="header-panel-row d-meta">No emergencies right now.</div>`
+			:
+			items.map(function (item) {
+				var label = item.imp_escalated ? "Escalated to lead/PM" : "Flagged as emergency";
+				return `
+          <div class="header-panel-row" style="display:flex; gap:10px; align-items:flex-start">
+            <div style="flex:none; padding-top:2px">${frappe.utils.icon("triangle-alert", "xs")}</div>
+            <div style="flex:1; min-width:0">
+              <div style="display:flex; justify-content:space-between; gap:8px; font-weight:500">
+                <span>${(item.title) || item.name}</span>
+                <span class="d-meta" style="flex:none">${(item.doctype)}</span>
+              </div>
+              <div class="d-meta" style="color:var(--text-danger); margin-top:2px">${label}</div>
+            </div>
+          </div>
+        `;
+			}).join("");
+		el.innerHTML = `
+			<div class="header-panel-title">
+			Emergencies
+			<button class="d-info" data-act="close-emergency-panel">${frappe.utils.icon("close", "xs")}</button>
+			</div>
+			${rows}
+  `;
+	}
+	async function loadNotifCount() {
+		var notifications = await frappe.xcall("implementor.api.notifications")
+		var el = document.getElementById("notif-badge")
+		if (notifications && notifications.length > 0) {
+			console.log(notifications.length)
+			el.textContent = notifications.length;
+			el.style.display = "flex"
+		}
+		else {
+			el.style.display = "none"
+		}
+	}
+	async function loadEmergencyCount() {
+		var dashboard = await frappe.xcall("implementor.api.dashboard_summary")
+		var el = document.getElementById("emergency-badge")
+		if (dashboard && dashboard.emergencies && dashboard.emergencies.length > 0) {
+			console.log(dashboard.emergencies.length)
+			el.textContent = dashboard.emergencies.length;
+			el.style.display = "flex"
+		}
+		else {
+			el.style.display = "none"
+		}
+	}
+	function notifIcon(type) {
+		var icons = {
+			"Mention": "at-sign",
+			"Assignment": "user-plus",
+			"Share": "share-2",
+			"Energy Point": "star",
+			"Alert": "triangle-alert",
+			"Comment": "message-circle"
+		};
+		var name = icons[type] || "bell";
+		return frappe.utils.icon(name, "xs");
+	}
+	function renderNotifyPanel() {
+		var el = document.getElementById("notification-panel");
+		if (!state.notifyPanelOpen) {
+			el.style.display = "none";
+			return;
+		}
+		el.style.display = "block";
+		var items = (notifications) || [];
+		var rows = (!items || (items.length === 0)) ?
+			`<div class="header-panel-row d-meta">No notifications right now.</div>`
+			:
+			items.map(function (item) {
+				console.log(item.type);
+				console.log(item.deadline);
+				return `
+          <div class="header-panel-row" style="display:flex; gap:10px; align-items:flex-start">
+            <div style="flex:none; padding-top:2px">${notifIcon(item.type)}</div>
+            <div style="flex:1; min-width:0">
+              <div style="display:flex; justify-content:space-between; gap:8px; font-weight:500">
+                <span>${(item.title) || (item.subject) || item.name}</span>
+                <span class="d-meta" style="flex:none">${(dueChip(item.deadline))}</span>
+              </div>
+            </div>
+          </div>
+        `;
+			}).join("");
+		el.innerHTML = `
+			<div class="header-panel-title">
+			Notifications
+			<button class="d-info" data-act="close-notify-panel">${frappe.utils.icon("close", "xs")}</button>
+			</div>
+			${rows}
+  `;
+	}
+	document.getElementById("notification-panel").addEventListener("click", function (e) {
+		if (e.target.closest("[data-act='close-notify-panel']")) {
+			state.notifyPanelOpen = false;
+			renderNotifyPanel();
+		}
+	});
+	document.getElementById("emergency-panel").addEventListener("click", function (e) {
+		if (e.target.closest("[data-act='close-emergency-panel']")) {
+			state.emergencyPanelOpen = false;
+			renderEmergencyPanel();
+		}
+	});
 	document.getElementById("btn-add").addEventListener("click", function (e) {
 		state.add = !state.add;   // simple toggle, same pattern as your menu open/close
 		renderAddMenu();
@@ -401,7 +514,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
     <div class="d-act" data-act="newtask"><div>${frappe.utils.icon("file-plus", "sm")}</div> New task in project</div>
     <div class="d-act" data-act="newtodo"><div>${frappe.utils.icon("circle-check-big", "sm")}</div> New to-do in task</div>
   `;
-	}
+	};
 	document.getElementById("add-menu").addEventListener("click", function (e) {
 		var newproject = e.target.closest("[data-act='newproject']");
 		if (newproject) {
@@ -750,6 +863,14 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			state.add = false;
 			renderAddMenu();
 		}
+		if (state.emergencyPanelOpen != false && !e.target.closest("#emergency-panel") && !e.target.closest("#btn-emergency") && !e.target.closest("#close-emergency-panel")) {
+			state.emergencyPanelOpen = false;
+			renderEmergencyPanel();
+		}
+		if (state.notifyPanelOpen != false && !e.target.closest("#notification-panel") && !e.target.closest("#btn-notif") && !e.target.closest("#close-notify-panel")) {
+			state.notifyPanelOpen = false;
+			renderNotifyPanel();
+		}
 
 	});
 
@@ -771,12 +892,14 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		showToDosForSelectedTasks()
 	});
 	document.getElementById("f-min").addEventListener("input", function (e) {
-		state.minPct = Number(e.target.value) || 0;
+		var num = Number(e.target.value);
+		state.minPct = isNaN(num) ? 0 : num;
 		showFilteredProjects();
 		showFilteredTasks();
 	});
 	document.getElementById("f-max").addEventListener("input", function (e) {
-		state.maxPct = Number(e.target.value) || 100;
+		var num = Number(e.target.value);
+		state.maxPct = isNaN(num) ? 100 : num;
 		showFilteredProjects();
 		showFilteredTasks();
 	});
@@ -915,14 +1038,14 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 				<div class="d-meta">${task.stage} · ${task.urgency}</div>
 				<div>
 					<div class="d-meta" style="display:flex; flex-wrap:wrap; gap:4px; align-items:center">
-						${task.div} Assigned To: ${renderLeads(task.assigned_to)}
+						${task.div} Assigned To: ${renderLeads(task.lead)}
 					</div>
 				</div>
 				<div style="margin-top:8px">
-					<div class="d-meta">${frappe.utils.icon("calendar-days")} ${fmtDate(task.due)} 💠 ${dueChip(task.due)} · ${task.status} · ${pct(task)}%</div>
+					<div class="d-meta">${frappe.utils.icon("calendar-days")} ${fmtDate(task.due)} · ${dueChip(task.due)} · ${task.status} · ${pct(task)}%</div>
 					<div style="margin-top:4px">
 						<div class="d-meta" style="color:var(--text-accent)">
-							${frappe.utils.icon("clock", "xs")} ${task.status} since ${fmtDate(task.creation)} ${renderLeads(task.assigned_to)}
+							${frappe.utils.icon("clock", "xs")} ${task.status} since ${fmtDate(task.creation)} ${renderLeads(task.lead)}
 						</div>
 					</div>
 				</div>
@@ -1027,16 +1150,16 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			body: formData,
 		});
 		if (!response.ok) {
-			var errBody = await response.json();
 			var friendlyMessage = "Upload failed";
 			try {
+				var errBody = await response.json();
 				if (errBody._server_messages) {
-					var messages = JSON.parse(errBody._server_messages);       // first parse: array of strings
-					var firstMessage = JSON.parse(messages[0]);                 // second parse: the actual object
+					var messages = JSON.parse(errBody._server_messages);
+					var firstMessage = JSON.parse(messages[0]);
 					friendlyMessage = firstMessage.message;
 				}
 			} catch (e) {
-				friendlyMessage = "Parsing Failed"
+				friendlyMessage = "Upload failed";
 			}
 			throw new Error(friendlyMessage);
 		}
@@ -1091,11 +1214,16 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		}).join(" ");
 	}
 	function dueChip(dueDateString) {
-		var days = remDays(dueDateString);
-		if (days > 0) return `<span> ${days}d left</span>`;
-		if (days === 0) return `<span style = "color:orange" > Due today</span>`;
-		return `<span style = "color:var(--text-danger)" > ${Math.abs(days)}d overdue</span>`;
-
+		var r = remDaysHours(dueDateString);
+		if (r.totalHours === 0) {
+			return `<span style="color:orange">Due now</span>`;
+		}
+		if (!r.isOverdue) {
+			var label = r.days > 0 ? (r.days + "d " + r.hours + "h left") : (r.hours + "h left");
+			return `<span>${label}</span>`;
+		}
+		var overdueLabel = r.days > 0 ? (r.days + "d " + r.hours + "h overdue") : (r.hours + "h overdue");
+		return `<span style="color:var(--text-danger)">${overdueLabel}</span>`;
 	}
 	// indicator to mark urgency
 	function urg(urgency) {
@@ -1289,9 +1417,9 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 				</div>
 				<div class="d-own-row">
 				<span class="d-own">${task.div} Lead:</span>
-				${renderLeads(task.assigned_to)}
+				${renderLeads(task.lead)}
 				</div>
-				<div class="d-meta">${fmtDate(task.due)} 💠 ${dueChip(task.due)}</div>
+				<div class="d-meta">${fmtDate(task.due)} · ${dueChip(task.due)}</div>
 				<div class="d-meta" style="color:var(--text-accent)">
 				 ${task.status} since ${fmtDate(task.creation)}
 				</div>
@@ -1444,6 +1572,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 				div: r.division,
 				assigned_to: r.assigned_to,
 				status: r.status,
+				lead: r.lead,
 				urgency: r.urgency,
 				percent: r.percent,
 				due: r.deadline,
@@ -1465,6 +1594,8 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		await loadProjects();
 		tasks = await loadTasks();
 		todos = await loadTodos();
+		await loadNotifCount();
+		await loadEmergencyCount();
 	}
 	init();
 }
