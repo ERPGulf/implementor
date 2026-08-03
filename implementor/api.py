@@ -227,10 +227,7 @@ def get_detail(doctype, name):
 		frappe.throw("Not permitted", frappe.PermissionError)
 
 	doc = frappe.get_doc(doctype, name)
-	data = doc.as_dict()  # as_dict() + Frappe's permission layer already
-	# strips fields the user lacks read access to at their permission level,
-	# PROVIDED the doctype's DocPerms are set up correctly (Phase 1/2 work) —
-	# this is exactly why getting permlevel grants right earlier matters.
+	data = doc.as_dict()
 
 	data["attachments"] = frappe.get_all(
 		"File",
@@ -331,12 +328,6 @@ def assign_todo(todo, user):
 	frappe.db.set_value("ToDo", todo, "allocated_to", user)
 
 	return {"ok": True, "todo": todo, "reassigned_from": old_user, "reassigned_to": user}
-
-
-@frappe.whitelist()
-def set_pm(project, user):
-	frappe.db.set_value("Project", project, "imp_project_manager", user)
-	return {"ok": True}
 
 
 @frappe.whitelist()

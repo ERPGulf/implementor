@@ -55,6 +55,9 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		return Math.round(diff / msPerDay);
 	}
 	function remDaysHours(dueDateString) {
+		if (!dueDateString) {
+			return { isOverdue: false, days: 0, hours: 0, totalHours: null };
+		}
 		var now = new Date();                     // real "right now" — not zeroed
 		var due_date = new Date(dueDateString);
 		var msPerHour = 1000 * 60 * 60;
@@ -294,6 +297,12 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			<div id="emergency-panel" class="header-panel" style="display:none;"></div>
 			</div>
 			<div style="position:relative">
+			<button id="btn-load" class="icon-btn-lg">
+				${frappe.utils.icon("refresh-cw")}
+				<span class="badge" id="emergency-badge" style="display:none">0</span>
+			</button>
+			</div>
+			<div style="position:relative">
 				<button id="btn-add">${frappe.utils.icon("plus", "xs")} Add</button>
 				<div id="add-menu" class="add-popover" style="display:none;right:0;"></div>
 			</div>
@@ -301,7 +310,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		</div>
 		<div class="topbar">
 		<div style="display:flex; gap:12px; padding:16px 16px 12px; flex-wrap:wrap">
-		<input id="f-name" placeholder="Search project name" />
+		<input id="f-name" placeholder="Search project/task/to-do" />
 		<select id ="f-urgency">
 			<option value="">Any urgency</option>
 			<option value="Emergency">Emergency</option>
@@ -369,10 +378,18 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		state.emergencyPanelOpen = !state.emergencyPanelOpen;
 		if (state.emergencyPanelOpen && !dashboardData) {
 			dashboardData = await frappe.xcall("implementor.api.dashboard_summary");
-			console.log(dashboardData)
 		}
 		renderEmergencyPanel();
 	})
+	document.getElementById("btn-load").addEventListener("click", async function () {
+		state.selectedProject = null;
+		state.selectedTask = null;
+		state.selectToDo = null;
+		loadProjects();
+		loadTasks();
+		loadTodos();
+
+	});
 	document.getElementById("btn-notif").addEventListener("click", async function () {
 		state.notifyPanelOpen = !state.notifyPanelOpen;
 		if (state.notifyPanelOpen) {
@@ -388,7 +405,6 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		}
 		el.style.display = "block";
 		var items = (dashboardData && dashboardData.emergencies) || [];
-		console.log(items)
 		var rows = (!items || (items.length === 0)) ?
 			`<div class="header-panel-row d-meta">No emergencies right now.</div>`
 			:
@@ -419,7 +435,6 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		var notifications = await frappe.xcall("implementor.api.notifications")
 		var el = document.getElementById("notif-badge")
 		if (notifications && notifications.length > 0) {
-			console.log(notifications.length)
 			el.textContent = notifications.length;
 			el.style.display = "flex"
 		}
@@ -431,7 +446,6 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		var dashboard = await frappe.xcall("implementor.api.dashboard_summary")
 		var el = document.getElementById("emergency-badge")
 		if (dashboard && dashboard.emergencies && dashboard.emergencies.length > 0) {
-			console.log(dashboard.emergencies.length)
 			el.textContent = dashboard.emergencies.length;
 			el.style.display = "flex"
 		}
@@ -463,8 +477,6 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			`<div class="header-panel-row d-meta">No notifications right now.</div>`
 			:
 			items.map(function (item) {
-				console.log(item.type);
-				console.log(item.deadline);
 				return `
           <div class="header-panel-row" style="display:flex; gap:10px; align-items:flex-start">
             <div style="flex:none; padding-top:2px">${notifIcon(item.type)}</div>
@@ -527,14 +539,14 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		if (newtask) {
 			state.add = false;
 			renderAddMenu();
-			frappe.new_doc("Task");
+			frappe.new_doc("Task", { project: state.selectedProject });
 			return
 		};
 		var newtodo = e.target.closest("[data-act='newtodo']");
 		if (newtodo) {
 			state.add = false;
 			renderAddMenu();
-			frappe.new_doc("ToDo");
+			frappe.new_doc("ToDo", { reference_type: "Task", reference_name: state.selectedTask });
 			return
 		};
 	});
@@ -553,6 +565,16 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 				});
 			return;
 		}
+		var newtask = e.target.closest("[data-act='newtask']");
+
+		if (newtask) {
+			project_id = newtask.getAttribute("data-id");
+			doc = frappe.new_doc("Task", {
+				project: project_id,
+			});
+			return
+		};
+
 		var dots = e.target.closest("[data-act='dots']")
 		if (dots) {
 			var id = dots.getAttribute("data-id");
@@ -645,6 +667,16 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 				});
 			return;
 		}
+		var newtodo = e.target.closest("[data-act='newtodo']");
+
+		if (newtodo) {
+			task_id = newtodo.getAttribute("data-id");
+			doc = frappe.new_doc("ToDo", {
+				reference_type: "Task",
+				reference_name: task_id,
+			});
+			return
+		};
 		var details = e.target.closest("[data-act='details']");
 		if (details) {
 			id = details.getAttribute("data-id");
@@ -877,8 +909,8 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 	document.getElementById("f-name").addEventListener("input", function (e) {
 		state.namedFilter = e.target.value;
 		showFilteredProjects()
-		showFilteredTasks()
-		showToDosForSelectedTasks()
+		// showFilteredTasks()
+		// showToDosForSelectedTasks()
 	})
 	document.getElementById("f-urgency").addEventListener("change", function (e) {
 		state.urgencyFilter = e.target.value;
@@ -1196,6 +1228,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 
 
 	function fmtDate(dueDateSting) {
+		if (!dueDateSting) return "null";
 		var months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 		var d = new Date(dueDateSting);
 		return d.getDate() + " " + months[d.getMonth()];
@@ -1219,8 +1252,13 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			return `<span style="color:orange">Due now</span>`;
 		}
 		if (!r.isOverdue) {
-			var label = r.days > 0 ? (r.days + "d " + r.hours + "h left") : (r.hours + "h left");
-			return `<span>${label}</span>`;
+			if (r.totalHours === null) {
+				return `<span>Deadline not set</span>`;
+			}
+			else {
+				var label = r.days > 0 ? (r.days + "d " + r.hours + "h left") : (r.hours + "h left");
+				return `<span>${label}</span>`;
+			}
 		}
 		var overdueLabel = r.days > 0 ? (r.days + "d " + r.hours + "h overdue") : (r.hours + "h overdue");
 		return `<span style="color:var(--text-danger)">${overdueLabel}</span>`;
@@ -1308,6 +1346,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
     <div class="d-act" data-act="details" data-id="${project.id}"><div>${frappe.utils.icon("info", "sm")}</div> Details & activity</div>
     <div class="d-act" data-act="gotostatus" data-id="${project.id}"><div>${frappe.utils.icon("circle-dot", "sm")}</div> Change status</div>
     <div class="d-act" data-act="changepm" data-id="${project.id}"><div>${frappe.utils.icon("user-check", "sm")}</div> Change project manager</div>
+		<div class="d-act" data-act="newtask" data-id="${project.id}"><div>${frappe.utils.icon("plus", "sm")}</div> Add Task</div>
     <div class="d-act" data-act="close"><div>${frappe.utils.icon("close", "sm")}</div> Close</div>
   </div>
 			`;
@@ -1401,6 +1440,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
     <div class="d-act" data-act="gotostatus" data-id="${task.id}"><div>${frappe.utils.icon("circle-dot", "sm")}</div> Change status</div>
     <div class="d-act" data-act="gotodivision" data-id="${task.id}"><div>${frappe.utils.icon("tag", "sm")}</div> Change Division</div>
     <div class="d-act" data-act="gotourgency" data-id="${task.id}"><div>${frappe.utils.icon("flame", "sm")}</div> Set Urgency</div>
+	<div class="d-act" data-act="newtodo" data-id="${task.id}"><div>${frappe.utils.icon("plus", "sm")}</div> Add ToDo</div>
     <div class="d-act" data-act="close"><div>${frappe.utils.icon("close", "sm")}</div> Close</div>
   </div>
 			`;
