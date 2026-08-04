@@ -4,11 +4,25 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		title: 'None',
 		single_column: true
 	});
+	var DeliverystatusOptions = [];
 	var dashboardData = null;
 	var notifications = null;
 	var currentUser = frappe.session.user;
+	var PROJECT_FILTER_FIELDS = [
+		{ name: "status", label: "Delivery Status", type: "select", options: ["Discovery", "Active", "Go-Live", "Hypercare", "Closed", "AMC"] },
+		{ name: "pm", label: "Project Manager", type: "text" },
+		{ name: "percent", label: "% Complete", type: "number" }
+	];
+
+	var OPERATORS_BY_TYPE = {
+		select: ["Equals", "Not Equals"],
+		text: ["Equals", "Like"],
+		number: ["Equals", "Greater Than", "Less Than"]
+	};
 	page.set_title('Implementor');
 	var state = {
+		colFilterOpen: null,
+		projectFilter: { field: "", condition: "", value: "" },
 		notifyPanelOpen: false,
 		emergencyPanelOpen: false,
 		view: "board",
@@ -93,6 +107,14 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		}
 		)
 		var sorted = sortedBy(filtered);
+		if (state.selectedProject) {
+			var selectedIndex = sorted.findIndex(function (p) { return p.id === state.selectedProject; });
+			if (selectedIndex > 0) {
+				var selectedProject = sorted[selectedIndex];
+				sorted.splice(selectedIndex, 1);
+				sorted.unshift(selectedProject);
+			}
+		}
 		document.getElementById("project-count").textContent = sorted.length + " projects shown";
 		document.getElementById("d-projects").innerHTML = renderProjectsColumn(sorted);
 
@@ -102,11 +124,20 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			var mineOnly = !state.mineOnly || isMine(task.lead, currentUser)
 			var match_project = state.selectedProject === null || task.project == state.selectedProject;
 			var match_pct = pct(task) >= state.minPct && pct(task) <= state.maxPct;
-			var match_name = state.namedFilter === "" || task.name.toLowerCase().includes(state.namedFilter.toLowerCase());
+			var match_name = state.selectedProject ? true : (state.namedFilter === "" || task.name.toLowerCase().includes(state.namedFilter.toLowerCase()));
 			var match_urgency = state.urgencyFilter === "" || task.urgency == state.urgencyFilter;
 			var match_person = state.personFilter === "" || task.lead && String(task.lead).toLowerCase().includes(state.personFilter.toLowerCase());
 			return match_pct && mineOnly && match_project && match_name && match_urgency && match_person;
 		});
+		var sorted = sortedBy(filtered);
+		if (state.selectedTask) {
+			var selectedIndex = sorted.findIndex(function (t) { return t.id === state.selectedTask; });
+			if (selectedIndex > 0) {
+				var selectedTask = sorted[selectedIndex];
+				sorted.splice(selectedIndex, 1);
+				sorted.unshift(selectedTask);
+			}
+		}
 		var sorted = sortedBy(filtered);
 		document.getElementById("d-tasks").innerHTML = renderTasksColumn(sorted);
 
@@ -115,7 +146,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		var filtered = testTodos.filter(function (todo) {
 			var mineOnly = !state.mineOnly || isMine(todo.who, currentUser)
 			var todo_filtered = state.selectedTask === null || todo.task == state.selectedTask;
-			var match_name = state.namedFilter === "" || todo.description.toLowerCase().includes(state.namedFilter.toLowerCase());
+			var match_name = state.selectedProject ? true : (state.namedFilter === "" || todo.description.toLowerCase().includes(state.namedFilter.toLowerCase()));
 			var match_person = state.personFilter === "" || (todo.who || "").toLowerCase().includes(state.personFilter.toLowerCase());
 			var match_urgency = state.urgencyFilter === "" || todo.urgency == state.urgencyFilter;
 			return match_name && mineOnly && todo_filtered && match_person && match_urgency;
@@ -125,14 +156,20 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 	}
 
 	function selectProject(id) {
+		console.log("Im clicked")
 		state.selectedProject = id;
 		state.selectedTask = null;
 		loadTasks(id);
 		loadTodos(undefined, id);
 		showFilteredProjects();
+		showFilteredTasks();
+		showToDosForSelectedTasks();
 	};
 	function selectTask(id) {
 		state.selectedTask = id;
+		console.log("state.selectedTask:", JSON.stringify(state.selectedTask));
+		console.log("this task's id:", JSON.stringify(testTasks[0].id));  // adjust index to the task you clicked
+		showFilteredTasks();
 		loadTodos(id);
 	};
 	async function selectToDo(id) {
@@ -335,6 +372,10 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			<div id="h-projects" class="d-hd">
 			<div style="display:inline-flex">${frappe.utils.icon("folder", "sm")}</div>
 			Projects
+			<button class="d-info" data-act="colfilter" data-col="projects" style="margin-left:auto">
+					${frappe.utils.icon("filter", "xs")}
+			</button>
+			<div id="colfilter-projects" class="header-panel" style="display:none; right:0;"></div>
 			</div>
 			<div id="d-projects"></div>
 			</div>
@@ -342,6 +383,10 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 				<div id="h-tasks" class="d-hd">
 				<div style="display:inline-flex">${frappe.utils.icon("file", "sm")}</div>
 				Tasks
+				<button class="d-info" data-act="colfilter" data-col="tasks" style="margin-left:auto">
+				${frappe.utils.icon("filter", "xs")}
+				</button>
+				<div id="colfilter-tasks" class="header-panel" style="display:none; right:0;"></div>
 				</div>
 				<div id="d-tasks"></div>
 			</div>
@@ -349,6 +394,10 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 				<div id="h-todos" class="d-hd">
 				<div style="display:inline-flex">${frappe.utils.icon("circle-check-big", "sm")}</div>
 				To-dos
+				<button class="d-info" data-act="colfilter" data-col="todos" style="margin-left:auto">
+					${frappe.utils.icon("filter", "xs")}
+				</button>
+				<div id="colfilter-todos" class="header-panel" style="display:none; right:0;"></div>
 				</div>
 				<div id="d-todos"></div>
 			</div>
@@ -358,14 +407,30 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		</div>
 		</div>
 	  `);
+
 	function updateView() {
 		document.getElementById("btn-board").classList.toggle("on", state.view === "board");
 		document.getElementById("btn-dashboard").classList.toggle("on", state.view === "dashboard");
-		document.querySelector(".topbar").style.display = state.view === "board" ? "block" : "none";
-		document.querySelector(".grid").style.display = state.view === "board" ? "grid" : "none";
-		document.getElementById("dashboard-view").style.display = state.view === "dashboard" ? "block" : "none";
-
+		var showBoard = state.view === "board";
+		document.querySelector(".topbar").style.display = showBoard ? "block" : "none";
+		document.querySelector(".grid").style.display = showBoard ? "grid" : "none";
+		document.getElementById("dashboard-view").style.display = !showBoard ? "block" : "none";
+		var target = showBoard ? document.querySelector(".grid") : document.getElementById("dashboard-view");
+		target.style.opacity = 0;
+		requestAnimationFrame(function () { target.style.opacity = 1; });
 	}
+	// console.log(`Before Clicking colFilterOpen it was  ${state.colFilterOpen}`);
+	document.getElementById("h-projects").addEventListener("click", function (e) {
+		var colfilter = e.target.closest("[data-act='colfilter']");
+		if (colfilter) {
+			var col = colfilter.getAttribute("data-col");
+			state.colFilterOpen = (state.colFilterOpen === col) ? null : col;
+			console.log(`clicked ${col} and set colFilterOpen to ${state.colFilterOpen}`);
+			return;
+
+		}
+	});
+
 	document.getElementById("btn-board").addEventListener("click", function (e) {
 		state.view = "board";
 		updateView();
@@ -411,16 +476,23 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			items.map(function (item) {
 				var label = item.imp_escalated ? "Escalated to lead/PM" : "Flagged as emergency";
 				return `
-          <div class="header-panel-row" style="display:flex; gap:10px; align-items:flex-start">
-            <div style="flex:none; padding-top:2px">${frappe.utils.icon("triangle-alert", "xs")}</div>
-            <div style="flex:1; min-width:0">
-              <div style="display:flex; justify-content:space-between; gap:8px; font-weight:500">
-                <span>${(item.title) || item.name}</span>
-                <span class="d-meta" style="flex:none">${(item.doctype)}</span>
-              </div>
-              <div class="d-meta" style="color:var(--text-danger); margin-top:2px">${label}</div>
-            </div>
-          </div>
+				<div class="header-panel-row" style="display:flex; gap:10px; align-items:center">
+				<div style="flex:none">${frappe.utils.icon("triangle-alert", "xs")}</div>
+
+				<div style="flex:1; min-width:0">
+					<div style="display:flex; justify-content:space-between; gap:8px; font-weight:500">
+					<span>${item.title || item.name}</span>
+					<span class="d-meta" style="flex:none">${item.doctype}</span>
+					</div>
+					<div class="d-meta" style="color:var(--text-danger); margin-top:2px">${label}</div>
+				</div>
+
+				<div style="flex:none">
+					<button class="d-info" data-act="opendocurl" data-doc="${item.doctype}" data-id="${item.name}">
+					${frappe.utils.icon("external-link", "xs")}
+					</button>
+				</div>
+				</div>
         `;
 			}).join("");
 		el.innerHTML = `
@@ -486,6 +558,11 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
                 <span class="d-meta" style="flex:none">${(dueChip(item.deadline))}</span>
               </div>
             </div>
+			<div style="flex:none">
+				<button class="d-info" data-act="opendocurl" data-doc="${item.document_type}" data-id="${item.document_name}" style="flex:none">
+				${frappe.utils.icon("external-link", "xs")}
+				</button>
+			</div>
           </div>
         `;
 			}).join("");
@@ -502,11 +579,25 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			state.notifyPanelOpen = false;
 			renderNotifyPanel();
 		}
+		if (e.target.closest("[data-act='opendocurl']")) {
+			var doc = e.target.closest("[data-act='opendocurl']").dataset.doc;
+			var id = e.target.closest("[data-act='opendocurl']").dataset.id;
+			frappe.xcall("implementor.api.get_doc_url", { doc: doc, id: id }).then(function (url) {
+				window.open(url, "_blank");
+			});
+		}
 	});
 	document.getElementById("emergency-panel").addEventListener("click", function (e) {
 		if (e.target.closest("[data-act='close-emergency-panel']")) {
 			state.emergencyPanelOpen = false;
 			renderEmergencyPanel();
+		}
+		if (e.target.closest("[data-act='opendocurl']")) {
+			var doc = e.target.closest("[data-act='opendocurl']").dataset.doc;
+			var id = e.target.closest("[data-act='opendocurl']").dataset.id;
+			frappe.xcall("implementor.api.get_doc_url", { doc: doc, id: id }).then(function (url) {
+				window.open(url, "_blank");
+			});
 		}
 	});
 	document.getElementById("btn-add").addEventListener("click", function (e) {
@@ -550,8 +641,39 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			return
 		};
 	});
-
+	function renderColFilter(col) {
+		var el = document.getElementById("colfilter-" + col);
+		if (state.colFilterOpen !== col) {
+			el.style.display = "none";
+			return;
+		}
+		el.style.display = "block";
+		if (col === "projects") {
+			el.innerHTML = `
+      <div class="header-panel-title">Delivery Status</div>
+      <div style="padding:10px; display:flex; flex-wrap:wrap; gap:6px">
+        <div class="d-opt ${state.projectStatusFilter === "" ? "on" : ""}" data-act="setcolfilter" data-col="projects" data-value="">Any</div>
+        ${DeliverystatusOptions.map(function (s) {
+				return `<div class="d-opt ${state.projectStatusFilter === s ? "on" : ""}" data-act="setcolfilter" data-col="projects" data-value="${s}">${s}</div>`;
+			}).join("")}
+      </div>
+    `;
+		}
+	}
+	async function getCopyUrl(doc, id) {
+		var url = await frappe.xcall("implementor.api.get_doc_url", { doc: doc, id: id })
+		return url
+	}
 	document.getElementById("d-projects").addEventListener("click", function (e) {
+		var setcolfilter = e.target.closest("[data-act='setcolfilter']");
+		if (setcolfilter) {
+			var col2 = setcolfilter.getAttribute("data-col");
+			var value = setcolfilter.getAttribute("data-value");
+			if (col2 === "projects") state.projectStatusFilter = value;
+			state.colFilterOpen = null;
+			showFilteredProjects();
+			return;
+		}
 		var react = e.target.closest("[data-act='react']");
 		if (react) {
 			var id = react.getAttribute("data-id");
@@ -578,10 +700,22 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		var dots = e.target.closest("[data-act='dots']")
 		if (dots) {
 			var id = dots.getAttribute("data-id");
-			state.selectedProject = id;
+			// state.selectedProject = id;
 			state.menu = (state.menu && state.menu.id === id) ? null : { id: id, mode: null };
 			showFilteredProjects();
 			return;
+		}
+		var copylink = e.target.closest("[data-act='copylink']")
+		if (copylink) {
+			var doc = copylink.getAttribute("data-doc");
+			var id = copylink.getAttribute("data-id");
+			getCopyUrl(doc, id).then(function (url) {
+				navigator.clipboard.writeText(url).then(function () {
+					frappe.show_alert({ message: "Link copied to clipboard", indicator: "green" }, 3);
+				})
+			});
+			return;
+
 		}
 		var info = e.target.closest("[data-act='opendrawer']");
 		if (info) {
@@ -685,6 +819,18 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			renderDrawer();
 			showFilteredTasks();
 			return;
+		}
+		var copylink = e.target.closest("[data-act='copylink']")
+		if (copylink) {
+			var doc = copylink.getAttribute("data-doc");
+			var id = copylink.getAttribute("data-id");
+			getCopyUrl(doc, id).then(function (url) {
+				navigator.clipboard.writeText(url).then(function () {
+					frappe.show_alert({ message: "Link copied to clipboard", indicator: "green" }, 3);
+				})
+			});
+			return;
+
 		}
 		var dots = e.target.closest("[data-act='dots']")
 		if (dots) {
@@ -815,6 +961,18 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			loadOptions().then(function () { showToDosForSelectedTasks(); });
 			return;
 		}
+		var copylink = e.target.closest("[data-act='copylink']")
+		if (copylink) {
+			var doc = copylink.getAttribute("data-doc");
+			var id = copylink.getAttribute("data-id");
+			getCopyUrl(doc, id).then(function (url) {
+				navigator.clipboard.writeText(url).then(function () {
+					frappe.show_alert({ message: "Link copied to clipboard", indicator: "green" }, 3);
+				})
+			});
+			return;
+
+		}
 		var setassign = e.target.closest("[data-act='assign']");
 		if (setassign) {
 			id = setassign.getAttribute("data-id");
@@ -909,8 +1067,8 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 	document.getElementById("f-name").addEventListener("input", function (e) {
 		state.namedFilter = e.target.value;
 		showFilteredProjects()
-		// showFilteredTasks()
-		// showToDosForSelectedTasks()
+		showFilteredTasks()
+		showToDosForSelectedTasks()
 	})
 	document.getElementById("f-urgency").addEventListener("change", function (e) {
 		state.urgencyFilter = e.target.value;
@@ -998,7 +1156,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			}).join("");
 		}
 
-		return list + `
+		return `<div id="attachments-list">${list}</div>` + `
     <input type="file" id="attachment-input" multiple style="display:none" />
     <button class="d-info" data-act="addattachment" style="width:auto; padding:6px 12px; gap:6px; margin-top:8px">
       ${frappe.utils.icon("paperclip", "sm")} Add attachment
@@ -1205,6 +1363,11 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			var files = Array.from(e.target.files);
 			var doctype = state.drawer.type;
 			var id = state.drawer.id;
+			var placeHolderHtml = files.map(function (f) {
+				return `<div class="uploading-row">${frappe.utils.icon("upload", "xs")} Uploading ${f.name}...</div>`;
+			}).join("");
+			var listEl = document.getElementById("attachments-list");
+			listEl.insertAdjacentHTML("beforeend", placeHolderHtml);
 			uploadAttachment(doctype, id, files).then(async function (f) {
 				if (doctype === "Project") await loadProjects();
 				if (doctype === "Task") await loadTasks(state.selectedProject);
@@ -1278,7 +1441,8 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 	function chip(status) {
 		var colors = {
 			"Discovery": ["var(--text-info)", "var(--bg-info)"],
-			"Active": ["var(--text-accent)", "var(--bg-accent)"],        // ADDED — main "in progress" state
+			"AMC": ["var(--text-success)", "var(--bg-success)"],
+			"Active": ["var(--text-accent)", "var(--bg-accent)"],
 			"Config": ["var(--text-accent)", "var(--bg-accent)"],
 			"Data Migration": ["var(--text-accent)", "var(--bg-accent)"],
 			"Integration": ["var(--text-warning)", "var(--bg-warning)"],
@@ -1317,15 +1481,14 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		var menuHtml = "";
 		if (state.menu && state.menu.id === project.id) {
 			if (state.menu.mode === "status") {
+				get_deliv_options();
 				menuHtml = `
 			<div class = "d-menu" >
 				<div class="d-hd" style="background:transparent; border:none; padding:0 0 8px">Status</div>
 				<div style="display:flex; flex-wrap:wrap; gap:6px">
-				<div class="d-opt" data-act="setstatus" data-id="${project.id}" data-value="Discovery">Discovery</div>
-				<div class="d-opt" data-act="setstatus" data-id="${project.id}" data-value="Active">Active</div>
-				<div class="d-opt" data-act="setstatus" data-id="${project.id}" data-value="Go-Live">Go-Live</div>
-				<div class="d-opt" data-act="setstatus" data-id="${project.id}" data-value="Hypercare">Hypercare</div>
-				<div class="d-opt" data-act="setstatus" data-id="${project.id}" data-value="Closed">Closed</div>
+                ${DeliverystatusOptions.map(status => `
+                    <div class="d-opt" data-act="setstatus" data-id="${project.id}" data-value="${status}">${status}</div>
+                `).join("")}
 				</div>
 				</div>
 			`;
@@ -1346,7 +1509,11 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
     <div class="d-act" data-act="details" data-id="${project.id}"><div>${frappe.utils.icon("info", "sm")}</div> Details & activity</div>
     <div class="d-act" data-act="gotostatus" data-id="${project.id}"><div>${frappe.utils.icon("circle-dot", "sm")}</div> Change status</div>
     <div class="d-act" data-act="changepm" data-id="${project.id}"><div>${frappe.utils.icon("user-check", "sm")}</div> Change project manager</div>
-		<div class="d-act" data-act="newtask" data-id="${project.id}"><div>${frappe.utils.icon("plus", "sm")}</div> Add Task</div>
+	<div class="d-act" data-act="newtask" data-id="${project.id}"><div>${frappe.utils.icon("plus", "sm")}</div> Add Task</div>
+	<div class="d-act" data-act="copylink" data-id="${project.id}" data-doc="Project"><div>${frappe.utils.icon("copy", "sm")}</div> Copy link</div>
+	<div class="d-act" data-act="sendslackdm" data-id="${project.id}" data-doc="Project"><div>${frappe.utils.icon("send", "sm")}</div> Send to Slack direct message</div>
+	<div class="d-act" data-act="sendslackchannel" data-id="${project.id}" data-doc="Project"><div>${frappe.utils.icon("send", "sm")}</div> Send to Slack Channel</div>
+	<div class="d-act" data-act="sendwhatsapp" data-id="${project.id}" data-doc="Project"><div>${frappe.utils.icon("send", "sm")}</div> Send to WhatsApp</div>
     <div class="d-act" data-act="close"><div>${frappe.utils.icon("close", "sm")}</div> Close</div>
   </div>
 			`;
@@ -1441,6 +1608,10 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
     <div class="d-act" data-act="gotodivision" data-id="${task.id}"><div>${frappe.utils.icon("tag", "sm")}</div> Change Division</div>
     <div class="d-act" data-act="gotourgency" data-id="${task.id}"><div>${frappe.utils.icon("flame", "sm")}</div> Set Urgency</div>
 	<div class="d-act" data-act="newtodo" data-id="${task.id}"><div>${frappe.utils.icon("plus", "sm")}</div> Add ToDo</div>
+	<div class="d-act" data-act="copylink" data-id="${task.id}" data-doc="Task"><div>${frappe.utils.icon("copy", "sm")}</div> Copy link</div>
+	<div class="d-act" data-act="sendslackdm" data-id="${task.id}" data-doc="Task"><div>${frappe.utils.icon("send", "sm")}</div> Send to Slack direct message</div>
+	<div class="d-act" data-act="sendslackchannel" data-id="${task.id}" data-doc="Task"><div>${frappe.utils.icon("send", "sm")}</div> Send to Slack Channel</div>
+	<div class="d-act" data-act="sendwhatsapp" data-id="${task.id}" data-doc="Task"><div>${frappe.utils.icon("send", "sm")}</div> Send to WhatsApp</div>
     <div class="d-act" data-act="close"><div>${frappe.utils.icon("close", "sm")}</div> Close</div>
   </div>
 			`;
@@ -1449,11 +1620,17 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		return `
 			<div class="d-row lvl-task ${task.id === state.selectedTask ? 'sel' : ''}" data-task-id=${task.id}>
 			<div style="display:flex; flex-direction:column; gap:6px; flex:1">
-				<div>
+				<div style="display:flex; flex-direction:column; gap:4px">
 				<div style="font-weight:500">${task.name}</div>
+				<div class="d-meta" style="font-weight:400; margin-bottom:6px">${testProjects.find(function (p) {
+			return p.id === task.project
+		})?.name || task.project}
+				</div>
+				<div style="display:flex; gap:4px; flex-wrap:wrap">
 				${chip(task.stage)}
 				${chip(task.status)}
 				${urg(task.urgency)}
+				</div>
 				</div>
 				<div class="d-own-row">
 				<span class="d-own">${task.div} Lead:</span>
@@ -1519,6 +1696,10 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
     <div class="d-act" data-act="gotostatus" data-id="${todo.id}"><div style="display:inline-flex">${frappe.utils.icon("circle-dot", "sm")}</div> Change status</div>
     <div class="d-act" data-act="assignto" data-id="${todo.id}"><div style="display:inline-flex">${frappe.utils.icon("user-plus", "sm")}</div> Assign</div>
     <div class="d-act" data-act="gotourgency" data-id="${todo.id}"><div style="display:inline-flex">${frappe.utils.icon("flame", "sm")}</div> Set Urgency</div>
+	<div class="d-act" data-act="copylink" data-id="${todo.id}" data-doc="ToDo"><div>${frappe.utils.icon("copy", "sm")}</div> Copy link</div>
+	<div class="d-act" data-act="sendslackdm" data-id="${todo.id}" data-doc="ToDo"><div>${frappe.utils.icon("send", "sm")}</div> Send to Slack direct message</div>
+	<div class="d-act" data-act="sendslackchannel" data-id="${todo.id}" data-doc="ToDo"><div>${frappe.utils.icon("send", "sm")}</div> Send to Slack Channel</div>
+	<div class="d-act" data-act="sendwhatsapp" data-id="${todo.id}" data-doc="ToDo"><div>${frappe.utils.icon("send", "sm")}</div> Send to WhatsApp</div>
     <div class="d-act" data-act="close"><div style="display:inline-flex">${frappe.utils.icon("close", "sm")}</div> Close</div>
   </div>
 			`;
@@ -1563,7 +1744,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 				id: r.name,
 				name: r.title,
 				client: r.client,
-				status: r.status,
+				status: r.del_status,
 				pm: r.pm,
 				percent: r.percent,
 				description: r.description,
@@ -1627,15 +1808,21 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		showFilteredTasks();
 
 	}
+	async function get_deliv_options() {
+		DeliverystatusOptions = await frappe.xcall("implementor.api.get_project_status_options")
+	}
 	var testProjects = []
 	var testTasks = [];
 	var testTodos = []
 	async function init() {
+		await get_deliv_options();
 		await loadProjects();
 		tasks = await loadTasks();
 		todos = await loadTodos();
 		await loadNotifCount();
-		await loadEmergencyCount();
+		await loadDashboard();
+		renderNotifyPanel();
+		renderEmergencyPanel();
 	}
 	init();
 }

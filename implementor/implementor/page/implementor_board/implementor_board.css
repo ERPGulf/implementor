@@ -32,6 +32,19 @@
     gap: 6px;
 }
 
+.d-row:hover {
+    background: var(--surface-1);
+}
+
+.d-row.suppress-row-hover:hover {
+    background: transparent;
+}
+
+.d-dots:hover,
+.d-info:hover {
+    background: var(--surface-1);
+}
+
 [data-theme-mode="dark"] .impl-board-root,
 [data-theme="dark"] .impl-board-root {
     --surface-0: #1c1c1c;
@@ -146,13 +159,25 @@ button.on {
     overflow: hidden
 }
 
+.d-row.lvl-project {
+    border-left-color: var(--lvl-project);
+}
 
-.d-row:hover {
-    background: var(--surface-1)
+.d-row.lvl-task {
+    border-left-color: var(--lvl-task);
+}
+
+.d-row.lvl-todo {
+    border-left-color: var(--lvl-todo);
 }
 
 .d-row.sel {
-    background: var(--surface-1)
+    background: var(--bg-accent);
+}
+
+.d-row.sel:hover {
+    background: var(--bg-accent);
+    /* stays the same when hovering the selected one - no double-highlight confusion */
 }
 
 .lvl-project {
@@ -251,7 +276,8 @@ button.on {
 .d-hd {
     font-size: 12px;
     color: var(--text-secondary);
-    padding: 10px 12px;
+    position: relative;
+    padding: 6px 12px;
     border-bottom: 0.5px solid var(--border);
     background: var(--surface-1);
     display: flex;
@@ -402,6 +428,12 @@ button.on {
 
 #btn-emergency {
     position: relative;
+}
+
+.impl-board-root .grid,
+.impl-board-root .topbar,
+#dashboard-view {
+    transition: opacity 0.15s ease;
 }
 
 #btn-emergency .badge {
@@ -608,4 +640,24 @@ button.on {
     border-radius: var(--radius);
     margin-bottom: 6px;
     font-size: 12px
+}
+
+.uploading-row {
+    padding: 4px 0;
+    font-size: 13px;
+    color: var(--text-primary);
+    opacity: 0.7;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 6px;
+    text-align: left;
+    width: 100%;
+}
+
+.uploading-row svg.icon {
+    width: 14px !important;
+    height: 14px !important;
+    margin: 0 !important;
+    flex: none;
 }

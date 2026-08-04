@@ -82,16 +82,15 @@ def _recent_activity(doctype, name, limit=5):
 @frappe.whitelist()
 def get_projects(filters=None):
 	filters = frappe.parse_json(filters) if isinstance(filters, str) else (filters or {})
-	filters.setdefault("imp_status", ["!=", "Closed"])
+	# filters.setdefault("imp_status", ["!=", "Closed"])
 
 	rows = frappe.get_list(
 		"Project",
-		filters=filters,
 		fields=[
 			"name", "project_name as title", "customer as client",
-			"imp_status as status", "imp_project_manager as pm",
+			"imp_status as del_status", "imp_project_manager as pm",
 			"imp_percent as percent", "imp_deadline as deadline",
-			"notes as description",
+			"notes as description"
 		],
 	)
 	for r in rows:
@@ -103,6 +102,18 @@ def get_projects(filters=None):
 		r["comments"] = _comments("Project", r["name"], limit=5)
 		r["attachments"] = _attachments("Project", r["name"])
 	return rows
+
+
+@frappe.whitelist()
+def get_doc_url(doc=None,id=None):
+	if not doc or not id:
+		frappe.throw("Both 'doc' and 'id' parameters are required")
+
+	if not frappe.db.exists(doc, id):
+		frappe.throw(f"{doc} {id} does not exist")
+	doc_lowerCase = doc.lower().replace(" ", "-")
+	url = frappe.utils.get_url(f"/app/{doc_lowerCase}/{id}")
+	return url
 
 @frappe.whitelist()
 def get_tasks(project=None):
@@ -256,6 +267,12 @@ def get_detail(doctype, name):
 	)
 	return data
 
+@frappe.whitelist()
+def get_project_status_options():
+	field = frappe.get_meta("Project").get_field("imp_status")
+	if not field or not field.options:
+		return []
+	return [opt for opt in field.options.split("\n") if opt]
 
 @frappe.whitelist()
 def set_status(doctype, name, status):
@@ -655,6 +672,54 @@ def update_description(doctype, name, description):
 	frappe.db.set_value(doctype, name, fieldname, description)
 
 	return {"ok": True, "doctype": doctype, "name": name, "description": _strip_html(description)}
+
+
+_FIELDTYPE_MAP = {
+	"Select": "select",
+	"Link": "select",       # options is a doctype name — see note below, not a literal option list
+	"Data": "text",
+	"Small Text": "text",
+	"Text": "text",
+	"Text Editor": "text",
+	"Int": "number",
+	"Float": "number",
+	"Currency": "number",
+	"Percent": "number",
+	"Date": "date",
+	"Datetime": "date",
+	"Check": "boolean",
+}
+
+
+@frappe.whitelist()
+def get_filter_fields(doctype, fieldnames):
+	if isinstance(fieldnames, str):
+		fieldnames = frappe.parse_json(fieldnames)
+
+	if not frappe.db.exists("DocType", doctype):
+		frappe.throw(f"DocType {doctype} does not exist")
+
+	meta = frappe.get_meta(doctype)
+	result = []
+	for fieldname in fieldnames:
+		field = meta.get_field(fieldname)
+		if not field:
+			continue 
+
+		entry = {
+			"name": fieldname,
+			"label": field.label or fieldname,
+			"type": _FIELDTYPE_MAP.get(field.fieldtype, "text"),
+		}
+
+		if field.fieldtype == "Select" and field.options:
+			entry["options"] = [opt for opt in field.options.split("\n") if opt]
+		elif field.fieldtype == "Link" and field.options:
+			entry["link_doctype"] = field.options
+
+		result.append(entry)
+
+	return result
 
 
 # add this to implementor/api.py (or implementor/seed.py)
