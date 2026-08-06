@@ -6,20 +6,26 @@
  "doctype": "DocType",
  "engine": "InnoDB",
  "field_order": [
-  "last_technical_assignee"
+  "last_technical_assignee",
+  "slack_b_token"
  ],
  "fields": [
   {
    "fieldname": "last_technical_assignee",
    "fieldtype": "Data",
    "label": "Last Technical Assignee"
+  },
+  {
+   "fieldname": "slack_b_token",
+   "fieldtype": "Data",
+   "label": "Slack - Bearer Token"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "issingle": 1,
  "links": [],
- "modified": "2026-07-28 16:22:16.069506",
+ "modified": "2026-08-05 06:39:52.972966",
  "modified_by": "Administrator",
  "module": "Implementor",
  "name": "Implementor Settings",
