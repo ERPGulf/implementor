@@ -45,6 +45,41 @@
     background: var(--surface-1);
 }
 
+.btn-completed-card {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 9px;
+    font-size: 12px;
+    font-weight: 500;
+    border-radius: 6px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.btn-completed-card .icon {
+    width: 12px !important;
+    height: 12px !important;
+    color: var(--text-success);
+    flex-shrink: 0;
+}
+
+.btn-completed-card:hover {
+    background: var(--bg-success);
+    border-color: var(--text-success);
+    color: var(--text-success);
+}
+
+.btn-completed-card:active {
+    background: var(--text-success);
+    border-color: var(--text-success);
+    color: #fff;
+}
+
 [data-theme-mode="dark"] .impl-board-root,
 [data-theme="dark"] .impl-board-root {
     --surface-0: #1c1c1c;
@@ -85,6 +120,7 @@
 }
 
 .d-menu {
+    position: relative;
     flex-basis: 100%;
     width: 100%;
     background: var(--surface-2);
@@ -140,6 +176,250 @@ button {
     display: inline-flex;
     align-items: center;
     gap: 5px
+}
+
+.impl-board-root .flatpickr-calendar {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    box-shadow: none;
+    width: 100%;
+    max-width: 280px;
+}
+
+.impl-board-root .flatpickr-calendar.inline {
+    margin-top: 8px;
+}
+
+.impl-board-root .flatpickr-footer-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 10px 12px;
+    border-top: 1px solid var(--border);
+}
+
+.impl-board-root .flatpickr-day.today {
+    border: 1px solid var(--text-accent);
+    background: transparent;
+}
+
+.impl-board-root .flatpickr-day:hover {
+    background: var(--surface-1);
+    border-color: transparent;
+}
+
+.impl-board-root .flatpickr-months {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 12px;
+}
+
+.impl-board-root .flatpickr-current-month {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-weight: 600;
+}
+
+.due-date-input-row {
+    padding: 8px 16px 16px;
+}
+
+.due-date-picker-wrapper {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 5px 5px;
+    overflow: hidden;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    animation: expandDown 0.15s ease-out;
+}
+
+.due-date-picker-wrapper .flatpickr-wrapper {
+    width: 100% !important;
+    display: block !important;
+}
+
+.due-date-picker-wrapper .flatpickr-innerContainer,
+.due-date-picker-wrapper .flatpickr-rContainer,
+.due-date-picker-wrapper .flatpickr-days,
+.due-date-picker-wrapper .dayContainer {
+    width: 100% !important;
+    max-width: none !important;
+}
+
+.due-date-picker-wrapper .flatpickr-days,
+.due-date-picker-wrapper .dayContainer {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    justify-content: space-between !important;
+}
+
+.due-date-picker-wrapper .flatpickr-day {
+    flex: 1 1 calc(100% / 7);
+    max-width: calc(100% / 7);
+    box-sizing: border-box;
+}
+
+@keyframes expandDown {
+    from {
+        opacity: 0;
+        transform: translateY(-4px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.due-date-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    padding: 10px 12px 4px;
+}
+
+
+.impl-board-root .flatpickr-current-month input.cur-year {
+    color: var(--text-primary);
+    background: transparent;
+}
+
+.impl-board-root .flatpickr-monthDropdown-months {
+    background: var(--surface-1);
+    color: var(--text-primary);
+    border-radius: 4px;
+}
+
+.impl-board-root .flatpickr-prev-month,
+.impl-board-root .flatpickr-next-month {
+    color: var(--text-secondary);
+    fill: var(--text-secondary);
+}
+
+.impl-board-root .flatpickr-prev-month:hover,
+.impl-board-root .flatpickr-next-month:hover {
+    color: var(--text-primary);
+    fill: var(--text-primary);
+}
+
+.impl-board-root .flatpickr-weekdays {
+    background: transparent;
+}
+
+.impl-board-root span.flatpickr-weekday {
+    color: var(--text-muted);
+    font-size: 11px;
+    font-weight: 500;
+}
+
+.impl-board-root .flatpickr-day {
+    color: var(--text-primary);
+    border-radius: 6px;
+    font-size: 13px;
+}
+
+.due-date-picker-wrapper .flatpickr-calendar {
+    width: 100% !important;
+    max-width: none !important;
+    box-sizing: border-box;
+    padding: 8px 16px 16px;
+}
+
+#due-date-calendar-container {
+    padding: 4px 0;
+}
+
+.due-date-picker-wrapper .flatpickr-innerContainer,
+.due-date-picker-wrapper .flatpickr-rContainer,
+.due-date-picker-wrapper .flatpickr-days,
+.due-date-picker-wrapper .dayContainer,
+.due-date-picker-wrapper .flatpickr-weekdays {
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box;
+}
+
+.due-date-picker-wrapper .flatpickr-months {
+    padding: 10px 12px;
+    box-sizing: border-box;
+}
+
+.due-date-label {
+    padding: 14px 12px 4px;
+}
+
+.due-date-picker-wrapper .flatpickr-day,
+.due-date-picker-wrapper span.flatpickr-weekday {
+    flex: 1 1 calc(100% / 7);
+    max-width: calc(100% / 7);
+    box-sizing: border-box;
+    text-align: center;
+    margin: 0;
+}
+
+.impl-board-root .flatpickr-calendar {
+    border: none;
+    box-shadow: none;
+    border-top: none;
+    border-radius: 0;
+    width: 100%;
+}
+
+.impl-board-root .flatpickr-day.today {
+    background: transparent;
+    border: 1.5px solid var(--text-accent);
+    color: var(--text-accent);
+    font-weight: 600;
+}
+
+.due-date-footer {
+    display: flex;
+    justify-content: flex-end;
+    border-radius: 0 0 10px 10px;
+    gap: 8px;
+    padding: 10px 12px;
+    border-top: 1px solid var(--border);
+    background: var(--surface-1);
+}
+
+.impl-board-root .flatpickr-day.selected,
+.impl-board-root .flatpickr-day.selected:hover {
+    background: var(--text-accent);
+    border-color: var(--text-accent);
+    color: #fff;
+}
+
+.impl-board-root .flatpickr-day.prevMonthDay,
+.impl-board-root .flatpickr-day.nextMonthDay {
+    color: var(--text-muted);
+    opacity: 0.5;
+}
+
+.impl-board-root .flatpickr-day.flatpickr-disabled {
+    color: var(--text-muted);
+    opacity: 0.3;
+}
+
+.cal-today-btn {
+    width: 100%;
+    margin-top: 6px;
+    padding: 6px;
+    background: transparent;
+    border: none;
+    color: var(--text-accent);
+    font-size: 13px;
+    cursor: pointer;
+    border-radius: 6px;
+}
+
+.cal-today-btn:hover {
+    background: var(--surface-1);
 }
 
 button:hover {
@@ -539,6 +819,7 @@ button.on {
     width: 220px;
     min-width: 200px;
     background: var(--surface-2, #fff);
+    color: var(--text-primary);
     border: 1px solid var(--border);
     border-radius: 10px;
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
@@ -774,7 +1055,7 @@ button.on {
 
 .grid {
     display: grid;
-    grid-template-columns: 300px 440px minmax(260px, 1fr);
+    grid-template-columns: 380px 460px minmax(260px, 1fr);
     min-height: 440px
 }
 

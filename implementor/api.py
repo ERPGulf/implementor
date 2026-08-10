@@ -154,7 +154,7 @@ def get_projects(filters=None):
             "name", "project_name as title", "customer as client",
             "imp_status as del_status", "imp_project_manager as pm",
             "imp_percent as percent", "imp_deadline as deadline",
-            "notes as description","slack_channel_id", "whatsapp_channel_id" 
+            "notes as description","slack_channel_id", "whatsapp_channel_id", "percent_complete" 
         ],
     )
     for r in rows:
@@ -193,7 +193,7 @@ def get_tasks(project=None):
             "status", "imp_urgency as urgency", "progress as percent",
             "imp_deadline as deadline", "imp_division_lead as lead","imp_started_on as started_on",
             "imp_doing as doing", "imp_escalated as escalated",
-            "description", "_assign", "slack_channel_id", "whatsapp_channel_id"
+            "description", "_assign", "slack_channel_id", "whatsapp_channel_id", "completed_on", "completed_by"
         ],
     )
     for r in rows:
@@ -430,6 +430,16 @@ def assign_todo(todo, user):
     frappe.db.set_value("ToDo", todo, "allocated_to", user)
 
     return {"ok": True, "todo": todo, "reassigned_from": old_user, "reassigned_to": user}
+@frappe.whitelist()
+def saveDueDate(doctype=None, name=None, dateStr=None):
+    if doctype is None or name is None or dateStr is None:
+        frappe.msgprint("Doctype, name, and date are required")
+        return
+    if doctype in ("Project","Task"):
+        frappe.db.set_value(doctype, name, 'imp_deadline', dateStr)
+    else:
+        frappe.db.set_value(doctype, name, 'date', dateStr)
+    return dateStr
 
 
 @frappe.whitelist()
@@ -806,6 +816,60 @@ def get_filter_fields(doctype, fieldnames):
 
     return result
 
+@frappe.whitelist()
+def update_task_completion(task_id, completed_on=None, completed_by=None):
+
+	if not frappe.db.exists("Task", task_id):
+		frappe.throw(f"Task {task_id} does not exist")
+
+	if not frappe.has_permission("Task", "write", task_id):
+		frappe.throw("Not permitted", frappe.PermissionError)
+
+	updates = {}
+	if completed_on is not None:
+		updates["completed_on"] = completed_on
+	if completed_by is not None:
+		if not frappe.db.exists("User", completed_by):
+			frappe.throw(f"User {completed_by} does not exist")
+		updates["completed_by"] = completed_by
+
+	if not updates:
+		frappe.throw("At least one of completed_on or completed_by must be provided")
+
+	frappe.db.set_value("Task", task_id, updates)
+
+	return {
+		"task": task_id,
+		"updated_fields": list(updates.keys()),
+		"completed_on": frappe.db.get_value("Task", task_id, "completed_on"),
+		"completed_by": frappe.db.get_value("Task", task_id, "completed_by"),
+	}
+ 
+ 
+@frappe.whitelist()
+def get_project_percent_by_task(task_id):
+	if not frappe.db.exists("Task", task_id):
+		frappe.throw(f"Task {task_id} does not exist")
+
+	if not frappe.has_permission("Task", "read", task_id):
+		frappe.throw("Not permitted", frappe.PermissionError)
+
+	project_id = frappe.db.get_value("Task", task_id, "project")
+	if not project_id:
+		frappe.throw(f"Task {task_id} is not linked to any project")
+
+	if not frappe.has_permission("Project", "read", project_id):
+		frappe.throw("Not permitted on linked project", frappe.PermissionError)
+
+	percent = frappe.db.get_value("Project", project_id, "percent_complete")
+
+	return {
+		"task": task_id,
+		"project": project_id,
+		"percent_complete": percent or 0,
+	}
+ 
+ 
 
 # add this to implementor/api.py (or implementor/seed.py)
 import frappe

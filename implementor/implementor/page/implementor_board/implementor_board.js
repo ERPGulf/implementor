@@ -36,7 +36,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		{ act: "details", icon: "info", label: "Details & activity" },
 		{ act: "gotostatus", icon: "circle-dot", label: "Change status" },
 		{ act: "changepm", icon: "user-check", label: "Change project manager" },
-		{ act: "changedue", icon: "calendar-days", label: "Change Due Date" },
+		{ act: "gotodue", icon: "calendar-days", label: "Change Due Date" },
 		{ act: "newtask", icon: "plus", label: "Add Task" },
 		{ act: "copylink", icon: "copy", label: "Copy link", doc: "Project" },
 		{ act: "sendslackdm", icon: "send", label: "Send to Slack direct message", doc: "Project" },
@@ -60,7 +60,13 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		}
 	]
 	page.set_title('Implementor');
+
 	var state = {
+		notification_doc: "",
+		notification_id: "",
+		single_todo_select: null,
+		completedBy: "",
+		completedOn: null,
 		todoStatusFilter: "",
 		todoAssignToFilter: "",
 		taskLeadFilter: "",
@@ -147,10 +153,11 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		var filtered = testProjects.filter(function (project) {
 			var mineOnly = !state.mineOnly || isMine(project.pm, currentUser)
 			var match_pct = ppct(project) >= state.minPct && ppct(project) <= state.maxPct;
+			var match_single = !state.selectedProject || state.selectedProject === project.id;
 			var match_name = state.namedFilter === "" || project.name.toLowerCase().includes(state.namedFilter.toLowerCase());
 			var match_person_name = state.personFilter === "" || (project.pm || "").toLowerCase().includes(state.personFilter.toLowerCase());
 			var match_del_status = !state.projectStatusFilter || state.projectStatusFilter == project.status
-			return match_del_status && mineOnly && match_pct && match_name && match_person_name;
+			return match_single && match_del_status && mineOnly && match_pct && match_name && match_person_name;
 		}
 		)
 		var sorted = sortedBy(filtered);
@@ -200,7 +207,8 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			var match_urgency = state.urgencyFilter === "" || todo.urgency == state.urgencyFilter;
 			var match_filter_status = state.todoStatusFilter === "" || (todo.status || "") === state.todoStatusFilter
 			var match_assignee = state.todoAssignToFilter === "" || (todo.who || "") === state.todoAssignToFilter;
-			return match_assignee && match_filter_status && match_name && mineOnly && todo_filtered && match_person && match_urgency;
+			var match_single = !state.single_todo_select || todo.id === state.single_todo_select;
+			return match_single && match_assignee && match_filter_status && match_name && mineOnly && todo_filtered && match_person && match_urgency;
 		});
 		var sorted = sortedBy(filtered);
 		document.getElementById("d-todos").innerHTML = renderToDosColumn(sorted);
@@ -217,6 +225,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 	};
 	function selectTask(id) {
 		state.selectedTask = id;
+		state.single_todo_select = null;
 		showFilteredTasks();
 		loadTodos(id);
 	};
@@ -354,7 +363,6 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		loadEmergencyCount();
 		renderDashBoard();
 	}
-
 	$(page.body).html(`
 		<div class="impl-board-root">
 		<div style="display:flex; align-items:center; justify-content:space-between; padding:8px 10px; border-bottom:0.5px solid var(--border)">
@@ -403,9 +411,9 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			<option value="Normal">Normal</option>
 			<option value="Low">Low</option>
 		</select>
-		<input id="f-person" placeholder="Person" />
-		<input id="f-min" type = "number" placeholder="0"/>
-		<input id="f-max" type = "number" placeholder="100"/>
+		<select id="f-person">
+		<option value="">Any</option>
+		</select>
 		<select id ="f-sort">
 			<option value="">Sort: default</option>
 			<option value="pct">% complete</option>
@@ -587,7 +595,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			items.map(function (item) {
 				var label = item.imp_escalated ? "Escalated to lead/PM" : "Flagged as emergency";
 				return `
-				<div class="header-panel-row" style="display:flex; gap:10px; align-items:center">
+				<div class="header-panel-row" data-act="opendocurl" data-doc="${item.doctype}" data-id="${item.name}" style="display:flex; gap:10px; align-items:center">
 				<div style="flex:none">${frappe.utils.icon("triangle-alert", "xs")}</div>
 
 				<div style="flex:1; min-width:0">
@@ -596,12 +604,6 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 					<span class="d-meta" style="flex:none">${item.doctype}</span>
 					</div>
 					<div class="d-meta" style="color:var(--text-danger); margin-top:2px">${label}</div>
-				</div>
-
-				<div style="flex:none">
-					<button class="d-info" data-act="opendocurl" data-doc="${item.doctype}" data-id="${item.name}">
-					${frappe.utils.icon("external-link", "xs")}
-					</button>
 				</div>
 				</div>
         `;
@@ -661,7 +663,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			:
 			items.map(function (item) {
 				return `
-          <div class="header-panel-row" style="display:flex; gap:10px; align-items:flex-start">
+          <div class="header-panel-row" data-act="opendocurl" data-doc="${item.document_type}" data-id="${item.document_name}" style="display:flex; gap:10px; align-items:flex-start">
             <div style="flex:none; padding-top:2px">${notifIcon(item.type)}</div>
             <div style="flex:1; min-width:0">
               <div style="display:flex; justify-content:space-between; gap:8px; font-weight:500">
@@ -669,11 +671,6 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
                 <span class="d-meta" style="flex:none">${(dueChip(item.deadline))}</span>
               </div>
             </div>
-			<div style="flex:none">
-				<button class="d-info" data-act="opendocurl" data-doc="${item.document_type}" data-id="${item.document_name}" style="flex:none">
-				${frappe.utils.icon("external-link", "xs")}
-				</button>
-			</div>
           </div>
         `;
 			}).join("");
@@ -691,11 +688,65 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			renderNotifyPanel();
 		}
 		if (e.target.closest("[data-act='opendocurl']")) {
-			var doc = e.target.closest("[data-act='opendocurl']").dataset.doc;
-			var id = e.target.closest("[data-act='opendocurl']").dataset.id;
-			frappe.xcall("implementor.api.get_doc_url", { doc: doc, id: id }).then(function (url) {
-				window.open(url, "_blank");
-			});
+			state.selectedProject = null;
+			state.selectedTask = null;
+			state.selectToDo = null;
+			state.notification_doc = e.target.closest("[data-act='opendocurl']").dataset.doc;
+			state.notification_id = e.target.closest("[data-act='opendocurl']").dataset.id;
+
+			if (state.notification_doc === "Task") {
+				var task = testTasks.find(function (t) {
+					return t.id === state.notification_id;
+				});
+				if (!task) return;
+
+				state.single_todo_select = null;
+				// showFilteredProjects();
+				// showFilteredTasks();
+				// selectProject(task.project);
+				selectTask(state.notification_id);
+				state.selectedProject = task.project;
+				showFilteredProjects();
+				state.notifyPanelOpen = false;
+				state.selectedProject = null;
+				state.selectedTask = null;
+				renderNotifyPanel();
+				return;
+			}
+			else {
+				var todo = testTodos.find(function (t) {
+					return t.id === state.notification_id;
+				});
+				console.log("TODO", todo)
+				if (!todo) return frappe.msgprint("No Todo assigned for this record.");
+
+				var task = testTasks.find(function (t) {
+					return t.id === todo.task;
+				});
+				console.log("TASK", task)
+				if (!task) return frappe.msgprint("No Task assigned for this record.");;
+
+				var project = testProjects.find(function (p) {
+					return p.id === task.project;
+				});
+				console.log("PROJECT", project)
+				if (!project) return frappe.msgprint("No Project assigned for this record.");;
+
+				// selectProject(project.id);
+				// selectTask(task.id);
+				state.selectedProject = project.id;
+				state.selectedTask = task.id;
+				showFilteredProjects();
+				showFilteredTasks();
+				state.single_todo_select = todo.id;
+				showToDosForSelectedTasks();
+				state.notifyPanelOpen = false;
+				state.selectedProject = null;
+				state.selectedTask = null;
+				state.single_todo_select = null;
+				renderNotifyPanel();
+				return;
+			}
 		}
 	});
 	document.getElementById("emergency-panel").addEventListener("click", function (e) {
@@ -704,11 +755,67 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			renderEmergencyPanel();
 		}
 		if (e.target.closest("[data-act='opendocurl']")) {
+			state.selectedProject = null;
+			state.selectedTask = null;
+			state.selectToDo = null;
+			// loadProjects();
+			// loadTasks();
+			// loadTodos();
 			var doc = e.target.closest("[data-act='opendocurl']").dataset.doc;
 			var id = e.target.closest("[data-act='opendocurl']").dataset.id;
-			frappe.xcall("implementor.api.get_doc_url", { doc: doc, id: id }).then(function (url) {
-				window.open(url, "_blank");
-			});
+			if (doc === "Task") {
+				var task = testTasks.find(function (t) {
+					return t.id === id;
+				});
+				if (!task) return frappe.throw("No Task Assigned for this record");
+
+				state.single_todo_select = null;
+				// showFilteredProjects();
+				// showFilteredTasks();
+				// selectProject(task.project);
+				var project = task.project
+				if (!project) return frappe.throw("No Project Assigned for this record");
+				state.selectedProject = project;
+				showFilteredProjects();
+				selectTask(id);
+				state.notifyPanelOpen = false;
+				renderNotifyPanel();
+				return;
+			}
+			else {
+				var todo = testTodos.find(function (t) {
+					return t.id === id;
+				});
+				console.log("TODO", todo)
+				if (!todo) return frappe.msgprint("No Todo assigned for this record.");
+
+				var task = testTasks.find(function (t) {
+					return t.id === todo.task;
+				});
+				console.log("TASK", task)
+				if (!task) return frappe.msgprint("No Task assigned for this record.");;
+
+				var project = testProjects.find(function (p) {
+					return p.id === task.project;
+				});
+				console.log("PROJECT", project)
+				if (!project) return frappe.msgprint("No Project assigned for this record.");;
+
+				// selectProject(project.id);
+				// selectTask(task.id);
+				state.selectedProject = project.id;
+				state.selectedTask = task.id;
+				showFilteredProjects();
+				showFilteredTasks();
+				state.single_todo_select = todo.id;
+				showToDosForSelectedTasks();
+				state.notifyPanelOpen = false;
+				renderNotifyPanel();
+				return;
+			}
+			// frappe.xcall("implementor.api.get_doc_url", { doc: doc, id: id }).then(function (url) {
+			// 	window.open(url, "_blank");
+			// });
 		}
 	});
 	document.getElementById("btn-add").addEventListener("click", function (e) {
@@ -756,7 +863,6 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 	function renderColFilter(col) {
 		var el = document.getElementById("colfilter-" + col);
 		if (state.colFilterOpen !== col) {
-			console.log(`Entered Colfilter!=col ${col}`)
 			el.style.display = "none";
 			return;
 		}
@@ -906,7 +1012,6 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		});
 
 		status_options = field && field.options ? field.options : [];
-		console.log(status_options)
 	}
 	async function getCopyUrl(doc, id) {
 		var url = await frappe.xcall("implementor.api.get_doc_url", { doc: doc, id: id })
@@ -968,7 +1073,79 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			})
 		}
 	})
+	var selectedDueDate = ""
+	function initDueDatePicker(doc, type) {
+		if (type == "completed_on") {
+			var input = document.getElementById("completed-on-input");
+		}
+		else {
+			var input = document.getElementById("due-date-input");
+		}
+		if (!input) return;
+		if (!window.implFlatpickr) {
+			loadFlatpickr(function () {
+				initDueDatePicker(doc, type)
+			})
+			return;
+		}
+		window.implFlatpickr(input, {
+			inline: true,
+			static: true,
+			dateFormat: "Y-m-d",
+			defaultDate: (type == "completed_on" ? doc.completed_on : doc.due) || null,
+			appendTo: (type == "completed_on") ? document.getElementById("completed-on-calendar-container") : document.getElementById("due-date-calendar-container"),
+			onChange: function (selectedDates, dateStr) {
+				if (type == "completed_on") {
+					state.completedOn = dateStr
+				}
+				else {
+					selectedDueDate = dateStr
+				}
+			},
+		})
+	}
+	var deadline_updated = ""
+	async function saveDueDate(doc, id, dateStr) {
+		deadline_updated = await frappe.xcall("implementor.api.saveDueDate", { doctype: doc, name: id, dateStr: dateStr })
+		return deadline_updated;
+	}
 	document.getElementById("d-projects").addEventListener("click", function (e) {
+		if (e.target.id === "due-date-input" || e.target.closest(".flatpickr-calendar")) {
+			return;
+		}
+		var gotodue = e.target.closest("[data-act='gotodue']");
+		if (gotodue) {
+			var projectId = gotodue.getAttribute("data-id")
+			var project = testProjects.find(function (p) {
+				return p.id === projectId
+			})
+			state.menu.mode = "changedue"
+			showFilteredProjects();
+			requestAnimationFrame(function () {
+				initDueDatePicker(project, "due-date");
+			});
+			return;
+		}
+		var setdue = e.target.closest("[data-act='savedue']");
+		if (setdue) {
+			var id = setdue.getAttribute("data-id")
+			saveDueDate("Project", id, selectedDueDate).then(
+				function (newDate) {
+					var project = testProjects.find(function (p) {
+						return p.id === id
+					})
+					if (project) project.due = newDate;
+					selectedDueDate = "";
+					state.menu = null;
+					loadProjects();
+					showFilteredProjects();
+
+				}
+			).catch(function (err) {
+				frappe.msgprint("Could not update due date: " + (err.message || "unknown error"))
+			})
+			return;
+		}
 		var sendAct = e.target.closest("[data-act='sendslackdm'],[data-act='sendslackchannel'],[data-act='sendwhatsapp']");
 		if (sendAct) {
 			var channelMap = {
@@ -986,10 +1163,6 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			state.sendPopupOpen = { mode: modeMap[channelMap[act]], channel: channelMap[act], doc: doc, id: recordId }
 			renderSendPopup();
 			return;
-
-		}
-		var due_date = e.target.closest("[data-act='changeduedate']")
-		if (e.target.id === "due-date-input") {
 
 		}
 		var react = e.target.closest("[data-act='react']");
@@ -1085,12 +1258,6 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			loadOptions("pm").then(function () { showFilteredProjects(); })
 			return;
 		}
-		var changedue = e.target.closest("[data-act='changedue']");
-		if (changedue) {
-			state.menu.mode = "changedue";
-			showFilteredProjects();
-			return;
-		}
 		var close = e.target.closest("[data-act='close']");
 		if (close) {
 			state.menu = null;
@@ -1108,7 +1275,135 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		var id = card.getAttribute("data-project-id");
 		selectProject(id)
 	});
+	async function saveCompleted(id, { completed_on, completed_by } = {}) {
+		var response = await frappe.xcall("implementor.api.update_task_completion", {
+			task_id: id,
+			completed_on: completed_on || undefined,
+			completed_by: completed_by || undefined
+		})
+		var out = ""
+		if (completed_on) {
+			out = response.completed_on
+		}
+		else {
+			out = response.completed_by
+		}
+		return out
+	}
+	async function getProjPerc(id) {
+		var response = await frappe.xcall("implementor.api.get_project_percent_by_task", {
+			task_id: id,
+		})
+		console.log(response)
+		return response.percent_complete;
+	}
+
 	document.getElementById("d-tasks").addEventListener("click", function (e) {
+		var savecompletedby = e.target.closest("[data-act='savecompletedby']");
+		if (savecompletedby) {
+			var id = savecompletedby.getAttribute("data-id");
+			var value = savecompletedby.getAttribute("data-value");
+			saveCompleted(id, { "completed_by": value }).then(function (cby) {
+				console.log("cby", cby)
+				var task = testTasks.find(function (t) {
+					return t.id === id
+				})
+				task.completed_by = cby;
+				state.menu = null;
+				showFilteredTasks();
+			}).catch(function (err) {
+				frappe.msgprint("Could not update completed date: " + (err.message || "unknown error"));
+			})
+			return;
+
+		}
+		var setcompletedby = e.target.closest("[data-act='setcompletedby'")
+		if (setcompletedby) {
+			var id = setcompletedby.getAttribute("data-id");
+			var task = testTasks.find(function (t) {
+				return t.id === id;
+			})
+			state.menu = { id: id, mode: "changecompletedby" };
+			showFilteredTasks();
+			return;
+
+		}
+		var savecompleted = e.target.closest("[data-act='savecompleted']")
+		if (savecompleted) {
+			var id = savecompleted.getAttribute("data-id")
+			var task = testTasks.find(function (t) {
+				return t.id === id
+			});
+			state.menu = null;
+			saveCompleted(id, { "completed_on": state.completedOn }).then(function (cdate) {
+				task.completed_on = cdate;
+				state.menu = null;
+				showFilteredTasks();
+				getProjPerc(id).then(function (percent_complete) {
+					var task = testTasks.find(function (t) {
+						return t.id === id
+					})
+					var project = testProjects.find(function (pro) {
+						return pro.id === task.project
+					})
+					project.percent_complete = percent_complete;
+					state.menu = null;
+					showFilteredProjects();
+				})
+			}).catch(function (err) {
+				frappe.msgprint("Could not update completed date: " + (err.message || "unknown error"))
+
+			})
+			return;
+		}
+		var setcompletedon = e.target.closest("[data-act='setcompletedon']")
+		if (setcompletedon) {
+			console.log("clicked")
+			var id = setcompletedon.getAttribute("data-id")
+			var task = testTasks.find(function (t) { return t.id === id })
+			state.menu = { id: id, mode: "changecompletedon" };
+			showFilteredTasks();
+			requestAnimationFrame(function () {
+				initDueDatePicker(task, "completed_on");
+			});
+			return;
+		}
+		var savedueDate = e.target.closest("[data-act='savedue']");
+		if (savedueDate) {
+			var id = savedueDate.getAttribute("data-id")
+			saveDueDate("Task", id, selectedDueDate).then(function (newdate) {
+				var task = testTasks.find(function (t) {
+					return t.id === id
+				})
+				if (task) task.due = newdate
+				state.menu = null;
+				selectedDueDate = "";
+				showFilteredTasks();
+				return;
+			}).catch(function (err) {
+				frappe.msgprint("Could not update due date: " + (err.message || "unknown error"))
+			})
+			return;
+		}
+		if (e.target.id === "due-date-input" || e.target.closest(".flatpickr-calendar")) {
+			return;
+		}
+		var gotodue = e.target.closest("[data-act='gotodue']")
+		if (gotodue) {
+			var id = gotodue.getAttribute("data-id");
+			var task = testTasks.find(function (t) {
+				return t.id === id;
+			})
+			console.log(id)
+			state.menu.mode = "changedue"
+			showFilteredTasks();
+			requestAnimationFrame(function () {
+				initDueDatePicker(task, "due_date");
+			});
+			return;
+
+		}
+
 		var react = e.target.closest("[data-act='react']");
 		var card = e.target.closest("[data-task-id]");
 		if (!card) return;
@@ -1407,7 +1702,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		selectToDo(id)
 	});
 	document.addEventListener("click", function (e) {
-		if (state.menu != null && !e.target.closest(".d-menu") && !e.target.closest("[data-act='dots']")) {
+		if (state.menu != null && !e.target.closest(".d-menu") && !e.target.closest("[data-act='setcompletedby']") && !e.target.closest("[data-act='setcompletedon']") && !e.target.closest("[data-act='gotodue']") && !e.target.closest("[data-act='dots']")) {
 			state.menu = null;
 			showFilteredProjects();
 			showFilteredTasks();
@@ -1437,6 +1732,17 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		}
 
 	});
+	function renderPersonfilter() {
+		el = document.getElementById("f-person")
+		if (!el) {
+			return;
+		}
+		el.innerHTML = `
+		<option value="">Any</option>
+		${TaskLeadOptions.map(function (u) {
+			return `<option value = ${u}>${u}</option>`;
+		}).join("")}`;
+	}
 
 	document.getElementById("f-name").addEventListener("input", function (e) {
 		state.namedFilter = e.target.value;
@@ -1449,24 +1755,24 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		showFilteredTasks()
 		showToDosForSelectedTasks()
 	});
-	document.getElementById("f-person").addEventListener("input", function (e) {
+	document.getElementById("f-person").addEventListener("change", function (e) {
 		state.personFilter = e.target.value;
 		showFilteredProjects()
 		showFilteredTasks()
 		showToDosForSelectedTasks()
 	});
-	document.getElementById("f-min").addEventListener("input", function (e) {
-		var num = Number(e.target.value);
-		state.minPct = isNaN(num) ? 0 : num;
-		showFilteredProjects();
-		showFilteredTasks();
-	});
-	document.getElementById("f-max").addEventListener("input", function (e) {
-		var num = Number(e.target.value);
-		state.maxPct = isNaN(num) ? 100 : num;
-		showFilteredProjects();
-		showFilteredTasks();
-	});
+	// document.getElementById("f-min").addEventListener("input", function (e) {
+	// 	var num = Number(e.target.value);
+	// 	state.minPct = isNaN(num) ? 0 : num;
+	// 	showFilteredProjects();
+	// 	showFilteredTasks();
+	// });
+	// document.getElementById("f-max").addEventListener("input", function (e) {
+	// 	var num = Number(e.target.value);
+	// 	state.maxPct = isNaN(num) ? 100 : num;
+	// 	showFilteredProjects();
+	// 	showFilteredTasks();
+	// });
 	document.getElementById("f-mine").addEventListener("click", function (e) {
 		state.mineOnly = !state.mineOnly;
 		e.target.textContent = state.mineOnly ? "✓ My work" : "My work";
@@ -1496,8 +1802,8 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		document.getElementById("f-name").value = "";
 		document.getElementById("f-urgency").value = "";
 		document.getElementById("f-person").value = "";
-		document.getElementById("f-min").value = "";
-		document.getElementById("f-max").value = "";
+		// document.getElementById("f-min").value = "";
+		// document.getElementById("f-max").value = "";
 		document.getElementById("f-sort").value = "";
 		document.getElementById("f-mine").textContent = "My work";
 		showFilteredProjects();
@@ -1612,7 +1918,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 					<div class="d-meta">${frappe.utils.icon("calendar-days")} ${fmtDate(task.due)} · ${dueChip(task.due)} · ${task.status} · ${pct(task)}%</div>
 					<div style="margin-top:4px">
 						<div class="d-meta" style="color:var(--text-accent)">
-							${frappe.utils.icon("clock", "xs")} ${task.status} since ${fmtDate(task.creation)} ${renderLeads(task.lead)}
+							${task.creation ? `<div class="d-meta" style="color:var(--text-accent)">${frappe.utils.icon("clock", "xs")} ${task.status} since ${fmtDate(task.creation)}</div>` : ""}
 						</div>
 					</div>
 				</div>
@@ -1779,7 +2085,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		names = names.filter(function (name, i) { return names.indexOf(name) === i; });
 
 		if (names.length === 0) {
-			return `<span style = "color:var(--text-muted)" > Unassigned</span>`;
+			return `<span style = "color:var(--text-muted); font-size:11px" > Unassigned</span>`;
 		}
 
 		return names.map(function (name) {
@@ -1857,6 +2163,31 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			`
 		}).join("");
 	}
+	var task_menu_actions = [
+		{ act: "details", icon: "info", label: "Details & activity" },
+		{ act: "gotostatus", icon: "circle-dot", label: "Change status" },
+		{ act: "gotodivision", icon: "tag", label: "Change Division" },
+		{ act: "gotourgency", icon: "flame", label: "Set Urgency" },
+		{ act: "gotodue", icon: "calendar-days", label: "Change Due date" },
+		{ act: "newtodo", icon: "plus", label: "Add ToDo" },
+		{ act: "copylink", icon: "copy", label: "Copy link", doc: "Task" },
+		{ act: "sendslackdm", icon: "send", label: "Send to Slack direct message", doc: "Task" },
+		{ act: "sendslackchannel", icon: "send", label: "Send to Slack Channel", doc: "Task" },
+		{ act: "sendwhatsapp", icon: "send", label: "Send to WhatsApp", doc: "Task" }
+	];
+	function renderTaskMenuCards(task) {
+		return task_menu_actions.map(function (p) {
+			var docAttr = p.doc ? ` data-doc="${p.doc}"` : "";
+			return `
+			<div class="d-act" data-act="${p.act}" data-id="${task.id}"${docAttr}>
+			<div>
+			${frappe.utils.icon(p.icon, "sm")}
+			</div>
+			${p.label}
+			</div>
+			`
+		}).join("");
+	}
 	function prog(percent) {
 		return `
 			<div style = "display:flex; align-items:center; gap:6px; margin-top:4px" >
@@ -1896,20 +2227,24 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			else if (state.menu.mode === "changedue") {
 				menuHtml = `
 				<div class="d-menu">
-					<div class="d-hd" style="background:transparent; border:none; padding:0 0 8px">Due date</div>
-					<div style="display:flex; flex-direction:column; gap:8px">
-						<input type="text" data-act="changeduedate" id="due-date-input" data-id="${project.id}"
-							value="${project.due ? project.due.split('T')[0] || project.due.split(' ')[0] : ''}"
-							placeholder ="Select Date"
-							style="width:100%; padding:6px 8px" autocomplete="off"/>
-						<div style="display:flex; gap:6px; justify-content:flex-end">
-							<button class="btn btn-default btn-sm" data-act="close">Cancel</button>
+					<div class="due-date-picker-wrapper">
+						<div class="due-date-label">Due date</div>
+						<div class="due-date-input-row">
+							<input type="text" data-act="changeduedate" id="due-date-input" data-id="${project.id}"
+								value="${frappe.datetime.str_to_user(project.due)}"
+								placeholder="Select Date"
+								style="width:auto; max-width:180px; padding:6px 10px" autocomplete="off" readonly/>
+						</div>
+						<div id="due-date-calendar-container"></div>
+						<div class="due-date-footer">
+							<button class="btn btn-default btn-sm" data-doc="projects" data-act="close">Cancel</button>
 							<button class="btn btn-primary btn-sm" data-act="savedue" data-id="${project.id}">Save</button>
 						</div>
 					</div>
 				</div>
 				`;
 			}
+
 			else {
 				menuHtml = `
 			<div class="d-menu" >
@@ -1927,7 +2262,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			<div>${chip(project.status)}</div>
 			<div class="d-own">PM · ${renderLeads(project.pm)}</div>
 			<div class="d-meta">${fmtDate(project.due)} · ${dueChip(project.due)}</div>
-			${prog(ppct(project))}
+			${prog(project.percent_complete)}
 			<div style="display:flex; gap:6px">${renderReactions(project)}</div>
 		</div>
 		<button class="d-dots" data-act="dots" data-id="${project.id}">${frappe.utils.icon("dot-vertical", "sm")}</button>
@@ -2000,54 +2335,117 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 					</div>
 			`;
 			}
+			else if (state.menu.mode === "changedue") {
+				menuHtml = `
+<div class="d-menu">
+	<div class="due-date-picker-wrapper">
+		<div class="due-date-label">Due date</div>
+		<div class="due-date-input-row">
+			<input type="text" data-act="changeduedate" id="due-date-input" data-id="${task.id}"
+				value="${frappe.datetime.str_to_user(task.due)}"
+				placeholder="Select Date"
+				style="width:auto; max-width:180px; padding:6px 10px" autocomplete="off" readonly/>
+		</div>
+		<div id="due-date-calendar-container"></div>
+		<div class="due-date-footer">
+			<button class="btn btn-default btn-sm" data-doc="projects" data-act="close">Cancel</button>
+			<button class="btn btn-primary btn-sm" data-act="savedue" data-id="${task.id}">Save</button>
+		</div>
+	</div>
+</div>
+`;
+			}
+			else if (state.menu.mode === "changecompletedon") {
+				menuHtml = `
+				<div class="d-menu">
+					<div class="d-hd" style="background:transparent; border:none; padding:0 0 8px">Due date</div>
+					<div style="display:flex; flex-direction:column; gap:8px">
+						<input type="hidden" id="completed-on-input" data-id="${task.id}" value="${task.completed_on || ''}" />
+
+						<div id="completed-on-calendar-container" data-id="${task.id}"></div>
+						<div style="display:flex; gap:6px; justify-content:flex-end">
+							<button class="btn btn-default btn-sm" data-doc="tasks" data-act="close">Cancel</button>
+							<button class="btn btn-primary btn-sm" data-act="savecompleted" data-id="${task.id}">Save</button>
+						</div>
+					</div>
+				</div>
+				`;
+			}
+			else if (state.menu.mode === "changecompletedby") {
+				menuHtml = `
+	<div class="d-menu">
+		<div class="d-hd" style="background:transparent; border:none; padding:0 0 8px">Completed by</div>
+		<div class="filter-values-wrap scrollable">
+			<div class="filter-opt ${!task.completed_by ? "on" : ""}" data-act="savecompletedby" data-id="${task.id}" data-value="">Unassigned</div>
+			${TaskLeadOptions.map(function (u) {
+					return `<div class="filter-opt ${task.completed_by === u ? "on" : ""}" data-act="savecompletedby" data-id="${task.id}" data-value="${u}">${u}</div>`;
+				}).join("")}
+		</div>
+	</div>
+	`;
+			}
 			else {
 				menuHtml = `
 			<div class="d-menu" >
-    <div class="d-act" data-act="details" data-id="${task.id}"><div>${frappe.utils.icon("info", "sm")}</div> Details & activity</div>
-    <div class="d-act" data-act="gotostatus" data-id="${task.id}"><div>${frappe.utils.icon("circle-dot", "sm")}</div> Change status</div>
-    <div class="d-act" data-act="gotodivision" data-id="${task.id}"><div>${frappe.utils.icon("tag", "sm")}</div> Change Division</div>
-    <div class="d-act" data-act="gotourgency" data-id="${task.id}"><div>${frappe.utils.icon("flame", "sm")}</div> Set Urgency</div>
-	<div class="d-act" data-act="newtodo" data-id="${task.id}"><div>${frappe.utils.icon("plus", "sm")}</div> Add ToDo</div>
-	<div class="d-act" data-act="copylink" data-id="${task.id}" data-doc="Task"><div>${frappe.utils.icon("copy", "sm")}</div> Copy link</div>
-	<div class="d-act" data-act="sendslackdm" data-id="${task.id}" data-doc="Task"><div>${frappe.utils.icon("send", "sm")}</div> Send to Slack direct message</div>
-	<div class="d-act" data-act="sendslackchannel" data-id="${task.id}" data-doc="Task"><div>${frappe.utils.icon("send", "sm")}</div> Send to Slack Channel</div>
-	<div class="d-act" data-act="sendwhatsapp" data-id="${task.id}" data-doc="Task"><div>${frappe.utils.icon("send", "sm")}</div> Send to WhatsApp</div>
+			${renderTaskMenuCards(task)}
     <div class="d-act" data-act="close"><div>${frappe.utils.icon("close", "sm")}</div> Close</div>
   </div>
 			`;
 			}
 		}
 		return `
-			<div class="d-row lvl-task ${task.id === state.selectedTask ? 'sel' : ''}" data-task-id=${task.id}>
-			<div style="display:flex; flex-direction:column; gap:6px; flex:1">
-				<div style="display:flex; flex-direction:column; gap:4px">
-				<div style="font-weight:500">${task.name}</div>
-				<div class="d-meta" style="font-weight:400; margin-bottom:6px">${testProjects.find(function (p) {
+	<div class="d-row lvl-task ${task.id === state.selectedTask ? 'sel' : ''}" data-task-id=${task.id}>
+	<div style="display:flex; flex-direction:column; gap:6px; flex:1">
+		<div style="display:flex; flex-direction:column; gap:4px">
+			<div style="font-weight:500">${task.name}</div>
+			<div class="d-meta" style="font-weight:400; margin-bottom:6px">${testProjects.find(function (p) {
 			return p.id === task.project
 		})?.name || task.project}
-				</div>
-				<div style="display:flex; gap:4px; flex-wrap:wrap">
+			</div>
+			<div style="display:flex; gap:4px; flex-wrap:wrap">
 				${chip(task.stage)}
 				${chip(task.status)}
 				${urg(task.urgency)}
-				</div>
-				</div>
-				<div class="d-own-row">
-				<span class="d-own">${task.div} Lead:</span>
-				${renderLeads(task.lead)}
-				</div>
-				<div class="d-meta">${fmtDate(task.due)} · ${dueChip(task.due)}</div>
-				<div class="d-meta" style="color:var(--text-accent)">
-				 ${task.status} since ${fmtDate(task.creation)}
-				</div>
-				${prog(pct(task))}
-				<div style="display:flex; gap:6px">${renderReactions(task)}</div>
 			</div>
-			<button class="d-dots" data-act="dots" data-id="${task.id}">${frappe.utils.icon("dot-vertical", "sm")}</button>
-			<button class="d-info" data-act="opendrawer" data-type="Task" data-id="${task.id}">${frappe.utils.icon("info", "sm")}</button>
-			${menuHtml}
-			</div>
-			`;
+		</div>
+
+		<div class="d-own-row">
+			<span class="d-own">${task.div} Lead:</span>
+			${renderLeads(task.lead)}
+		</div>
+
+		<div class="d-meta">
+			${task.due ? fmtDate(task.due) : "No Due date"} · ${task.status === "Completed" ? `<span style="color:var(--text-success)">Completed</span>` : dueChip(task.due)}
+		</div>
+
+		${task.creation ? `
+		<div class="d-meta" style="color:var(--text-accent)">
+		<span style="display:inline-flex; width:12px; height:12px">${frappe.utils.icon("clock", "xs")}</span>	
+		${task.status} since ${fmtDate(task.creation)}
+		</div>
+		` : ""}
+
+		${task.status === "Completed" ? `
+		<div style="display:flex; gap:6px; margin-top:8px; padding-top:8px; border-top:1px solid var(--border); flex-wrap:wrap">
+			<button class="btn-completed-card" data-act="setcompletedon" data-id="${task.id}">
+				<span style="color:var(--text-success)">✓</span>
+				Completed on: ${task.completed_on ? fmtDate(task.completed_on) : "Set date"}
+			</button>
+			<button class="btn-completed-card" data-act="setcompletedby" data-id="${task.id}">
+				${frappe.utils.icon("user-check", "xs")} Completed by: ${task.completed_by ? task.completed_by : "Set person"}
+			</button>
+		</div>
+		` : ""}
+
+		<div style="display:flex; gap:6px; margin-top:6px; padding-top:6px; border-top:1px solid var(--border)">
+			${renderReactions(task)}
+		</div>
+	</div>
+	<button class="d-dots" data-act="dots" data-id="${task.id}">${frappe.utils.icon("dot-vertical", "sm")}</button>
+	<button class="d-info" data-act="opendrawer" data-type="Task" data-id="${task.id}">${frappe.utils.icon("info", "sm")}</button>
+	${menuHtml}
+	</div>
+	`;
 	}
 	function renderToDoCard(todo) {
 		var icon = todo.done ? "✓" : "○";
@@ -2154,6 +2552,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 				comments: r.comments,
 				attachments: r.attachments,
 				slack_channel_id: r.slack_channel_id,
+				percent_complete: r.percent_complete,
 				whatsapp_channel_id: r.whatsapp_channel_id
 			}
 		});
@@ -2190,6 +2589,8 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		testTasks = rows.map(function (r) {
 			return {
 				id: r.name,
+				completed_on: r.completed_on,
+				completed_by: r.completed_by,
 				project: r.project || projectId,
 				name: r.title,
 				description: r.description,
@@ -2219,8 +2620,8 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		divisions = await frappe.xcall("implementor.api.get_div_options")
 
 	}
-	function loadFlatpickr(callback) {
-		if (window.flatpickr) { callback(); return; }
+	function loadFlatpickr(callback = () => { }) {
+		if (window.implFlatpickr) { callback(); return; }
 		var css = document.createElement("link");
 		css.rel = "stylesheet";
 		css.href = "https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css";
@@ -2228,7 +2629,10 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 
 		var script = document.createElement("script");
 		script.src = "https://cdn.jsdelivr.net/npm/flatpickr";
-		script.onload = callback;
+		script.onload = function () {
+			window.implFlatpickr = window.flatpickr;
+			callback();
+		};
 		document.head.appendChild(script);
 	}
 	async function loadTaskLeadOptions() {
@@ -2237,6 +2641,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			return u.name
 		})
 		assignees = TaskLeadOptions
+		// persons = TaskLeadOptions
 	}
 	var testProjects = []
 	var testTasks = [];
@@ -2251,8 +2656,9 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		renderNotifyPanel();
 		renderEmergencyPanel();
 		await loadTaskLeadOptions();
+		renderPersonfilter();
 		await get_todo_status_options();
-		loadFlatpickr(function () { });
+		loadFlatpickr();
 	}
 	init();
 }
