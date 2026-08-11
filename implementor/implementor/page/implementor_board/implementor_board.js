@@ -334,38 +334,38 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		if (!dashboardData) return;
 		var d = dashboardData;
 		var cardsHtml = [];
-		if (!d.project_id) { cardsHtml.push(metricCard("Projects", d.projects)) }
+		if (!d.project_id) {
+			cardsHtml.push(metricCard("Projects", d.projects));
+		}
 		cardsHtml.push(
 			metricCard("Tasks", d.tasks),
-			metricCard("Avg Process", d.avg_progress + "%"),
+			metricCard(d.project_id ? "Project Completed %" : "Overall Completed %", d.avg_progress + "%"),
 			metricCard("Due ≤ 7 days ", d.due_7d),
 			metricCard("Overdue", d.overdue, true),
 			metricCard("Escalated", d.escalated, true)
-		)
-		cardsHtml = cardsHtml.join("")
+		);
+		cardsHtml = cardsHtml.join("");
 
 		document.getElementById("dashboard-view").innerHTML = `
-		<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(140px,1fr)); gap:10px;">
-		${cardsHtml}
-		</div>
-		<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(280px,1fr)); gap:16px; margin-top:20px;">
-			<div class="dw-sec"><div class="dw-lbl">Deadlines — soonest first</div>${dashList(d.deadlines_soon, false, "No deadlines set.")}</div>
-			<div class="dw-sec"><div class="dw-lbl">Emergencies</div>${dashList(d.emergencies, true, "None right now.")}</div>
-		</div>
-			<div class="dw-sec"><div class="dw-lbl">TASKS BY STATUS</div>
-			${statusBarSection(false, d.by_status)}</div>
-			<div class="dw-sec"><div class="dw-lbl">TASKS BY URGENCY</div>
-			${statusBarSection(false, d.by_urgency)}</div>
-			<div class="dw-sec"><div class="dw-lbl">PROGRESS BY STAGE (all projects)</div>
-			${statusBarSection(true, d.stage_avg_progress)}</div>
-			<div class="dw-sec"><div class="dw-lbl">OPEN TASKS BY DIVISION</div>
-			${statusBarSection(false, d.by_division)}</div>
-		`;
+    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(140px,1fr)); gap:10px;">
+    ${cardsHtml}
+    </div>
+    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(280px,1fr)); gap:16px; margin-top:20px;">
+        <div class="dw-sec"><div class="dw-lbl">Deadlines — soonest first</div>${dashList(d.deadlines_soon, false, "No deadlines set.")}</div>
+        <div class="dw-sec"><div class="dw-lbl">Emergencies</div>${dashList(d.emergencies, true, "None right now.")}</div>
+    </div>
+        <div class="dw-sec"><div class="dw-lbl">TASKS BY STATUS</div>
+        ${statusBarSection(false, d.by_status)}</div>
+        <div class="dw-sec"><div class="dw-lbl">TASKS BY URGENCY</div>
+        ${statusBarSection(false, d.by_urgency)}</div>
+        <div class="dw-sec"><div class="dw-lbl">% COMPLETED BY STAGE</div>
+        ${statusBarSection(true, d.stage_avg_progress)}</div>
+        <div class="dw-sec"><div class="dw-lbl">OPEN TASKS BY DIVISION</div>
+        ${statusBarSection(false, d.by_division)}</div>
+    `;
 	}
-
 	async function loadDashboard() {
 		dashboardData = await frappe.xcall("implementor.api.dashboard_summary", { project_id: state.selectedProject });
-		console.log(dashboardData)
 		loadEmergencyCount();
 		renderDashBoard();
 	}

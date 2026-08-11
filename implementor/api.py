@@ -574,7 +574,7 @@ def dashboard_summary(group_by=None, project_id=None):
     projects = frappe.get_list(
         "Project",
         filters=project_filters,
-        fields=["name", "imp_status", "imp_percent", "imp_deadline", "imp_health", "customer"],
+        fields=["name", "imp_status", "imp_percent", "imp_deadline", "imp_health", "customer","percent_complete"],
     )
 
     task_filters = {}
@@ -591,7 +591,7 @@ def dashboard_summary(group_by=None, project_id=None):
     due_7d = len([t for t in tasks if t.imp_deadline and 0 <= _remaining_days(t.imp_deadline) <= 7])
     overdue = len([t for t in tasks if t.imp_deadline and _remaining_days(t.imp_deadline) < 0])
     escalated = len([t for t in tasks if t.imp_escalated])
-    avg_progress = round(sum((p.imp_percent or 0) for p in projects) / len(projects)) if projects else 0
+    avg_progress = round(sum((p.percent_complete or 0) for p in projects) / len(projects)) if projects else 0
 
     def _bucket(rows, field):
         out = {}
@@ -637,21 +637,22 @@ def dashboard_summary(group_by=None, project_id=None):
     )
 
     result = {
-        "project_id": project_id,
-        "projects": len(projects),
-        "tasks": len(tasks),
-        "avg_progress": avg_progress,
-        "due_7d": due_7d,
-        "overdue": overdue,
-        "escalated": escalated,
-        "by_status": _bucket(tasks, "status"),
-        "by_urgency": _bucket(tasks, "imp_urgency"),
-        "by_stage": _bucket(tasks, "imp_stage"),
-        "by_division": _bucket(tasks, "imp_division"),
-        "stage_avg_progress": _avg_bucket(tasks, "imp_stage", "progress"),
-        "deadlines_soon": deadlines_soon,
-        "emergencies": emergencies,
-    }
+    "project_id": project_id,
+    "projects": len(projects),
+    "tasks": len(tasks),
+    "avg_progress": avg_progress,
+    "due_7d": due_7d,
+    "overdue": overdue,
+    "escalated": escalated,
+    "by_status": _bucket(tasks, "status"),
+    "by_urgency": _bucket(tasks, "imp_urgency"),
+    "by_stage": _bucket(tasks, "imp_stage"),
+    "by_division": _bucket(tasks, "imp_division"),
+    "stage_avg_progress": _avg_bucket(tasks, "imp_stage", "progress"),  # dict: {stage: avg%}
+    "completion_perc": round((projects[0].percent_complete or 0) if project_id and projects else avg_progress),  # number
+    "deadlines_soon": deadlines_soon,
+    "emergencies": emergencies,
+}
 
     if group_by == "client" and not project_id:
         by_client = {}
