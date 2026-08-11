@@ -1,3 +1,4 @@
+
 frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 	var page = frappe.ui.make_app_page({
 		parent: wrapper,
@@ -64,7 +65,6 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 	var state = {
 		notification_doc: "",
 		notification_id: "",
-		single_todo_select: null,
 		completedBy: "",
 		completedOn: null,
 		todoStatusFilter: "",
@@ -131,8 +131,9 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		var isOverdue = totalHours < 0;
 		var absHours = Math.abs(totalHours);
 		var days = Math.floor(absHours / 24);
+		var months = Math.floor(days / 30);
 		var hours = absHours % 24;
-		return { isOverdue: isOverdue, days: days, hours: hours, totalHours: totalHours };
+		return { isOverdue: isOverdue, months: months, days: days, hours: hours, totalHours: totalHours };
 	}
 	function sortedBy(arr) {
 		if (state.sortFilter === "name") {
@@ -153,11 +154,11 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		var filtered = testProjects.filter(function (project) {
 			var mineOnly = !state.mineOnly || isMine(project.pm, currentUser)
 			var match_pct = ppct(project) >= state.minPct && ppct(project) <= state.maxPct;
-			var match_single = !state.selectedProject || state.selectedProject === project.id;
+			// var match_single = !state.selectedProject || state.selectedProject === project.id;
 			var match_name = state.namedFilter === "" || project.name.toLowerCase().includes(state.namedFilter.toLowerCase());
 			var match_person_name = state.personFilter === "" || (project.pm || "").toLowerCase().includes(state.personFilter.toLowerCase());
 			var match_del_status = !state.projectStatusFilter || state.projectStatusFilter == project.status
-			return match_single && match_del_status && mineOnly && match_pct && match_name && match_person_name;
+			return match_del_status && mineOnly && match_pct && match_name && match_person_name;
 		}
 		)
 		var sorted = sortedBy(filtered);
@@ -195,6 +196,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			}
 		}
 		var sorted = sortedBy(filtered);
+		document.getElementById("task-count").textContent = sorted.length + " tasks shown";
 		document.getElementById("d-tasks").innerHTML = renderTasksColumn(sorted);
 
 	}
@@ -207,10 +209,11 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			var match_urgency = state.urgencyFilter === "" || todo.urgency == state.urgencyFilter;
 			var match_filter_status = state.todoStatusFilter === "" || (todo.status || "") === state.todoStatusFilter
 			var match_assignee = state.todoAssignToFilter === "" || (todo.who || "") === state.todoAssignToFilter;
-			var match_single = !state.single_todo_select || todo.id === state.single_todo_select;
-			return match_single && match_assignee && match_filter_status && match_name && mineOnly && todo_filtered && match_person && match_urgency;
+			// var match_single = !state.single_todo_select || todo.id === state.single_todo_select;
+			return match_assignee && match_filter_status && match_name && mineOnly && todo_filtered && match_person && match_urgency;
 		});
 		var sorted = sortedBy(filtered);
+		document.getElementById("todo-count").textContent = sorted.length + " todos shown";
 		document.getElementById("d-todos").innerHTML = renderToDosColumn(sorted);
 	}
 
@@ -225,7 +228,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 	};
 	function selectTask(id) {
 		state.selectedTask = id;
-		state.single_todo_select = null;
+		state.selectToDo = null;
 		showFilteredTasks();
 		loadTodos(id);
 	};
@@ -292,8 +295,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		} else {
 			color = "var(--text-accent)";        // upcoming - accent
 		}
-
-		var deadlineText = isEmergency ? (item.imp_escalated ? "Escalated" : "Emergency") : dueChip(item.deadline);
+		var deadlineText = isEmergency ? (item.imp_escalated ? "Escalated" : "Emergency") : dueChip(item.doctype, item.deadline);
 		return `
     <div class="dash-list-row ${isEmergency ? 'is-emergency' : ''}">
       <span class="dash-name">
@@ -331,14 +333,17 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 	function renderDashBoard() {
 		if (!dashboardData) return;
 		var d = dashboardData;
-		var cardsHtml = [
-			metricCard("Projects", d.projects),
+		var cardsHtml = [];
+		if (!d.project_id) { cardsHtml.push(metricCard("Projects", d.projects)) }
+		cardsHtml.push(
 			metricCard("Tasks", d.tasks),
 			metricCard("Avg Process", d.avg_progress + "%"),
 			metricCard("Due ≤ 7 days ", d.due_7d),
 			metricCard("Overdue", d.overdue, true),
-			metricCard("Escalated", d.escalated, true),
-		].join("")
+			metricCard("Escalated", d.escalated, true)
+		)
+		cardsHtml = cardsHtml.join("")
+
 		document.getElementById("dashboard-view").innerHTML = `
 		<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(140px,1fr)); gap:10px;">
 		${cardsHtml}
@@ -359,7 +364,8 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 	}
 
 	async function loadDashboard() {
-		dashboardData = await frappe.xcall("implementor.api.dashboard_summary");
+		dashboardData = await frappe.xcall("implementor.api.dashboard_summary", { project_id: state.selectedProject });
+		console.log(dashboardData)
 		loadEmergencyCount();
 		renderDashBoard();
 	}
@@ -371,7 +377,9 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 				<button id="btn-dashboard">${frappe.utils.icon("chart-bar", "xs")} Dashboard</button>
 				<div class="legend" id="project-count"></div>
 				<div class="legend"><span class="dot" style="background:var(--lvl-project)"></span> Project</div>
+				<div class="legend" id="task-count"></div>
 				<div class="legend"><span class="dot" style="background:var(--lvl-task)"></span> Task</div>
+				<div class="legend" id="todo-count"></div>
 				<div class="legend"><span class="dot" style="background:var(--lvl-todo)"></span> To-do</div>
 			</div>
 			<div style="display:flex; align-items:center; gap:10px">
@@ -478,7 +486,12 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		</div>
 		</div>
 	  `);
-
+	function scrollToSelected() {
+		requestAnimationFrame(function () {
+			var el = document.querySelector(".sel");
+			if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+		});
+	}
 	function updateView() {
 		document.getElementById("btn-board").classList.toggle("on", state.view === "board");
 		document.getElementById("btn-dashboard").classList.toggle("on", state.view === "dashboard");
@@ -668,7 +681,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
             <div style="flex:1; min-width:0">
               <div style="display:flex; justify-content:space-between; gap:8px; font-weight:500">
                 <span>${(item.title) || (item.subject) || item.name}</span>
-                <span class="d-meta" style="flex:none">${(dueChip(item.deadline))}</span>
+                <span class="d-meta" style="flex:none">${(dueChip(item.doctype, item.deadline))}</span>
               </div>
             </div>
           </div>
@@ -682,141 +695,80 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			${rows}
   `;
 	}
-	document.getElementById("notification-panel").addEventListener("click", function (e) {
+	document.getElementById("notification-panel").addEventListener("click", async function (e) {
 		if (e.target.closest("[data-act='close-notify-panel']")) {
 			state.notifyPanelOpen = false;
 			renderNotifyPanel();
+			return;
 		}
-		if (e.target.closest("[data-act='opendocurl']")) {
-			state.selectedProject = null;
-			state.selectedTask = null;
+		var opendocurl = e.target.closest("[data-act='opendocurl']");
+		if (!opendocurl) return;
+
+		var doc = opendocurl.dataset.doc;
+		var id = opendocurl.dataset.id;
+
+		if (doc === "Task") {
+			var ctx = await frappe.xcall("implementor.api.resolve_task_context", { task: id });
+			if (!ctx.project) return frappe.msgprint("No Project found for this Task.");
+			state.selectedProject = ctx.project;
+			state.selectedTask = ctx.task;
 			state.selectToDo = null;
-			state.notification_doc = e.target.closest("[data-act='opendocurl']").dataset.doc;
-			state.notification_id = e.target.closest("[data-act='opendocurl']").dataset.id;
-
-			if (state.notification_doc === "Task") {
-				var task = testTasks.find(function (t) {
-					return t.id === state.notification_id;
-				});
-				if (!task) return;
-
-				state.single_todo_select = null;
-				// showFilteredProjects();
-				// showFilteredTasks();
-				// selectProject(task.project);
-				selectTask(state.notification_id);
-				state.selectedProject = task.project;
-				showFilteredProjects();
-				state.notifyPanelOpen = false;
-				state.selectedProject = null;
-				state.selectedTask = null;
-				renderNotifyPanel();
-				return;
-			}
-			else {
-				var todo = testTodos.find(function (t) {
-					return t.id === state.notification_id;
-				});
-				console.log("TODO", todo)
-				if (!todo) return frappe.msgprint("No Todo assigned for this record.");
-
-				var task = testTasks.find(function (t) {
-					return t.id === todo.task;
-				});
-				console.log("TASK", task)
-				if (!task) return frappe.msgprint("No Task assigned for this record.");;
-
-				var project = testProjects.find(function (p) {
-					return p.id === task.project;
-				});
-				console.log("PROJECT", project)
-				if (!project) return frappe.msgprint("No Project assigned for this record.");;
-
-				// selectProject(project.id);
-				// selectTask(task.id);
-				state.selectedProject = project.id;
-				state.selectedTask = task.id;
-				showFilteredProjects();
-				showFilteredTasks();
-				state.single_todo_select = todo.id;
-				showToDosForSelectedTasks();
-				state.notifyPanelOpen = false;
-				state.selectedProject = null;
-				state.selectedTask = null;
-				state.single_todo_select = null;
-				renderNotifyPanel();
-				return;
-			}
+		} else {
+			var ctx = await frappe.xcall("implementor.api.resolve_todo_context", { todo: id });
+			if (!ctx.task || !ctx.project) return frappe.msgprint("No Task/Project found for this To-do.");
+			state.selectedProject = ctx.project;
+			state.selectedTask = ctx.task;
+			state.selectToDo = ctx.todo;
 		}
+
+		state.notifyPanelOpen = false;
+		renderNotifyPanel();
+		state.view = "board";
+		updateView();
+
+		await loadTasks(state.selectedProject);
+		await loadTodos(state.selectedTask, state.selectedProject);
+		showFilteredProjects();
+		showFilteredTasks();
+		showToDosForSelectedTasks();
+		scrollToSelected();
 	});
-	document.getElementById("emergency-panel").addEventListener("click", function (e) {
+	document.getElementById("emergency-panel").addEventListener("click", async function (e) {
 		if (e.target.closest("[data-act='close-emergency-panel']")) {
 			state.emergencyPanelOpen = false;
 			renderEmergencyPanel();
+			return;
 		}
-		if (e.target.closest("[data-act='opendocurl']")) {
-			state.selectedProject = null;
-			state.selectedTask = null;
+		var opendocurl = e.target.closest("[data-act='opendocurl']");
+		if (!opendocurl) return;
+
+		var doc = opendocurl.dataset.doc;
+		var id = opendocurl.dataset.id;
+
+		if (doc === "Task") {
+			var ctx = await frappe.xcall("implementor.api.resolve_task_context", { task: id });
+			if (!ctx.project) return frappe.msgprint("No Project found for this Task.");
+			state.selectedProject = ctx.project;
+			state.selectedTask = id;
 			state.selectToDo = null;
-			// loadProjects();
-			// loadTasks();
-			// loadTodos();
-			var doc = e.target.closest("[data-act='opendocurl']").dataset.doc;
-			var id = e.target.closest("[data-act='opendocurl']").dataset.id;
-			if (doc === "Task") {
-				var task = testTasks.find(function (t) {
-					return t.id === id;
-				});
-				if (!task) return frappe.throw("No Task Assigned for this record");
-
-				state.single_todo_select = null;
-				// showFilteredProjects();
-				// showFilteredTasks();
-				// selectProject(task.project);
-				var project = task.project
-				if (!project) return frappe.throw("No Project Assigned for this record");
-				state.selectedProject = project;
-				showFilteredProjects();
-				selectTask(id);
-				state.notifyPanelOpen = false;
-				renderNotifyPanel();
-				return;
-			}
-			else {
-				var todo = testTodos.find(function (t) {
-					return t.id === id;
-				});
-				console.log("TODO", todo)
-				if (!todo) return frappe.msgprint("No Todo assigned for this record.");
-
-				var task = testTasks.find(function (t) {
-					return t.id === todo.task;
-				});
-				console.log("TASK", task)
-				if (!task) return frappe.msgprint("No Task assigned for this record.");;
-
-				var project = testProjects.find(function (p) {
-					return p.id === task.project;
-				});
-				console.log("PROJECT", project)
-				if (!project) return frappe.msgprint("No Project assigned for this record.");;
-
-				// selectProject(project.id);
-				// selectTask(task.id);
-				state.selectedProject = project.id;
-				state.selectedTask = task.id;
-				showFilteredProjects();
-				showFilteredTasks();
-				state.single_todo_select = todo.id;
-				showToDosForSelectedTasks();
-				state.notifyPanelOpen = false;
-				renderNotifyPanel();
-				return;
-			}
-			// frappe.xcall("implementor.api.get_doc_url", { doc: doc, id: id }).then(function (url) {
-			// 	window.open(url, "_blank");
-			// });
+		} else {
+			var ctx = await frappe.xcall("implementor.api.resolve_todo_context", { todo: id });
+			if (!ctx.task || !ctx.project) return frappe.msgprint("No Task/Project found for this ToDo")
+			state.selectedProject = ctx.project;
+			state.selectedTask = ctx.task;
+			state.selectToDo = id;
 		}
+
+		state.emergencyPanelOpen = false;
+		renderEmergencyPanel();
+		state.view = "board";
+		updateView();
+		await loadTasks(state.selectedProject);
+		await loadTodos(state.selectedTask, state.selectedProject);
+		showFilteredProjects();
+		showFilteredTasks();
+		showToDosForSelectedTasks();
+		scrollToSelected();
 	});
 	document.getElementById("btn-add").addEventListener("click", function (e) {
 		state.add = !state.add;   // simple toggle, same pattern as your menu open/close
@@ -841,21 +793,120 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		if (newproject) {
 			state.add = false;
 			renderAddMenu();
-			frappe.new_doc("Project");
+			frappe.new_doc(
+				"Project",
+				{}, // route_options
+				(quick_entry) => {
+					// This runs only if Quick Entry dialog is used
+					if (!quick_entry || !quick_entry.dialog) {
+						// Full form opened instead of Quick Entry – nothing to override
+						return;
+					}
+
+					const dialog = quick_entry.dialog;
+
+					// Override Save action
+					dialog.set_primary_action(__('Save'), () => {
+						const values = dialog.get_values(true); // true = validate
+
+						frappe.call({
+							method: "frappe.client.insert",
+							args: {
+								doc: {
+									doctype: "Project",
+									...values
+								}
+							},
+							callback(r) {
+								if (!r.exc) {
+									frappe.msgprint(__("Project Successfully created"));
+									// Optional: refresh your page data here
+									// e.g. load_projects_table(page);
+								}
+								// Important: just hide the dialog, no redirect
+								dialog.hide();
+							}
+						});
+					});
+				}
+			);
+			loadProjects();
+			showFilteredProjects();
 			return
-		};
+		}
 		var newtask = e.target.closest("[data-act='newtask']");
 		if (newtask) {
 			state.add = false;
 			renderAddMenu();
-			frappe.new_doc("Task", { project: state.selectedProject });
+			frappe.new_doc("Task", { project: state.selectedProject }, (quick_entry) => {
+				if (!quick_entry || !quick_entry.dialog) {
+					return
+				}
+				const dialog = quick_entry.dialog;
+				dialog.set_primary_action(__('Save'), () => {
+					const values = dialog.get_values(true); // true = validate
+
+					frappe.call({
+						method: "frappe.client.insert",
+						args: {
+							doc: {
+								doctype: "Task",
+								project: state.selectedProject,
+								...values
+							}
+						},
+						callback(r) {
+							if (!r.exc) {
+								frappe.msgprint(__("Task Successfully created"));
+								// Optional: refresh your page data here
+								// e.g. load_projects_table(page);
+							}
+							// Important: just hide the dialog, no redirect
+							dialog.hide();
+						}
+					});
+				});
+
+			});
+			loadTasks();
+			showFilteredTasks();
 			return
 		};
 		var newtodo = e.target.closest("[data-act='newtodo']");
 		if (newtodo) {
 			state.add = false;
 			renderAddMenu();
-			frappe.new_doc("ToDo", { reference_type: "Task", reference_name: state.selectedTask });
+			frappe.new_doc("ToDo", { reference_type: "Task", reference_name: state.selectedTask }, (quick_entry) => {
+				if (!quick_entry || !quick_entry.dialog) {
+					return
+				}
+				const dialog = quick_entry.dialog;
+				dialog.set_primary_action(__('Save'), () => {
+					const values = dialog.get_values(true); // true = validate
+
+					frappe.call({
+						method: "frappe.client.insert",
+						args: {
+							doc: {
+								doctype: "ToDo",
+								reference_type: "Task",
+								reference_name: state.selectedTask,
+								...values
+							}
+						},
+						callback(r) {
+							if (!r.exc) {
+								frappe.msgprint(__("ToDo Successfully created"));
+								// Optional: refresh your page data here
+								// e.g. load_projects_table(page);
+							}
+							// Important: just hide the dialog, no redirect
+							dialog.hide();
+						}
+					});
+				});
+
+			});
 			return
 		};
 	});
@@ -1182,8 +1233,35 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 
 		if (newtask) {
 			project_id = newtask.getAttribute("data-id");
-			doc = frappe.new_doc("Task", {
-				project: project_id,
+			frappe.new_doc("Task", { project: project_id }, (quick_entry) => {
+				if (!quick_entry || !quick_entry.dialog) {
+					return
+				}
+				const dialog = quick_entry.dialog;
+				dialog.set_primary_action(__('Save'), () => {
+					const values = dialog.get_values(true); // true = validate
+
+					frappe.call({
+						method: "frappe.client.insert",
+						args: {
+							doc: {
+								doctype: "Task",
+								project: project_id,
+								...values
+							}
+						},
+						callback(r) {
+							if (!r.exc) {
+								frappe.msgprint(__("Task Successfully created"));
+								// Optional: refresh your page data here
+								// e.g. load_projects_table(page);
+							}
+							// Important: just hide the dialog, no redirect
+							dialog.hide();
+						}
+					});
+				});
+
 			});
 			return
 		};
@@ -1379,7 +1457,6 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 				state.menu = null;
 				selectedDueDate = "";
 				showFilteredTasks();
-				return;
 			}).catch(function (err) {
 				frappe.msgprint("Could not update due date: " + (err.message || "unknown error"))
 			})
@@ -1445,9 +1522,36 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 
 		if (newtodo) {
 			task_id = newtodo.getAttribute("data-id");
-			doc = frappe.new_doc("ToDo", {
-				reference_type: "Task",
-				reference_name: task_id,
+			frappe.new_doc("ToDo", { reference_type: "Task", reference_name: task_id }, (quick_entry) => {
+				if (!quick_entry || !quick_entry.dialog) {
+					return
+				}
+				const dialog = quick_entry.dialog;
+				dialog.set_primary_action(__('Save'), () => {
+					const values = dialog.get_values(true); // true = validate
+
+					frappe.call({
+						method: "frappe.client.insert",
+						args: {
+							doc: {
+								doctype: "ToDo",
+								reference_type: "Task",
+								reference_name: task_id,
+								...values
+							}
+						},
+						callback(r) {
+							if (!r.exc) {
+								frappe.msgprint(__("ToDo Successfully created"));
+								// Optional: refresh your page data here
+								// e.g. load_projects_table(page);
+							}
+							// Important: just hide the dialog, no redirect
+							dialog.hide();
+						}
+					});
+				});
+
 			});
 			return
 		};
@@ -1556,6 +1660,39 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		selectTask(id)
 	});
 	document.getElementById("d-todos").addEventListener("click", function (e) {
+		var savedue = e.target.closest("[data-act='savedue']")
+		if (savedue) {
+			var id = savedue.getAttribute("data-id");
+			var todo = testTodos.find(function (f) {
+				return f.id === id
+			})
+			saveDueDate("ToDo", id, selectedDueDate).then(function (newdate) {
+				var todo = testTodos.find(function (t) {
+					return t.id === id
+				})
+				if (todo) todo.due = newdate
+				state.menu = null;
+				selectedDueDate = "";
+				showToDosForSelectedTasks();
+
+			}).catch(function (err) {
+				frappe.msgprint("Could not update due date: " + (err.message || "unknown error"))
+			})
+			return;
+		}
+		var gotodue = e.target.closest("[data-act='gotodue'");
+		if (gotodue) {
+			var id = gotodue.getAttribute("data-id");
+			var todo = testTodos.find(function (f) {
+				return f.id === id
+			})
+			state.menu = { id: id, mode: "changedue" }
+			showToDosForSelectedTasks();
+			requestAnimationFrame(function () {
+				initDueDatePicker(todo, "due_date");
+			});
+			return;
+		}
 		var react = e.target.closest("[data-act='react']");
 		var card = e.target.closest("[data-todo-id]");
 		if (!card) return;
@@ -1582,7 +1719,8 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		};
 		var changeurg = e.target.closest("[data-act='gotourgency']");
 		if (changeurg) {
-			state.menu.mode = "changeurg";
+			var id = changeurg.getAttribute("data-id")
+			state.menu = { id: id, mode: "changeurg" }
 			showToDosForSelectedTasks();
 			return;
 		}
@@ -1880,7 +2018,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			<h3 style="margin:0 0 4px">${project.name}</h3>
 			<div class="d-meta"> ${project.client} · PM: ${renderLeads(project.pm)}· ${ppct(project)}%</div>
 			<div style="margin-top:8px">
-			<div class="d-meta" >${frappe.utils.icon("calendar-days")} ${fmtDate(project.due)} · ${dueChip(project.due)}</div></div>
+			<div class="d-meta" >${frappe.utils.icon("calendar-days")} ${fmtDate(project.due)} · ${dueChip("Project", project.due)}</div></div>
 		</div>
 		<div class="dw-sec">
 			<div class="dw-lbl">Description</div>
@@ -1915,7 +2053,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 					</div>
 				</div>
 				<div style="margin-top:8px">
-					<div class="d-meta">${frappe.utils.icon("calendar-days")} ${fmtDate(task.due)} · ${dueChip(task.due)} · ${task.status} · ${pct(task)}%</div>
+					<div class="d-meta">${frappe.utils.icon("calendar-days")} ${fmtDate(task.due)} · ${dueChip("Task", task.due)} · ${task.status} · ${pct(task)}%</div>
 					<div style="margin-top:4px">
 						<div class="d-meta" style="color:var(--text-accent)">
 							${task.creation ? `<div class="d-meta" style="color:var(--text-accent)">${frappe.utils.icon("clock", "xs")} ${task.status} since ${fmtDate(task.creation)}</div>` : ""}
@@ -1952,7 +2090,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
     <h3 style="margin:0 0 4px">${todo.name}</h3>
     <div class="d-meta">${todo.status} · ${todo.urgency} · Assigned to: ${renderLeads(todo.who)}</div>
     <div style="margin-top:8px">
-      <div class="d-meta">${frappe.utils.icon("calendar-days", "xs")} ${fmtDate(todo.due)} · ${dueChip(todo.due)}</div>
+      <div class="d-meta">${frappe.utils.icon("calendar-days", "xs")} ${fmtDate(todo.due)} · ${dueChip("ToDo", todo.due)}</div>
     </div>
   </div>
   <div class="dw-sec">
@@ -2092,7 +2230,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			return `<span class="d-chip" style = "background:var(--surface-1); color:var(--text-secondary)" > ${frappe.utils.icon("user", "xs")} ${name}</span>`;
 		}).join(" ");
 	}
-	function dueChip(dueDateString) {
+	function dueChip(doc, dueDateString) {
 		var r = remDaysHours(dueDateString);
 		if (r.totalHours === 0) {
 			return `<span style="color:orange">Due now</span>`;
@@ -2106,7 +2244,11 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 				return `<span>${label}</span>`;
 			}
 		}
-		var overdueLabel = r.days > 0 ? (r.days + "d " + r.hours + "h overdue") : (r.hours + "h overdue");
+		// if (doc === "Project") {
+		// 	var overdueLabel = r.months > 0 ? (r.months + "mo " + r.hours + "h overdue") : (r.hours + "h overdue");
+		// 	return `<span style="color:var(--text-danger)">${overdueLabel}</span>`;
+		// }
+		var overdueLabel = r.months > 0 ? (r.months + "mo " + r.hours + "h overdue") : r.days > 0 ? (r.days + "d " + r.hours + "h overdue") : (r.hours + "h overdue");
 		return `<span style="color:var(--text-danger)">${overdueLabel}</span>`;
 	}
 	// indicator to mark urgency
@@ -2261,7 +2403,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			<div class="d-meta">${project.client}</div>
 			<div>${chip(project.status)}</div>
 			<div class="d-own">PM · ${renderLeads(project.pm)}</div>
-			<div class="d-meta">${fmtDate(project.due)} · ${dueChip(project.due)}</div>
+			<div class="d-meta">${fmtDate(project.due)} · ${dueChip("Project", project.due)}</div>
 			${prog(project.percent_complete)}
 			<div style="display:flex; gap:6px">${renderReactions(project)}</div>
 		</div>
@@ -2407,6 +2549,9 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 				${chip(task.status)}
 				${urg(task.urgency)}
 			</div>
+			<div style="display:flex;gap:4px;flex-wrap:wrap">
+			${renderModuleCards(task.module)}
+			</div>
 		</div>
 
 		<div class="d-own-row">
@@ -2415,7 +2560,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		</div>
 
 		<div class="d-meta">
-			${task.due ? fmtDate(task.due) : "No Due date"} · ${task.status === "Completed" ? `<span style="color:var(--text-success)">Completed</span>` : dueChip(task.due)}
+			${task.due ? fmtDate(task.due) : "No Due date"} · ${task.status === "Completed" ? `<span style="color:var(--text-success)">Completed</span>` : dueChip("Task", task.due)}
 		</div>
 
 		${task.creation ? `
@@ -2446,6 +2591,25 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 	${menuHtml}
 	</div>
 	`;
+	}
+	var todo_menu_actions = [
+		{ act: "details", icon: "info", label: "Details & activity" },
+		{ act: "gotostatus", icon: "circle-dot", label: "Change status" },
+		{ act: "assignto", icon: "user-plus", label: "Assign" },
+		{ act: "gotourgency", icon: "flame", label: "Set Urgency" },
+		{ act: "gotodue", icon: "calendar-days", label: "Change Due date" },
+		{ act: "copylink", icon: "copy", label: "Copy link", doc: "ToDo" },
+		{ act: "sendslackdm", icon: "send", label: "Send to Slack direct message", doc: "ToDo" },
+		{ act: "sendslackchannel", icon: "send", label: "Send to Slack Channel", doc: "ToDo" },
+		{ act: "sendwhatsapp", icon: "send", label: "Send to WhatsApp", doc: "ToDo" }
+	];
+	function renderToDoMenuOptions(todo) {
+		return todo_menu_actions.map(function (action) {
+			var docAttr = action.doc ? ` data-doc="${action.doc}"` : "";
+			return `
+			<div class="d-act" data-act=${action.act} data-id="${todo.id}" ${docAttr}><div>${frappe.utils.icon(action.icon, "sm")}</div>${action.label}</div>
+			`;
+		}).join("")
 	}
 	function renderToDoCard(todo) {
 		var icon = todo.done ? "✓" : "○";
@@ -2487,24 +2651,37 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 					</div>
 			`;
 			}
+			else if (state.menu.mode === "changedue") {
+				menuHtml = `
+	<div class="d-menu">
+		<div class="due-date-picker-wrapper">
+			<div class="due-date-label">Due date</div>
+			<div class="due-date-input-row">
+				<input type="text" data-act="changeduedate" id="due-date-input" data-id="${todo.id}"
+					value="${frappe.datetime.str_to_user(todo.due)}"
+					placeholder="Select Date"
+					style="width:auto; max-width:180px; padding:6px 10px" autocomplete="off" readonly/>
+			</div>
+			<div id="due-date-calendar-container"></div>
+			<div class="due-date-footer">
+				<button class="btn btn-default btn-sm" data-doc="todos" data-act="close">Cancel</button>
+				<button class="btn btn-primary btn-sm" data-act="savedue" data-id="${todo.id}">Save</button>
+			</div>
+		</div>
+	</div>
+	`;
+			}
 			else {
 				menuHtml = `
 			<div class="d-menu" >
-    <div class="d-act" data-act="details" data-id="${todo.id}"><div style="display:inline-flex">${frappe.utils.icon("info", "sm")}</div> Details & activity</div>
-    <div class="d-act" data-act="gotostatus" data-id="${todo.id}"><div style="display:inline-flex">${frappe.utils.icon("circle-dot", "sm")}</div> Change status</div>
-    <div class="d-act" data-act="assignto" data-id="${todo.id}"><div style="display:inline-flex">${frappe.utils.icon("user-plus", "sm")}</div> Assign</div>
-    <div class="d-act" data-act="gotourgency" data-id="${todo.id}"><div style="display:inline-flex">${frappe.utils.icon("flame", "sm")}</div> Set Urgency</div>
-	<div class="d-act" data-act="copylink" data-id="${todo.id}" data-doc="ToDo"><div>${frappe.utils.icon("copy", "sm")}</div> Copy link</div>
-	<div class="d-act" data-act="sendslackdm" data-id="${todo.id}" data-doc="ToDo"><div>${frappe.utils.icon("send", "sm")}</div> Send to Slack direct message</div>
-	<div class="d-act" data-act="sendslackchannel" data-id="${todo.id}" data-doc="ToDo"><div>${frappe.utils.icon("send", "sm")}</div> Send to Slack Channel</div>
-	<div class="d-act" data-act="sendwhatsapp" data-id="${todo.id}" data-doc="ToDo"><div>${frappe.utils.icon("send", "sm")}</div> Send to WhatsApp</div>
+			${(renderToDoMenuOptions(todo))}
     <div class="d-act" data-act="close"><div style="display:inline-flex">${frappe.utils.icon("close", "sm")}</div> Close</div>
   </div>
 			`;
 			}
 		}
 		return `
-			<div class="d-row lvl-todo" data-todo-id=${todo.id}>
+			<div class="d-row lvl-todo ${todo.id === state.selectToDo ? 'sel' : ''}" data-todo-id=${todo.id}>
 				${icon}
 			<div style="display:flex; flex-direction:column; gap:6px; flex:1">
 			<div>
@@ -2513,7 +2690,12 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 				${urg(todo.urgency)}
 				${chip(todo.priority)}
 			</div>
+			<div style="display:flex; gap:4px; flex-wrap:wrap">
+				${renderModuleCards(todo.module)}
+			</div>
 				<div class="d-own">Assigned To · ${renderLeads(todo.who)}</div>
+							<div style="margin-top:8px">
+			<div class="d-meta" >${frappe.utils.icon("calendar-days")} ${fmtDate(todo.due)} · ${dueChip("ToDo", todo.due)}</div></div>
 				<div style="display:flex; gap:6px">${renderReactions(todo)}</div>
 			</div>
 			<button class="d-dots" data-act="dots" data-id="${todo.id}">${frappe.utils.icon("dot-vertical", "sm")}</button>
@@ -2522,6 +2704,19 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			</div>
 			`;
 
+	}
+	function renderModuleCards(module) {
+		if (!module) {
+			return `<div class="d-meta">No module assigned.</div>`;
+		}
+		// var inScope = !!module.in_scope;
+		var color = "var(--text-success)";
+		var bg = "var(--bg-success)";
+		return `
+			<div class="d-chip" style="color:${color}; background:${bg}; border:0.5px solid ${color}">
+				${module}
+			</div>
+		`;
 	}
 	function renderProjectsColumn(projects) {
 		return projects.map(renderProjectCard).join("")
@@ -2578,7 +2773,8 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 				activity: r.activity,
 				description: r.title,
 				slack_channel_id: r.slack_channel_id,
-				whatsapp_channel_id: r.whatsapp_channel_id
+				whatsapp_channel_id: r.whatsapp_channel_id,
+				module: r.imp_module
 			};
 		});
 		showToDosForSelectedTasks();
@@ -2609,7 +2805,8 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 				attachments: r.attachments,
 				reactions: r.reaction_counts || {},
 				slack_channel_id: r.slack_channel_id,
-				whatsapp_channel_id: r.whatsapp_channel_id
+				whatsapp_channel_id: r.whatsapp_channel_id,
+				module: r.imp_module
 			};
 		});
 		showFilteredTasks();

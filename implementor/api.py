@@ -193,7 +193,7 @@ def get_tasks(project=None):
             "status", "imp_urgency as urgency", "progress as percent",
             "imp_deadline as deadline", "imp_division_lead as lead","imp_started_on as started_on",
             "imp_doing as doing", "imp_escalated as escalated",
-            "description", "_assign", "slack_channel_id", "whatsapp_channel_id", "completed_on", "completed_by"
+            "description", "_assign", "slack_channel_id", "whatsapp_channel_id", "completed_on", "completed_by","imp_module"
         ],
     )
     for r in rows:
@@ -206,6 +206,8 @@ def get_tasks(project=None):
         r["activity"] = _recent_activity("Task", r["name"], limit=5)
         r["comments"] = _comments("Task", r["name"], limit=5)
         r["attachments"] = _attachments("Task", r["name"])
+        r["modules"] = _project_modules(r.get("project"))
+        r["imp_module"] = frappe.db.get_value("Project Module", r.get("imp_module"), "module_name") if r.get("imp_module") else None
     return rows
 
 @frappe.whitelist()
@@ -229,9 +231,16 @@ def get_todos(task=None, project=None):
             "name", "description as title", "reference_type", "reference_name as task",
             "allocated_to as assignee", "status", "priority", "imp_done as done",
             "imp_urgency as urgency", "date as deadline", "imp_escalated as escalated",
-            "slack_channel_id", "whatsapp_channel_id"
+            "slack_channel_id", "whatsapp_channel_id","imp_module"
         ],
     )
+
+    task_ids = list({r["task"] for r in rows if r.get("task")})
+    task_to_project = {}
+    if task_ids:
+        task_rows = frappe.get_all("Task", filters={"name": ["in", task_ids]}, fields=["name", "project"])
+        task_to_project = {t.name: t.project for t in task_rows}
+
     for r in rows:
         r["title"] = _strip_html(r.get("title"))
         r["remaining_days"] = _remaining_days(r.get("deadline"))
@@ -240,8 +249,20 @@ def get_todos(task=None, project=None):
         r["activity"] = _recent_activity("ToDo", r["name"], limit=5)
         r["comments"] = _comments("ToDo", r["name"], limit=5)
         r["attachments"] = _attachments("ToDo", r["name"])
+        r["modules"] = _project_modules(task_to_project.get(r.get("task")))
+        r["imp_module"] = frappe.db.get_value("Project Module", r.get("imp_module"), "module_name") if r.get("imp_module") else None
     return rows
 
+def _project_modules(project_name):
+	if not project_name:
+		return []
+	return frappe.get_all(
+		"Project Module",
+		filters={"parent": project_name, "parenttype": "Project", "parentfield": "imp_modules"},
+		fields=["module_name", "in_scope", "notes"],
+		order_by="idx asc",
+	)
+ 
 def _comments(doctype, name, limit=5):
     rows = frappe.get_all(
         "Comment",
@@ -530,18 +551,41 @@ def convert_ticket_to_task(ticket, project, task_type, division):
 def set_ticket_status(ticket, status):
     frappe.db.set_value("Support Ticket", ticket, "status", status)
     return {"ok": True}
+@frappe.whitelist()
+def resolve_task_context(task):
+	project = frappe.db.get_value("Task", task, "project")
+	return {"task": task, "project": project}
 
 @frappe.whitelist()
-def dashboard_summary(group_by=None):
+def resolve_todo_context(todo):
+	reference_type, reference_name = frappe.db.get_value(
+		"ToDo", todo, ["reference_type", "reference_name"]
+	)
+	if reference_type != "Task" or not reference_name:
+		return {"todo": todo, "task": None, "project": None}
+	project = frappe.db.get_value("Task", reference_name, "project")
+	return {"todo": todo, "task": reference_name, "project": project}
+@frappe.whitelist()
+def dashboard_summary(group_by=None, project_id=None):
+    project_filters = {"imp_status": ["!=", "Closed"]}
+    if project_id:
+        project_filters["name"] = project_id
+
     projects = frappe.get_list(
         "Project",
-        filters={"imp_status": ["!=", "Closed"]},
+        filters=project_filters,
         fields=["name", "imp_status", "imp_percent", "imp_deadline", "imp_health", "customer"],
     )
+
+    task_filters = {}
+    if project_id:
+        task_filters["project"] = project_id
+
     tasks = frappe.get_list(
         "Task",
-        fields=["name", "status","subject", "imp_urgency", "imp_stage", "imp_division",
-                "imp_deadline", "imp_escalated", "project", "progress"],   # ADDED "progress"
+        filters=task_filters,
+        fields=["name", "status", "subject", "imp_urgency", "imp_stage", "imp_division",
+                "imp_deadline", "imp_escalated", "project", "progress"],
     )
 
     due_7d = len([t for t in tasks if t.imp_deadline and 0 <= _remaining_days(t.imp_deadline) <= 7])
@@ -556,28 +600,44 @@ def dashboard_summary(group_by=None):
             out[key] = out.get(key, 0) + 1
         return out
 
-    def _avg_bucket(rows, group_field, value_field):          # NEW helper
+    def _avg_bucket(rows, group_field, value_field):
         groups = {}
         for r in rows:
             key = r.get(group_field) or "Unspecified"
             groups.setdefault(key, []).append(r.get(value_field) or 0)
         return {k: round(sum(v) / len(v)) for k, v in groups.items()}
-    todos = frappe.get_list(
-        "ToDo",
-        filters={"reference_type": "Task"},
-        fields=["name", "description", "imp_urgency", "date", "imp_escalated", "imp_done", "reference_name"],
-    )
+
+    todo_filters = {"reference_type": "Task"}
+    if project_id:
+        task_ids_for_project = [t.name for t in tasks]
+        if not task_ids_for_project:
+            todos = []
+        else:
+            todo_filters["reference_name"] = ["in", task_ids_for_project]
+            todos = frappe.get_list(
+                "ToDo",
+                filters=todo_filters,
+                fields=["name", "description", "imp_urgency", "date", "imp_escalated", "imp_done", "reference_name"],
+            )
+    else:
+        todos = frappe.get_list(
+            "ToDo",
+            filters=todo_filters,
+            fields=["name", "description", "imp_urgency", "date", "imp_escalated", "imp_done", "reference_name"],
+        )
 
     deadlines_soon = (
-        [{**t, "doctype": "Task", "title": t.subject,"deadline": t.imp_deadline} for t in tasks if t.imp_deadline and  _remaining_days(t.imp_deadline) <= 7]
-        + [{**d, "doctype": "ToDo", "title": d.description,"deadline":d.date} for d in todos if d.date and not d.imp_done and  _remaining_days(d.date) <= 7]
+        [{**t, "doctype": "Task", "title": t.subject, "deadline": t.imp_deadline} for t in tasks if t.imp_deadline and _remaining_days(t.imp_deadline) <= 7]
+        + [{**d, "doctype": "ToDo", "title": d.description, "deadline": d.date} for d in todos if d.date and not d.imp_done and _remaining_days(d.date) <= 7]
     )
 
     emergencies = (
         [{**t, "doctype": "Task", "title": t.subject} for t in tasks if t.imp_urgency == "Emergency" and t.status != "Done"]
         + [{**d, "doctype": "ToDo", "title": d.description} for d in todos if d.imp_urgency == "Emergency" and not d.imp_done]
     )
+
     result = {
+        "project_id": project_id,
         "projects": len(projects),
         "tasks": len(tasks),
         "avg_progress": avg_progress,
@@ -588,13 +648,12 @@ def dashboard_summary(group_by=None):
         "by_urgency": _bucket(tasks, "imp_urgency"),
         "by_stage": _bucket(tasks, "imp_stage"),
         "by_division": _bucket(tasks, "imp_division"),
-        "stage_avg_progress": _avg_bucket(tasks, "imp_stage", "progress"),   # NEW field
+        "stage_avg_progress": _avg_bucket(tasks, "imp_stage", "progress"),
         "deadlines_soon": deadlines_soon,
-        "emergencies":emergencies ,
+        "emergencies": emergencies,
     }
-    return result
 
-    if group_by == "client":
+    if group_by == "client" and not project_id:
         by_client = {}
         for p in projects:
             by_client.setdefault(p.customer, []).append(p)
@@ -607,7 +666,6 @@ def dashboard_summary(group_by=None):
         }
 
     return result
-
 
 @frappe.whitelist()
 def notifications():
