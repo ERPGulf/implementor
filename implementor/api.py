@@ -560,7 +560,7 @@ def resolve_task_context(task):
 def resolve_todo_context(todo):
 	reference_type, reference_name = frappe.db.get_value(
 		"ToDo", todo, ["reference_type", "reference_name"]
-	)
+	) or (None, None)
 	if reference_type != "Task" or not reference_name:
 		return {"todo": todo, "task": None, "project": None}
 	project = frappe.db.get_value("Task", reference_name, "project")

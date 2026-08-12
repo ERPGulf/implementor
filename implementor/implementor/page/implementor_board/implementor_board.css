@@ -502,15 +502,6 @@ button.on {
     margin-bottom: 14px;
 }
 
-.send-popup-title {
-    font-size: 15px;
-    font-weight: 600;
-    color: var(--text-primary, #111827);
-    display: flex;
-    align-items: center;
-    gap: 6px;
-}
-
 .send-popup-close {
     border: none;
     background: transparent;
@@ -615,6 +606,22 @@ button.on {
 
 .btn-send:active {
     opacity: 0.8;
+}
+
+#f-person {
+    position: relative;
+    z-index: 1;
+}
+
+#f-person.expanded {
+    position: absolute;
+    z-index: 1000;
+    width: 250px;
+    max-height: 220px;
+    /* ~5-6 rows, adjust to taste */
+    overflow-y: auto;
+    background: #fff;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
 }
 
 .d-row.sel {
@@ -969,18 +976,8 @@ button.on {
     z-index: 60;
 }
 
-.header-panel-row {
-    padding: 8px 16px;
-    border-bottom: 0.5px solid var(--border);
-    cursor: pointer;
-}
-
 .header-panel-row:hover {
     background: var(--surface-1);
-}
-
-.header-panel-row:last-child {
-    border-bottom: none;
 }
 
 .header-panel-title {
@@ -1018,10 +1015,6 @@ button.on {
     padding: 0 3px;
 }
 
-#btn-emergency .icon {
-    color: var(--text-danger);
-}
-
 #btn-emergency {
     position: relative;
 }
@@ -1030,23 +1023,6 @@ button.on {
 .impl-board-root .topbar,
 #dashboard-view {
     transition: opacity 0.15s ease;
-}
-
-#btn-emergency .badge {
-    position: absolute;
-    top: -4px;
-    right: -4px;
-    background: var(--text-danger-light);
-    color: #fff;
-    font-size: 10px;
-    font-weight: 600;
-    min-width: 16px;
-    height: 16px;
-    border-radius: 999px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 0 3px;
 }
 
 #btn-emergency .icon {

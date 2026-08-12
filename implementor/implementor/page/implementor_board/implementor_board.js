@@ -220,6 +220,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 	function selectProject(id) {
 		state.selectedProject = id;
 		state.selectedTask = null;
+		state.selectToDo = null;
 		loadTasks(id);
 		loadTodos(undefined, id);
 		showFilteredProjects();
@@ -367,6 +368,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 	async function loadDashboard() {
 		dashboardData = await frappe.xcall("implementor.api.dashboard_summary", { project_id: state.selectedProject });
 		loadEmergencyCount();
+		// renderEmergencyBadgeFromData(dashboardData);
 		renderDashBoard();
 	}
 	$(page.body).html(`
@@ -400,7 +402,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			<div style="position:relative">
 			<button id="btn-load" class="icon-btn-lg">
 				${frappe.utils.icon("refresh-cw")}
-				<span class="badge" id="emergency-badge" style="display:none">0</span>
+				<span class="badge" style="display:none">0</span>
 			</button>
 			</div>
 			<div style="position:relative">
@@ -419,9 +421,8 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			<option value="Normal">Normal</option>
 			<option value="Low">Low</option>
 		</select>
-		<select id="f-person">
-		<option value="">Any</option>
-		</select>
+		<div id="f-person">
+		</div>
 		<select id ="f-sort">
 			<option value="">Sort: default</option>
 			<option value="pct">% complete</option>
@@ -579,12 +580,33 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		renderEmergencyPanel();
 	})
 	document.getElementById("btn-load").addEventListener("click", async function () {
+		state.menu = null;
+		state.drawer = null;
+		state.namedFilter = "";
+		state.personFilter = "";
+		state.mineOnly = false;
+		state.sortFilter = "";
+		state.urgencyFilter = "";
+		state.taskDivFilter = "";
+		state.taskLeadFilter = "";
+		state.projectStatusFilter = "";
+		document.getElementById("f-name").value = "";
+		document.getElementById("f-urgency").value = "";
+		document.getElementById("f-person").value = "";
+		// document.getElementById("f-min").value = "";
+		// document.getElementById("f-max").value = "";
+		document.getElementById("f-sort").value = "";
+		document.getElementById("f-mine").textContent = "My work";
 		state.selectedProject = null;
 		state.selectedTask = null;
 		state.selectToDo = null;
 		loadProjects();
 		loadTasks();
 		loadTodos();
+		showFilteredProjects();
+		showFilteredTasks();
+		showToDosForSelectedTasks();
+		renderPersonFilter();
 
 	});
 	document.getElementById("btn-notif").addEventListener("click", async function () {
@@ -720,7 +742,6 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			state.selectedTask = ctx.task;
 			state.selectToDo = ctx.todo;
 		}
-
 		state.notifyPanelOpen = false;
 		renderNotifyPanel();
 		state.view = "board";
@@ -1868,20 +1889,14 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			state.colFilterField = null;
 			renderColFilter(openCol);
 		}
+		if (!e.target.closest("[id ='f-person-trigger']")) {
+			if (state.personPanelOpen) {
+				state.personPanelOpen = false;
+				renderPersonFilter();
+			}
+		}
 
 	});
-	function renderPersonfilter() {
-		el = document.getElementById("f-person")
-		if (!el) {
-			return;
-		}
-		el.innerHTML = `
-		<option value="">Any</option>
-		${TaskLeadOptions.map(function (u) {
-			return `<option value = ${u}>${u}</option>`;
-		}).join("")}`;
-	}
-
 	document.getElementById("f-name").addEventListener("input", function (e) {
 		state.namedFilter = e.target.value;
 		showFilteredProjects()
@@ -1893,12 +1908,42 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		showFilteredTasks()
 		showToDosForSelectedTasks()
 	});
-	document.getElementById("f-person").addEventListener("change", function (e) {
-		state.personFilter = e.target.value;
-		showFilteredProjects()
-		showFilteredTasks()
-		showToDosForSelectedTasks()
+	document.getElementById("f-person").addEventListener("click", function (e) {
+		var trigger = e.target.closest("#f-person-trigger");
+		if (trigger) {
+			state.personPanelOpen = !state.personPanelOpen;
+			document.getElementById("f-person-panel").style.display = state.personPanelOpen ? "block" : "none"
+			return;
+		}
+		var setPersonFilter = e.target.closest("[data-act='setpersonfilter']");
+		if (setPersonFilter) {
+			state.personFilter = setPersonFilter.getAttribute("data-value")
+			state.personPanelOpen = false;
+			renderPersonFilter();
+			showFilteredProjects();
+			showFilteredTasks();
+			showToDosForSelectedTasks();
+			return;
+		}
 	});
+	function renderPersonFilter() {
+		var el = document.getElementById("f-person");
+		if (!el) return;
+		el.innerHTML = `
+        <div id="f-person-trigger" style="height:34px; width:160px; padding:0 10px; border:0.5px solid var(--border-strong); border-radius:var(--radius); background:var(--surface-2); display:flex; align-items:center; justify-content:space-between; gap:6px; cursor:pointer; white-space:nowrap; overflow:hidden;">
+            <span style="overflow:hidden; text-overflow:ellipsis;">${state.personFilter || "Any person"}</span>
+            <span style="flex:none; display:inline-flex;">${frappe.utils.icon("chevron-down", "xs")}</span>
+        </div>
+        <div id="f-person-panel" class="filter-panel" style="display:none; top:38px; left:0;">
+            <div class="filter-values-wrap scrollable">
+                <div class="filter-opt ${state.personFilter === "" ? "on" : ""}" data-act="setpersonfilter" data-value="">Any</div>
+                ${TaskLeadOptions.map(function (u) {
+			return `<div class="filter-opt ${state.personFilter === u ? "on" : ""}" data-act="setpersonfilter" data-value="${u}">${u}</div>`;
+		}).join("")}
+            </div>
+        </div>
+    `;
+	}
 	// document.getElementById("f-min").addEventListener("input", function (e) {
 	// 	var num = Number(e.target.value);
 	// 	state.minPct = isNaN(num) ? 0 : num;
@@ -1927,8 +1972,6 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 
 	});
 	document.getElementById("f-clear").addEventListener("click", function (e) {
-		state.maxPct = 100;
-		state.minPct = 0;
 		state.namedFilter = "";
 		state.personFilter = "";
 		state.mineOnly = false;
@@ -1947,6 +1990,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		showFilteredProjects();
 		showFilteredTasks();
 		showToDosForSelectedTasks();
+		renderPersonFilter();
 
 	});
 	function renderActivityEntry(entry) {
@@ -2853,9 +2897,9 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		renderNotifyPanel();
 		renderEmergencyPanel();
 		await loadTaskLeadOptions();
-		renderPersonfilter();
 		await get_todo_status_options();
 		loadFlatpickr();
+		renderPersonFilter();
 	}
 	init();
 }
