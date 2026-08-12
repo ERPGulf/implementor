@@ -191,9 +191,9 @@ def get_tasks(project=None):
             "name", "subject as title", "project", "imp_stage as stage",
             "imp_division as division",
             "status", "imp_urgency as urgency", "progress as percent",
-            "imp_deadline as deadline", "imp_division_lead as lead","imp_started_on as started_on",
+            "imp_deadline as deadline", "custom_division_lead as lead","imp_started_on as started_on",
             "imp_doing as doing", "imp_escalated as escalated",
-            "description", "_assign", "slack_channel_id", "whatsapp_channel_id", "completed_on", "completed_by","imp_module"
+            "description", "_assign", "slack_channel_id", "whatsapp_channel_id", "completed_on", "completed_by","custom_module"
         ],
     )
     for r in rows:
@@ -207,7 +207,7 @@ def get_tasks(project=None):
         r["comments"] = _comments("Task", r["name"], limit=5)
         r["attachments"] = _attachments("Task", r["name"])
         r["modules"] = _project_modules(r.get("project"))
-        r["imp_module"] = frappe.db.get_value("Project Module", r.get("imp_module"), "module_name") if r.get("imp_module") else None
+        r["imp_module"] = frappe.db.get_value("Project Module", r.get("imp_module"), "module_name") if r.get("custom_module") else None
     return rows
 
 @frappe.whitelist()
@@ -433,7 +433,7 @@ def set_division(task, division):
     )
     doc = frappe.get_doc("Task", task)
     doc.imp_division = division
-    doc.imp_division_lead = lead
+    doc.custom_division_lead = lead
     doc.save()
 
     return {"division": division, "lead": lead}
@@ -533,7 +533,7 @@ def convert_ticket_to_task(ticket, project, task_type, division):
         "subject": ticket_doc.subject,
         "imp_task_type": task_type,
         "imp_division": division,
-        "imp_division_lead": lead,
+        "custom_division_lead": lead,
         "imp_urgency": ticket_doc.priority,
         "imp_source_ticket": ticket,
     })
@@ -686,6 +686,15 @@ def notifications():
 
     return rows
 
+@frappe.whitelist()
+def read_notifications(id):
+    doc = frappe.get_doc("Notification Log", id)
+    if doc.for_user != frappe.session.user:
+        frappe.throw("Not permitted", frappe.PermissionError)
+    doc.read = 1
+    doc.save(ignore_permissions=True)
+    return {"success": True}
+
 
 @frappe.whitelist()
 def emergencies():
@@ -704,7 +713,7 @@ def my_work():
     user = frappe.session.user
     return {
         "pm_projects": frappe.get_list("Project", filters={"imp_project_manager": user}, fields=["name", "project_name"]),
-        "leading_tasks": frappe.get_list("Task", filters={"imp_division_lead": user}, fields=["name", "subject"]),
+        "leading_tasks": frappe.get_list("Task", filters={"custom_division_lead": user}, fields=["name", "subject"]),
         "doing_tasks": frappe.get_list("Task", filters={"imp_doing": user}, fields=["name", "subject"]),
         "assigned_todos": frappe.get_list("ToDo", filters={"allocated_to": user, "imp_done": 0}, fields=["name", "description"]),
     }
@@ -967,7 +976,7 @@ def seed_dummy_projects(count=4):
             "subject": sample["task"],
             "imp_stage": sample["stage"],
             "imp_division": "Functional",
-            "imp_division_lead": frappe.session.user,
+            "custom_division_lead": frappe.session.user,
             "status": "Open",
             "imp_urgency": sample["urgency"],
             "progress": 0,
