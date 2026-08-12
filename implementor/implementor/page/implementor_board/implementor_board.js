@@ -731,18 +731,17 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 
 		if (doc === "Task") {
 			var ctx = await frappe.xcall("implementor.api.resolve_task_context", { task: id });
-			if (!ctx.project) frappe.msgprint("No Project found for this Task.");
+			if (!ctx.project) return frappe.msgprint("No Project found for this Task.");
 			state.selectedProject = ctx.project;
 			state.selectedTask = ctx.task;
 			state.selectToDo = null;
 		} else {
 			var ctx = await frappe.xcall("implementor.api.resolve_todo_context", { todo: id });
-			if (!ctx.task || !ctx.project) frappe.msgprint("No Task/Project found for this To-do.");
+			if (!ctx.task || !ctx.project) return frappe.msgprint("No Task/Project found for this To-do.");
 			state.selectedProject = ctx.project;
 			state.selectedTask = ctx.task;
 			state.selectToDo = ctx.todo;
 		}
-		state.notifyPanelOpen = false;
 		frappe.xcall("implementor.api.read_notifications", { id: notifid }).then(function () {
 			notifications = notifications.filter(function (n) {
 				return n.name != notifid;
@@ -760,6 +759,15 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		showToDosForSelectedTasks();
 		scrollToSelected();
 	});
+	function acknowledgeEmergency(doctype, name, eid) {
+		return frappe.xcall("implementor.api.read_emergency", { doctype: doctype, name: name }).then(function () {
+			dashboardData.emergencies = dashboardData.emergencies.filter(function (item) {
+				return item.name != eid;
+			});
+			updateEmergencyBadge(dashboardData);
+			renderEmergencyPanel();
+		});
+	}
 	document.getElementById("emergency-panel").addEventListener("click", async function (e) {
 		if (e.target.closest("[data-act='close-emergency-panel']")) {
 			state.emergencyPanelOpen = false;
@@ -776,9 +784,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		if (doc === "Task") {
 			var ctx = await frappe.xcall("implementor.api.resolve_task_context", { task: id });
 			if (!ctx.project) {
-				state.emergencyPanelOpen = false;
-				updateEmergencyBadge(dashboardData);
-				renderEmergencyPanel();
+				acknowledgeEmergency(doc, id, eid)
 				frappe.msgprint("No Project found for this Task.");
 				return;
 			}
@@ -788,9 +794,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		} else {
 			var ctx = await frappe.xcall("implementor.api.resolve_todo_context", { todo: id });
 			if (!ctx.task || !ctx.project) {
-				state.emergencyPanelOpen = false;
-				updateEmergencyBadge(dashboardData);
-				renderEmergencyPanel();
+				acknowledgeEmergency(doc, id, eid)
 				frappe.msgprint("No Task/Project found for this ToDo");
 				return;
 			}
@@ -798,12 +802,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			state.selectedTask = ctx.task;
 			state.selectToDo = id;
 		}
-		dashboardData.emergencies = dashboardData.emergencies.filter(function (item) {
-			return item.name != eid
-		})
-		updateEmergencyBadge(dashboardData);
-		state.emergencyPanelOpen = false;
-		renderEmergencyPanel();
+		acknowledgeEmergency(doc, id, eid)
 		state.view = "board";
 		updateView();
 		await loadTasks(state.selectedProject);

@@ -585,7 +585,7 @@ def dashboard_summary(group_by=None, project_id=None):
         "Task",
         filters=task_filters,
         fields=["name", "status", "subject", "imp_urgency", "imp_stage", "imp_division",
-                "imp_deadline", "imp_escalated", "project", "progress"],
+                "imp_deadline", "imp_escalated", "project", "progress","custom_emergency_read"],
     )
 
     due_7d = len([t for t in tasks if t.imp_deadline and 0 <= _remaining_days(t.imp_deadline) <= 7])
@@ -617,13 +617,13 @@ def dashboard_summary(group_by=None, project_id=None):
             todos = frappe.get_list(
                 "ToDo",
                 filters=todo_filters,
-                fields=["name", "description", "imp_urgency", "date", "imp_escalated", "imp_done", "reference_name"],
+                fields=["name", "description", "imp_urgency", "date", "imp_escalated", "imp_done", "reference_name","custom_emergency_read"],
             )
     else:
         todos = frappe.get_list(
             "ToDo",
             filters=todo_filters,
-            fields=["name", "description", "imp_urgency", "date", "imp_escalated", "imp_done", "reference_name"],
+            fields=["name", "description", "imp_urgency", "date", "imp_escalated", "imp_done", "reference_name","custom_emergency_read"],
         )
 
     deadlines_soon = (
@@ -632,9 +632,9 @@ def dashboard_summary(group_by=None, project_id=None):
     )
 
     emergencies = (
-        [{**t, "doctype": "Task", "title": t.subject} for t in tasks if t.imp_urgency == "Emergency" and t.status != "Done"]
-        + [{**d, "doctype": "ToDo", "title": d.description} for d in todos if d.imp_urgency == "Emergency" and not d.imp_done]
-    )
+    [{**t, "doctype": "Task", "title": t.subject} for t in tasks if t.imp_urgency == "Emergency" and t.status != "Done" and not t.custom_emergency_read]
+    + [{**d, "doctype": "ToDo", "title": d.description} for d in todos if d.imp_urgency == "Emergency" and not d.imp_done and not d.custom_emergency_read]
+)
 
     result = {
     "project_id": project_id,
@@ -685,7 +685,15 @@ def notifications():
             r["deadline"] = frappe.db.get_value("ToDo", r.document_name, "date")
 
     return rows
-
+@frappe.whitelist()
+def read_emergency(doctype, name):
+    if doctype not in ("Task", "ToDo"):
+        frappe.throw(f"Emergency read-tracking not supported on {doctype}")
+    if not frappe.has_permission(doctype, "write", name):
+        frappe.throw("Not permitted", frappe.PermissionError)
+    doc = frappe.get_doc(doctype, name)
+    doc.db_set("custom_emergency_read", 1, update_modified=False)
+    return {"success": True}
 @frappe.whitelist()
 def read_notifications(id):
     doc = frappe.get_doc("Notification Log", id)
