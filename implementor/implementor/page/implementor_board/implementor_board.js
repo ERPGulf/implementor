@@ -241,8 +241,6 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		loadTasks(id);
 		loadTodos(undefined, id);
 		showFilteredProjects();
-		showFilteredTasks();
-		showToDosForSelectedTasks();
 	};
 	function selectTask(id) {
 		state.selectedTask = id;
@@ -615,12 +613,14 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		state.selectedProject = null;
 		state.selectedTask = null;
 		state.selectToDo = null;
-		loadProjects();
-		loadTasks();
-		loadTodos();
-		showFilteredProjects();
-		showFilteredTasks();
-		showToDosForSelectedTasks();
+		await loadProjects();
+		await Promise.all([
+			loadTasks(),
+			loadTodos()
+		]);
+		// showFilteredProjects();
+		// showFilteredTasks();
+		// showToDosForSelectedTasks();
 		renderPersonFilter();
 
 	});
@@ -771,8 +771,6 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		await loadTasks(state.selectedProject);
 		await loadTodos(state.selectedTask, state.selectedProject);
 		showFilteredProjects();
-		showFilteredTasks();
-		showToDosForSelectedTasks();
 		scrollToSelected();
 	});
 	function acknowledgeEmergency(doctype, name, eid) {
@@ -824,8 +822,6 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		await loadTasks(state.selectedProject);
 		await loadTodos(state.selectedTask, state.selectedProject);
 		showFilteredProjects();
-		showFilteredTasks();
-		showToDosForSelectedTasks();
 		scrollToSelected();
 	});
 	document.getElementById("btn-add").addEventListener("click", function (e) {
@@ -878,18 +874,14 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 							callback(r) {
 								if (!r.exc) {
 									frappe.msgprint(__("Project Successfully created"));
-									// Optional: refresh your page data here
-									// e.g. load_projects_table(page);
+									loadProjects();
 								}
-								// Important: just hide the dialog, no redirect
 								dialog.hide();
 							}
 						});
 					});
 				}
 			);
-			loadProjects();
-			showFilteredProjects();
 			return
 		}
 		var newtask = e.target.closest("[data-act='newtask']");
@@ -916,10 +908,8 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 						callback(r) {
 							if (!r.exc) {
 								frappe.msgprint(__("Task Successfully created"));
-								// Optional: refresh your page data here
-								// e.g. load_projects_table(page);
+								loadTasks(state.selectedProject);
 							}
-							// Important: just hide the dialog, no redirect
 							dialog.hide();
 						}
 					});
@@ -955,8 +945,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 						callback(r) {
 							if (!r.exc) {
 								frappe.msgprint(__("ToDo Successfully created"));
-								// Optional: refresh your page data here
-								// e.g. load_projects_table(page);
+								loadTodos(state.selectedTask);
 							}
 							// Important: just hide the dialog, no redirect
 							dialog.hide();
@@ -1314,7 +1303,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		var dots = e.target.closest("[data-act='dots']")
 		if (dots) {
 			var id = dots.getAttribute("data-id");
-			// state.selectedProject = id;
+			state.selectedProject = id;
 			state.menu = (state.menu && state.menu.id === id) ? null : { id: id, mode: null };
 			showFilteredProjects();
 			return;
@@ -1440,7 +1429,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			return;
 
 		}
-		var setcompletedby = e.target.closest("[data-act='setcompletedby'")
+		var setcompletedby = e.target.closest("[data-act='setcompletedby']")
 		if (setcompletedby) {
 			var id = setcompletedby.getAttribute("data-id");
 			var task = testTasks.find(function (t) {
@@ -1461,6 +1450,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			saveCompleted(id, { "completed_on": state.completedOn }).then(function (cdate) {
 				task.completed_on = cdate;
 				state.menu = null;
+				state.completedOn = null;
 				showFilteredTasks();
 				getProjPerc(id).then(function (percent_complete) {
 					var task = testTasks.find(function (t) {
@@ -1485,6 +1475,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			var id = setcompletedon.getAttribute("data-id")
 			var task = testTasks.find(function (t) { return t.id === id })
 			state.menu = { id: id, mode: "changecompletedon" };
+			state.completedOn = task.completed_on || null;
 			showFilteredTasks();
 			requestAnimationFrame(function () {
 				initDueDatePicker(task, "completed_on");
@@ -1725,7 +1716,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			})
 			return;
 		}
-		var gotodue = e.target.closest("[data-act='gotodue'");
+		var gotodue = e.target.closest("[data-act='gotodue']");
 		if (gotodue) {
 			var id = gotodue.getAttribute("data-id");
 			var todo = testTodos.find(function (f) {
@@ -2879,12 +2870,22 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			}).join("")
 	}
 	async function getOptions() {
-		urgency_options = await frappe.xcall("implementor.api.get_options", { doc: "Task", field: "imp_urgency" });
-		DeliverystatusOptions = await frappe.xcall("implementor.api.get_options", { doc: "Project", field: "imp_status" });
-		divisions = await frappe.xcall("implementor.api.get_options", { doc: "Task", field: "imp_division" })
-		task_status_options = await frappe.xcall("implementor.api.get_options", { doc: "Task", field: "status" });
-		todo_urg_options = await frappe.xcall("implementor.api.get_options", { doc: "ToDo", field: "imp_urgency" });
-		todo_status_options = await frappe.xcall("implementor.api.get_options", { doc: "ToDo", field: "status" });
+		var results = await Promise.all([
+			frappe.xcall("implementor.api.get_options", { doc: "Task", field: "imp_urgency" }),
+			frappe.xcall("implementor.api.get_options", { doc: "Project", field: "imp_status" }),
+			frappe.xcall("implementor.api.get_options", { doc: "Task", field: "imp_division" }),
+			frappe.xcall("implementor.api.get_options", { doc: "Task", field: "status" }),
+			frappe.xcall("implementor.api.get_options", { doc: "ToDo", field: "imp_urgency" }),
+			frappe.xcall("implementor.api.get_options", { doc: "ToDo", field: "status" }),
+			frappe.xcall("implementor.api.get_options", { doc: "Project", field: "imp_project_manager" })
+		]);
+		urgency_options = results[0];
+		DeliverystatusOptions = results[1];
+		divisions = results[2];
+		task_status_options = results[3];
+		todo_urg_options = results[4];
+		todo_status_options = results[5];
+		prj_pms = results[6];
 		renderUrgOptions();
 	}
 	function loadurg(task) {
@@ -2920,16 +2921,18 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 	var testTodos = []
 	async function init() {
 		await loadProjects();
-		tasks = await loadTasks();
-		todos = await loadTodos();
-		await loadNotifCount();
-		await loadDashboard();
+		await Promise.all([
+			loadTasks(),
+			loadTodos(),
+			loadNotifCount(),
+			loadDashboard(),
+			loadTaskLeadOptions(),
+			getOptions()
+		]);
 		renderNotifyPanel();
 		renderEmergencyPanel();
-		await loadTaskLeadOptions();
 		loadFlatpickr();
 		renderPersonFilter();
-		await getOptions();
 	}
 	init();
 }
