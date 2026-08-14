@@ -193,7 +193,7 @@ def get_tasks(project=None):
             "status", "imp_urgency as urgency", "progress as percent",
             "imp_deadline as deadline", "custom_division_lead as lead","imp_started_on as started_on",
             "imp_doing as doing", "imp_escalated as escalated",
-            "description", "_assign", "slack_channel_id", "whatsapp_channel_id", "completed_on", "completed_by","custom_module"
+            "description", "_assign", "slack_channel_id", "whatsapp_channel_id", "completed_on", "completed_by","custom_module","imp_module"
         ],
     )
     for r in rows:
@@ -206,8 +206,8 @@ def get_tasks(project=None):
         r["activity"] = _recent_activity("Task", r["name"], limit=5)
         r["comments"] = _comments("Task", r["name"], limit=5)
         r["attachments"] = _attachments("Task", r["name"])
-        r["modules"] = _project_modules(r.get("project"))
-        r["imp_module"] = frappe.db.get_value("Project Module", r.get("imp_module"), "module_name") if r.get("custom_module") else None
+        # r["modules"] = _project_modules(r.get("project"))
+        # r["imp_module"] = frappe.db.get_value("Project Module", r.get("imp_module"), "module_name") if r.get("custom_module") else None
     return rows
 
 @frappe.whitelist()
@@ -249,8 +249,8 @@ def get_todos(task=None, project=None):
         r["activity"] = _recent_activity("ToDo", r["name"], limit=5)
         r["comments"] = _comments("ToDo", r["name"], limit=5)
         r["attachments"] = _attachments("ToDo", r["name"])
-        r["modules"] = _project_modules(task_to_project.get(r.get("task")))
-        r["imp_module"] = frappe.db.get_value("Project Module", r.get("imp_module"), "module_name") if r.get("imp_module") else None
+        # r["modules"] = _project_modules(task_to_project.get(r.get("task")))
+        # r["imp_module"] = frappe.db.get_value("Project Module", r.get("imp_module"), "module_name") if r.get("imp_module") else None
     return rows
 
 def _project_modules(project_name):
@@ -672,7 +672,7 @@ def dashboard_summary(group_by=None, project_id=None):
 def notifications():
     rows = frappe.get_list(
         "Notification Log",
-        filters={"for_user": frappe.session.user, "read": 0},
+        filters={"for_user": frappe.session.user, "read": 0,"document_type":["in",["Task","ToDo"]]},
         fields=["name", "subject", "document_type", "document_name", "creation","type"],
         order_by="creation desc",
         limit_page_length=50,

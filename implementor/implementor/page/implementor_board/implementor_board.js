@@ -587,6 +587,8 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		state.sortFilter = "";
 		state.urgencyFilter = "";
 		state.taskDivFilter = "";
+		state.todoAssignToFilter = "";
+		state.todoStatusFilter = "";
 		state.taskLeadFilter = "";
 		state.projectStatusFilter = "";
 		document.getElementById("f-name").value = "";
@@ -2921,6 +2923,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		await get_todo_status_options();
 		loadFlatpickr();
 		renderPersonFilter();
+		console.log(testTasks)
 	}
 	init();
 }
