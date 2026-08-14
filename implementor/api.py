@@ -374,8 +374,15 @@ def get_div_options():
     return [opt for opt in field.options.split("\n") if opt]
 
 @frappe.whitelist()
-def get_project_status_options():
-    field = frappe.get_meta("Project").get_field("imp_status")
+def get_status_optns(doc):
+    field = frappe.get_meta(doc).get_field("imp_status")
+    if not field or not field.options:
+        return []
+    return [opt for opt in field.options.split("\n") if opt]
+
+@frappe.whitelist()
+def get_options(doc,field):
+    field = frappe.get_meta(doc).get_field(field)
     if not field or not field.options:
         return []
     return [opt for opt in field.options.split("\n") if opt]

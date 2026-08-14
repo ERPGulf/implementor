@@ -6,6 +6,10 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		single_column: true
 	});
 	var assignees = [];
+	var urgency_options = [];
+	var todo_status_options = [];
+	var task_status_options = [];
+	var todo_urg_options = [];
 	var SLACK_ICON = `<svg width="16" height="16" viewBox="0 0 122.8 122.8" xmlns="http://www.w3.org/2000/svg">
   <path d="M25.8 77.6c0 7.1-5.8 12.9-12.9 12.9S0 84.7 0 77.6s5.8-12.9 12.9-12.9h12.9v12.9z" fill="#e01e5a"/>
   <path d="M32.3 77.6c0-7.1 5.8-12.9 12.9-12.9s12.9 5.8 12.9 12.9v32.3c0 7.1-5.8 12.9-12.9 12.9s-12.9-5.8-12.9-12.9z" fill="#e01e5a"/>
@@ -61,7 +65,6 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		}
 	]
 	page.set_title('Implementor');
-
 	var state = {
 		notification_doc: "",
 		notification_id: "",
@@ -91,7 +94,22 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		menu: null,
 		drawer: null,
 		add: false,
-	}; //we use state to remember the project selected.
+	};
+	function debounce(fn, delay) {
+		var timer = null;
+		return function (...args) {
+			clearTimeout(timer);
+			timer = setTimeout(function () {
+				fn.apply(this, args);
+			}, delay)
+		}
+	}
+	var runSearchFilter = debounce(function (value) {
+		state.namedFilter = value;
+		showFilteredProjects();
+		showFilteredTasks();
+		showToDosForSelectedTasks();
+	}, 200)
 	function summarizeActivityEntry(entry) {
 		if (!entry.data) {
 			return "Created";
@@ -195,9 +213,8 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 				sorted.unshift(selectedTask);
 			}
 		}
-		var sorted = sortedBy(filtered);
-		document.getElementById("task-count").textContent = sorted.length + " tasks shown";
-		document.getElementById("d-tasks").innerHTML = renderTasksColumn(sorted);
+		elTaskCount.textContent = sorted.length + " tasks shown";
+		elTasks.innerHTML = renderTasksColumn(sorted);
 
 	}
 	function showToDosForSelectedTasks() {
@@ -414,11 +431,6 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		<div style="display:flex; gap:12px; padding:16px 16px 12px; flex-wrap:wrap">
 		<input id="f-name" placeholder="Search project/task/to-do" />
 		<select id ="f-urgency">
-			<option value="">Any urgency</option>
-			<option value="Emergency">Emergency</option>
-			<option value="Urgent">Urgent</option>
-			<option value="Normal">Normal</option>
-			<option value="Low">Low</option>
 		</select>
 		<div id="f-person">
 		</div>
@@ -486,6 +498,8 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		</div>
 		</div>
 	  `);
+	var elTaskCount = document.getElementById("task-count");
+	var elTasks = document.getElementById("d-tasks");
 	function scrollToSelected() {
 		requestAnimationFrame(function () {
 			var el = document.querySelector(".sel");
@@ -1067,7 +1081,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 				</div>
 				<div class="filter-values-wrap scrollable">
 				<div class="filter-opt ${state.todoStatusFilter === "" ? "on" : ""}" data-act="setcolfilter" data-value="">Any</div>
-				${status_options.map(function (d) {
+				${todo_status_options.map(function (d) {
 					var isOn = state.todoStatusFilter === d;
 					return `<div class="filter-opt ${isOn ? "on" : ""}" data-act="setcolfilter" data-value="${d}">${d}
 				</div>`;
@@ -1094,19 +1108,6 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 
 			}
 		}
-	}
-	var status_options = [];
-	async function get_todo_status_options() {
-		var response = await frappe.xcall("implementor.api.get_filter_fields", {
-			doctype: "ToDo",
-			fieldnames: ["status"]
-		});
-
-		var field = (response || []).find(function (f) {
-			return f && f.name === "status";
-		});
-
-		status_options = field && field.options ? field.options : [];
 	}
 	async function getCopyUrl(doc, id) {
 		var url = await frappe.xcall("implementor.api.get_doc_url", { doc: doc, id: id })
@@ -1921,10 +1922,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 
 	});
 	document.getElementById("f-name").addEventListener("input", function (e) {
-		state.namedFilter = e.target.value;
-		showFilteredProjects()
-		showFilteredTasks()
-		showToDosForSelectedTasks()
+		runSearchFilter(e.target.value);
 	})
 	document.getElementById("f-urgency").addEventListener("change", function (e) {
 		state.urgencyFilter = e.target.value;
@@ -2411,7 +2409,6 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		var menuHtml = "";
 		if (state.menu && state.menu.id === project.id) {
 			if (state.menu.mode === "status") {
-				get_deliv_options();
 				menuHtml = `
 			<div class = "d-menu" >
 				<div class="d-hd" style="background:transparent; border:none; padding:0 0 8px">Status</div>
@@ -2500,6 +2497,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			}).join("");
 		}
 	}
+
 	function renderTaskCard(task) {
 		var menuHtml = "";
 		if (state.menu && state.menu.id === task.id) {
@@ -2508,13 +2506,9 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			<div class = "d-menu" >
 				<div class="d-hd" style="background:transparent; border:none; padding:0 0 8px">Status</div>
 				<div style="display:flex; flex-wrap:wrap; gap:6px">
-				<div class="d-opt" data-act="setstatus" data-id="${task.id}" data-value="Open">Open</div>
-				<div class="d-opt" data-act="setstatus" data-id="${task.id}" data-value="Working">Working</div>
-				<div class="d-opt" data-act="setstatus" data-id="${task.id}" data-value="Pending Review">Pending Review</div>
-				<div class="d-opt" data-act="setstatus" data-id="${task.id}" data-value="Overdue">Overdue</div>
-				<div class="d-opt" data-act="setstatus" data-id="${task.id}" data-value="Template">Template</div>
-				<div class="d-opt" data-act="setstatus" data-id="${task.id}" data-value="Completed">Completed</div>
-				<div class="d-opt" data-act="setstatus" data-id="${task.id}" data-value="Cancelled">Cancelled</div>
+				${task_status_options.map(function (s) {
+					return `<div class="d-opt" data-act="setstatus" data-id="${task.id}" data-value=${s}>${s}</div>`
+				}).join("")}
 				</div>
 				</div>
 			`;
@@ -2524,9 +2518,9 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			<div class="d-menu" >
 					<div class="d-hd" style="background:transparent; border:none; padding:0 0 8px">Division (sets lead)</div>
 					<div style="display:flex; flex-wrap:wrap; gap:6px">
-					<div class = "d-opt"  data-act="setdiv" data-id="${task.id}" data-value="Functional">Functional</div>
-					<div class = "d-opt" data-act="setdiv" data-id="${task.id}" data-value="Technical">Technical</div>
-					<div class = "d-opt" data-act="setdiv" data-id="${task.id}" data-value="Infra-Cloud">Infra-Cloud</div>
+					${divisions.map(function (d) {
+					return `<div class = "d-opt"  data-act="setdiv" data-id="${task.id}" data-value=${d}>${d}</div>`
+				}).join("")}
 					</div>
 					</div>
 			`;
@@ -2534,14 +2528,11 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			else if (state.menu.mode === "changeurg") {
 				menuHtml = `
 			<div class="d-menu" >
-					<div class="d-hd" style="background:transparent; border:none; padding:0 0 8px">Division (sets lead)</div>
+					<div class="d-hd" style="background:transparent; border:none; padding:0 0 8px">Change Urgency</div>
 					<div style="display:flex; flex-wrap:wrap; gap:6px">
-					<div class = "d-opt"  data-act="seturg" data-id="${task.id}" data-value="Emergency">Emergency</div>
-					<div class = "d-opt" data-act="seturg" data-id="${task.id}" data-value="Urgent">Urgent</div>
-					<div class = "d-opt" data-act="seturg" data-id="${task.id}" data-value="Normal">Normal</div>
-					<div class = "d-opt" data-act="seturg" data-id="${task.id}" data-value="Low">Low</div>
+					${loadurg(task)}
 					</div>
-					</div>
+			</div>
 			`;
 			}
 			else if (state.menu.mode === "changedue") {
@@ -2688,9 +2679,9 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			<div class = "d-menu" >
 				<div class="d-hd" style="background:transparent; border:none; padding:0 0 8px">Status</div>
 				<div style="display:flex; flex-wrap:wrap; gap:6px">
-				<div class="d-opt" data-act="setstatus" data-id="${todo.id}" data-value="Open">Open</div>
-				<div class="d-opt" data-act="setstatus" data-id="${todo.id}" data-value="Closed">Closed</div>
-				<div class="d-opt" data-act="setstatus" data-id="${todo.id}" data-value="Cancelled">Cancelled</div>
+				${todo_status_options.map(function (s) {
+					return `<div class="d-opt" data-act="setstatus" data-id="${todo.id}" data-value=${s}>${s}</div>`
+				}).join("")}
 				</div>
 				</div>
 			`;
@@ -2710,10 +2701,9 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			<div class="d-menu" >
 					<div class="d-hd" style="background:transparent; border:none; padding:0 0 8px">Set Urgency🔥</div>
 					<div style="display:flex; flex-wrap:wrap; gap:6px">
-					<div class = "d-opt"  data-act="seturg" data-id="${todo.id}" data-value="Emergency">Emergency</div>
-					<div class = "d-opt" data-act="seturg" data-id="${todo.id}" data-value="Urgent">Urgent</div>
-					<div class = "d-opt" data-act="seturg" data-id="${todo.id}" data-value="Normal">Normal</div>
-					<div class = "d-opt" data-act="seturg" data-id="${todo.id}" data-value="Low">Low</div>
+					${todo_urg_options.map(function (s) {
+					return `<div class="d-opt" data-act="seturg" data-id="${todo.id}" data-value=${s}>${s}</div>`
+				}).join("")}
 					</div>
 					</div>
 			`;
@@ -2879,10 +2869,28 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		showFilteredTasks();
 
 	}
-	async function get_deliv_options() {
-		DeliverystatusOptions = await frappe.xcall("implementor.api.get_project_status_options");
-		divisions = await frappe.xcall("implementor.api.get_div_options")
-
+	function renderUrgOptions() {
+		var el = document.getElementById("f-urgency")
+		if (!el) return;
+		var combined = Array.from(new Set([...(urgency_options || []), ...(todo_urg_options || [])]));
+		el.innerHTML = `<option value="">Any urgency</option>` +
+			combined.map(function (f) {
+				return `<option value="${f}">${f}</option>`;
+			}).join("")
+	}
+	async function getOptions() {
+		urgency_options = await frappe.xcall("implementor.api.get_options", { doc: "Task", field: "imp_urgency" });
+		DeliverystatusOptions = await frappe.xcall("implementor.api.get_options", { doc: "Project", field: "imp_status" });
+		divisions = await frappe.xcall("implementor.api.get_options", { doc: "Task", field: "imp_division" })
+		task_status_options = await frappe.xcall("implementor.api.get_options", { doc: "Task", field: "status" });
+		todo_urg_options = await frappe.xcall("implementor.api.get_options", { doc: "ToDo", field: "imp_urgency" });
+		todo_status_options = await frappe.xcall("implementor.api.get_options", { doc: "ToDo", field: "status" });
+		renderUrgOptions();
+	}
+	function loadurg(task) {
+		return urgency_options.map(function (u) {
+			return `<div class = "d-opt"  data-act="seturg" data-id="${task.id}" data-value=${u}>${u}</div>`
+		}).join("")
 	}
 	function loadFlatpickr(callback = () => { }) {
 		if (window.implFlatpickr) { callback(); return; }
@@ -2911,7 +2919,6 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 	var testTasks = [];
 	var testTodos = []
 	async function init() {
-		await get_deliv_options();
 		await loadProjects();
 		tasks = await loadTasks();
 		todos = await loadTodos();
@@ -2920,10 +2927,9 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		renderNotifyPanel();
 		renderEmergencyPanel();
 		await loadTaskLeadOptions();
-		await get_todo_status_options();
 		loadFlatpickr();
 		renderPersonFilter();
-		console.log(testTasks)
+		await getOptions();
 	}
 	init();
 }
