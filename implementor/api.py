@@ -765,8 +765,20 @@ def toggle_todo_done(todo):
         "project": project_name,
         "project_percent": project_percent,
     }
- 
- 
+@frappe.whitelist(allow_guest=True)
+def get_milestone(project):
+    doc = frappe.get_doc("Project",project)
+    return [
+        {
+            "name":m.name,
+            "duration":m.duration,
+            "completion_status":m.completion_status,
+            "payment_percent":m.payment_,
+            "payment_status":m.payment_status
+        }
+        for m in doc.get("payment_milestone")
+    ]
+
  
 @frappe.whitelist()
 def get_users(role=None):

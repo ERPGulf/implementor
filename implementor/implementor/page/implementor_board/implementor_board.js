@@ -46,6 +46,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		{ act: "copylink", icon: "copy", label: "Copy link", doc: "Project" },
 		{ act: "sendslackdm", icon: "send", label: "Send to Slack direct message", doc: "Project" },
 		{ act: "sendslackchannel", icon: "send", label: "Send to Slack Channel", doc: "Project" },
+		{ act: "addpaymentmilestone", icon: "wallet", label: "Add Payment Milestone", doc: "Project" },
 		{ act: "sendwhatsapp", icon: "send", label: "Send to WhatsApp", doc: "Project" }
 	];
 
@@ -66,6 +67,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 	]
 	page.set_title('Implementor');
 	var state = {
+		milestoneOpen: null,
 		notification_doc: "",
 		notification_id: "",
 		completedBy: "",
@@ -488,6 +490,18 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			<div class="send-popup-actions">
 			<button class="btn btn-default btn-sm" data-act="cancelsend">Cancel</button>
 			<button class="btn btn-primary btn-sm" data-act="confirmsend">Send</button>
+			</div>
+		</div>
+		</div>
+		<div id = "milestone-popup-overlay" class ="send-popup-overlay" style="display:none;">
+		<div class ="send-popup" style="width:500px">
+			<div class="send-popup-header">
+			<span class="send-popup-title-icon">${frappe.utils.icon("hand-coins", "xs")}</span>
+			<div class="send-popup-title"> Payment Milestones </div>
+			<button data-act='closemilestones' class="d-info">${frappe.utils.icon("close", "xs")}</button>
+			</div>
+			<div id="milestone-list" style="max-height:280px; overflow-y:auto; display:flex; flex-direction:column; gap:6px;">
+			</div>
 			</div>
 		</div>
 		</div>
@@ -1158,6 +1172,39 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			})
 		}
 	})
+	function renderMilestonePopup() {
+		var el = document.getElementById("milestone-popup-overlay");
+		if (!state.milestoneOpen) {
+			console.log("True")
+			el.style.display = "none";
+			return;
+		}
+		el.style.display = "flex";
+		var rows = state.milestoneOpen.rows || [];
+		console.log(rows)
+		document.getElementById("milestone-list").innerHTML = rows.length === 0 ?
+			`<div class="d-meta">No milestones yet.</div>`
+			:
+			rows.map(function (m) {
+				return `
+					<div class="dash-list-row" data-row="${m.name}" style="align-items:center">
+						<div>
+							<div style="font-weight:500; font-size:16px;">${m.title || "Untitled milestone"}</div>
+							<span class="dash-name" style="font-size:14px;">
+								<span>${m.duration || ""} days</span>
+								<span class="d-meta"> · ${m.payment_percent || 0}% payment</span>
+							</span>
+						</div>
+						<span style="display:flex; gap:6px; align-items:center">
+							${chip(m.completion_status)}
+							${chip(m.payment_status)}
+							<button class="d-info" data-act="deletemilestone" data-row="${m.name}">${frappe.utils.icon("trash", "xs")}</button>
+						</span>
+					</div>
+`;
+			}).join("")
+
+	}
 	var selectedDueDate = ""
 	function initDueDatePicker(doc, type) {
 		if (type == "completed_on") {
@@ -1193,6 +1240,10 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 	async function saveDueDate(doc, id, dateStr) {
 		deadline_updated = await frappe.xcall("implementor.api.saveDueDate", { doctype: doc, name: id, dateStr: dateStr })
 		return deadline_updated;
+	}
+	async function getMilestone(project_Id) {
+		var response = await frappe.xcall("implementor.api.get_milestone", { project: project_Id })
+		return response;
 	}
 	document.getElementById("d-projects").addEventListener("click", function (e) {
 		if (e.target.id === "due-date-input" || e.target.closest(".flatpickr-calendar")) {
@@ -1248,6 +1299,17 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			state.sendPopupOpen = { mode: modeMap[channelMap[act]], channel: channelMap[act], doc: doc, id: recordId }
 			renderSendPopup();
 			return;
+
+		}
+		var paymentmilestone = e.target.closest("[data-act='addpaymentmilestone']")
+		if (paymentmilestone) {
+			var id = paymentmilestone.getAttribute("data-id")
+			console.log("Inside it")
+			getMilestone(id).then(function (rows) {
+				state.milestoneOpen = { project: id, rows: rows }
+				renderMilestonePopup();
+				return;
+			})
 
 		}
 		var react = e.target.closest("[data-act='react']");
@@ -2538,9 +2600,9 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 				style="width:auto; max-width:180px; padding:6px 10px" autocomplete="off" readonly/>
 		</div>
 		<div id="due-date-calendar-container"></div>
-		<div class="due-date-footer">
-			<button class="btn btn-default btn-sm" data-doc="projects" data-act="close">Cancel</button>
-			<button class="btn btn-primary btn-sm" data-act="savedue" data-id="${task.id}">Save</button>
+		<div class="due-date-footer" style="margin-top:10px; gap:6px>
+							<button class="btn btn-default btn-sm" data-doc="projects" data-act="close">Cancel</button>
+							<button class="btn btn-primary btn-sm" data-act="savedue" data-id="${project.id}">Save</button>
 		</div>
 	</div>
 </div>
