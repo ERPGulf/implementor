@@ -771,6 +771,7 @@ def get_milestone(project):
     return [
         {
             "name":m.name,
+            "m_title":m.m_title,
             "duration":m.duration,
             "completion_status":m.completion_status,
             "payment_percent":m.payment_,
@@ -779,6 +780,32 @@ def get_milestone(project):
         for m in doc.get("payment_milestone")
     ]
 
+ 
+@frappe.whitelist()
+def set_milestone(project, duration, percent, cstatus, pstatus, estart, edate, c_perc, nofmod, title):
+	doc = frappe.get_doc("Project", project)
+	rows = get_milestone(project)
+	count_of_milestone = len(rows) + 1
+	doc.append("payment_milestone", {
+		"m_title": f"Milestone {count_of_milestone}",
+		"duration": duration,
+		"payment_percent": percent,
+		"completion_status": cstatus,
+		"payment_status": pstatus,
+		"start_date": estart,
+		"end_date": edate,
+		"milestone_completion_perc": c_perc,
+		"no_of_modules": nofmod,
+	})
+	doc.save()
+	return get_milestone(project)
+
+@frappe.whitelist()
+def delete_milestone(name,project):
+    doc= frappe.get_doc("Project",project)
+    doc.payment_milestone=[row for row in doc.payment_milestone if row.name!=name]
+    doc.save()
+    return get_milestone(project)
  
 @frappe.whitelist()
 def get_users(role=None):

@@ -11,6 +11,7 @@
   "completion_status",
   "payment_",
   "payment_status",
+  "m_title",
   "column_break_hfkc",
   "start_date",
   "end_date",
@@ -27,8 +28,9 @@
   },
   {
    "fieldname": "completion_status",
-   "fieldtype": "Data",
-   "label": "Completion status"
+   "fieldtype": "Select",
+   "label": "Completion status",
+   "options": "Not Started\nIn Progress\nPartially Completed\nOn Hold\nDue\nCompleted"
   },
   {
    "fieldname": "payment_",
@@ -37,8 +39,9 @@
   },
   {
    "fieldname": "payment_status",
-   "fieldtype": "Data",
-   "label": "Payment Status"
+   "fieldtype": "Select",
+   "label": "Payment Status",
+   "options": "Paid\nUnPaid\nOverdue\nPartially Paid\nPending"
   },
   {
    "fieldname": "milestone_completion_perc",
@@ -63,13 +66,18 @@
   {
    "fieldname": "column_break_hfkc",
    "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "m_title",
+   "fieldtype": "Data",
+   "label": "MileStone Title"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "istable": 1,
  "links": [],
- "modified": "2026-08-17 18:10:50.962365",
+ "modified": "2026-08-18 12:32:33.132967",
  "modified_by": "Administrator",
  "module": "Implementor",
  "name": "Payment Milestone",

@@ -494,14 +494,71 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		</div>
 		</div>
 		<div id = "milestone-popup-overlay" class ="send-popup-overlay" style="display:none;">
-		<div class ="send-popup" style="width:500px">
+		<div class ="send-popup" style="width:800px">
 			<div class="send-popup-header">
-			<span class="send-popup-title-icon">${frappe.utils.icon("hand-coins", "xs")}</span>
-			<div class="send-popup-title"> Payment Milestones </div>
+			<h4 style="margin:0; font-size:14px; font-weight:600; color:var(--text-secondary); text-transform:uppercase; padding-left: 10px;letter-spacing:0.6px;">Payment milestones</h4>
 			<button data-act='closemilestones' class="d-info">${frappe.utils.icon("close", "xs")}</button>
 			</div>
-			<div id="milestone-list" style="max-height:280px; overflow-y:auto; display:flex; flex-direction:column; gap:6px;">
+			<div id="milestone-list" style="max-height:195px; overflow-y:auto; display:flex; flex-direction:column; gap:6px;">
 			</div>
+			<div id="milestone-add-form" style="display:flex; flex-direction:column; gap:12px; padding:16px; margin-top:8px; border-top:0.5px solid var(--border);">
+				<h4 style="margin:0; font-size:14px; font-weight:600; color:var(--text-secondary); text-transform:uppercase; letter-spacing:0.3px;">Add milestone</h4>
+				<div style="display:flex; flex-direction:row; gap:12px;">
+					<div style="display:flex; flex-direction:column; gap:3px; flex:1;">
+						<label for="ms-duration" style="font-size:12px; color:var(--text-secondary);">Duration (days)</label>
+						<input id="ms-duration" input type="number" placeholder="e.g. 14">
+					</div>
+					<div style="display:flex; flex-direction:column; gap:3px; flex:1;">
+						<label for="ms-percent" style="font-size:12px; color:var(--text-secondary);">Payment %</label>
+						<input id="ms-percent" input type="number" placeholder="e.g. 20">
+					</div>
+					<div style="display:flex; flex-direction:column; gap:3px; flex:1;">
+						<label style="font-size:12px; color:var(--text-secondary);">Completion status</label>
+						<select id="ms-cstatus">
+						<option value="Not Started">Not Started</option>
+						<option value="In Progress">In Progress</option>
+						<option value="Partially Completed">Partially Completed</option>
+						<option value="On Hold">On Hold</option>
+						<option value="Due">Due</option>
+						<option value="Completed">Completed</option>
+						</select>
+					</div>
+				</div>
+				<div style="display:flex; flex-direction:row; gap:12px;">
+					<div style="display:flex; flex-direction:column; gap:3px; flex:1;">
+						<label for="ms-pstatus" style="font-size:12px; color:var(--text-secondary);">Payment status</label>
+						<select id="ms-pstatus">
+						<option value="Paid">Paid</option>
+						<option value="UnPaid">UnPaid</option>
+						<option value="Overdue">Overdue</option>
+						<option value="Partially Paid">Partially Paid</option>
+						<option value="Pending">Pending</option>
+						</select>
+					</div>
+					<div style="display:flex; flex-direction:column; gap:3px; flex:1;">
+						<label for="ms-estart" style="font-size:12px; color:var(--text-secondary);">Start date</label>
+						<input id="ms-estart" input type="date">
+					</div>
+					<div style="display:flex; flex-direction:column; gap:3px; flex:1;">
+						<label for="ms-edate" style="font-size:12px; color:var(--text-secondary);">End date</label>
+						<input id="ms-edate" input type="date">
+					</div>
+				</div>
+				<div style="display:flex; flex-direction:row; gap:12px;">
+					<div style="display:flex; flex-direction:column; gap:3px; flex:1;">
+						<label for="ms-c_perc" style="font-size:12px; color:var(--text-secondary);">Milestone Completion (%)</label>
+						<input id="ms-c_perc" input type="number" placeholder="30%">
+					</div>
+					<div style="display:flex; flex-direction:column; gap:3px; flex:1;">
+						<label for="ms-nofmod" style="font-size:12px; color:var(--text-secondary);">No of Modules</label>
+						<input id="ms-nofmod" input type="number">
+					</div>
+					<div style="display:flex; flex-direction:column; gap:3px; flex:1;">
+						<label for="ms-title" style="font-size:12px; color:var(--text-secondary);">Title</label>
+						<input id="ms-title" input type="text">
+					</div>
+				</div>
+				<button class="btn btn-primary btn-sm" data-act="addmilestone" style="align-self:flex-end;">${frappe.utils.icon("plus", "xs")} Add</button>
 			</div>
 		</div>
 		</div>
@@ -518,6 +575,15 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
 		});
 	}
+	async function setMileStone(project, duration, percent, cstatus, pstatus, estart, edate, c_perc, nofmod, title) {
+		var response = await frappe.xcall("implementor.api.set_milestone", {
+			project: state.selectedProject,
+			duration: duration, percent: percent, cstatus: cstatus, pstatus: pstatus,
+			estart: estart, edate: edate, c_perc: c_perc, nofmod: nofmod, title: title
+		})
+		console.log("Response", response)
+		return response;
+	}
 	function updateView() {
 		document.getElementById("btn-board").classList.toggle("on", state.view === "board");
 		document.getElementById("btn-dashboard").classList.toggle("on", state.view === "dashboard");
@@ -529,6 +595,67 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		target.style.opacity = 0;
 		requestAnimationFrame(function () { target.style.opacity = 1; });
 	}
+	async function deleteMilestone(name) {
+		var rows = await frappe.xcall("implementor.api.delete_milestone", { name: name, project: state.selectedProject })
+		return rows
+	}
+	document.getElementById("milestone-popup-overlay").addEventListener("click", function (e) {
+		if (e.target === this) {
+			state.milestoneOpen = null;
+			renderMilestonePopup();
+			return;
+		}
+		var closemilestone = e.target.closest("[data-act='closemilestones']")
+		if (closemilestone) {
+			state.milestoneOpen = null;
+			renderMilestonePopup();
+			return;
+		}
+		var deletemilestone = e.target.closest("[data-act='deletemilestone'")
+		if (deletemilestone) {
+			var id = deletemilestone.getAttribute("data-row")
+			console.log(id)
+			deleteMilestone(id).then(function (rows) {
+				state.milestoneOpen = { project: id, rows: rows }
+				renderMilestonePopup()
+			})
+			return;
+		}
+		var addmilestone = e.target.closest("[data-act='addmilestone']")
+		if (addmilestone) {
+			var duration = document.getElementById("ms-duration").value;
+			var percent = document.getElementById("ms-percent").value;
+			var cstatus = document.getElementById("ms-cstatus").value;
+			var pstatus = document.getElementById("ms-pstatus").value;
+			var estart = document.getElementById("ms-estart").value;
+			var edate = document.getElementById("ms-edate").value;
+			var c_perc = document.getElementById("ms-c_perc").value;
+			var nofmod = document.getElementById("ms-nofmod").value;
+			var title = document.getElementById("ms-title").value;
+
+			if (!duration || !percent || !cstatus || !pstatus || !estart || !edate || !c_perc || !nofmod) {
+				frappe.msgprint("Please fill in all milestone fields.");
+				return;
+			}
+			var project = state.selectedProject
+
+			setMileStone(project, duration, percent, cstatus, pstatus, estart, edate, c_perc, nofmod, title).then(function (rows) {
+				console.log("rows received:", rows);
+				state.milestoneOpen = { project: project, rows: rows }
+				renderMilestonePopup();
+				document.getElementById("ms-duration").value = "";
+				document.getElementById("ms-percent").value = "";
+				document.getElementById("ms-cstatus").value = "";
+				document.getElementById("ms-pstatus").value = "";
+				document.getElementById("ms-estart").value = "";
+				document.getElementById("ms-edate").value = "";
+				document.getElementById("ms-c_perc").value = "";
+				document.getElementById("ms-nofmod").value = "";
+				document.getElementById("ms-title").value = "";
+			});
+			return;
+		}
+	});
 	function bindColFilterHeader(headerId, col) {
 		document.getElementById(headerId).addEventListener("click", function (e) {
 			var colfilter = e.target.closest("[data-act='colfilter']");
@@ -1175,7 +1302,6 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 	function renderMilestonePopup() {
 		var el = document.getElementById("milestone-popup-overlay");
 		if (!state.milestoneOpen) {
-			console.log("True")
 			el.style.display = "none";
 			return;
 		}
@@ -1189,7 +1315,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 				return `
 					<div class="dash-list-row" data-row="${m.name}" style="align-items:center">
 						<div>
-							<div style="font-weight:500; font-size:16px;">${m.title || "Untitled milestone"}</div>
+							<div style="font-weight:500; font-size:16px;">${m.m_title || "Milestone"}</div>
 							<span class="dash-name" style="font-size:14px;">
 								<span>${m.duration || ""} days</span>
 								<span class="d-meta"> · ${m.payment_percent || 0}% payment</span>
