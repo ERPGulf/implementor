@@ -1397,6 +1397,12 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		var setdue = e.target.closest("[data-act='savedue']");
 		if (setdue) {
 			var id = setdue.getAttribute("data-id")
+			if (!selectedDueDate) {
+				state.menu = null;
+				loadProjects();
+				showFilteredProjects();
+				return
+			};
 			saveDueDate("Project", id, selectedDueDate).then(
 				function (newDate) {
 					var project = testProjects.find(function (p) {
@@ -1726,6 +1732,12 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		}
 		var savedueDate = e.target.closest("[data-act='savedue']");
 		if (savedueDate) {
+			if (!selectedDueDate) {
+				state.menu = null;
+				loadProjects();
+				showFilteredProjects();
+				return
+			};
 			var id = savedueDate.getAttribute("data-id")
 			saveDueDate("Task", id, selectedDueDate).then(function (newdate) {
 				var task = testTasks.find(function (t) {
@@ -1963,6 +1975,12 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		}
 		var savedue = e.target.closest("[data-act='savedue']")
 		if (savedue) {
+			if (!selectedDueDate) {
+				state.menu = null;
+				loadProjects();
+				showFilteredProjects();
+				return
+			};
 			var id = savedue.getAttribute("data-id");
 			var todo = testTodos.find(function (f) {
 				return f.id === id
