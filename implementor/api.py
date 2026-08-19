@@ -146,7 +146,6 @@ def send_slack_message(doctype, name, mode, message):
 @frappe.whitelist()
 def get_projects(filters=None):
     filters = frappe.parse_json(filters) if isinstance(filters, str) else (filters or {})
-    # filters.setdefault("imp_status", ["!=", "Closed"])
 
     rows = frappe.get_list(
         "Project",
@@ -157,17 +156,116 @@ def get_projects(filters=None):
             "notes as description","slack_channel_id", "whatsapp_channel_id", "percent_complete" 
         ],
     )
+
+    names = [r["name"] for r in rows]                                  # NEW: collect all project names
+    reactions = _reaction_counts_bulk("Project", names)                 # NEW: 1 query for all
+    wall_counts = _wall_count_bulk("Project", names)                    # NEW: 1 query for all
+    activity = _recent_activity_bulk("Project", names, limit=5)         # NEW: 1 query for all
+    comments = _comments_bulk("Project", names, limit=5)                # NEW: 1 query for all
+    attachments = _attachments_bulk("Project", names)                   # NEW: 1 query for all
+
     for r in rows:
         r["description"] = _strip_html(r.get("description"))
         r["remaining_days"] = _remaining_days(r.get("deadline"))
-        r["reaction_counts"] = _reaction_counts("Project", r["name"])
-        r["wall_count"] = _wall_count("Project", r["name"])
-        r["activity"] = _recent_activity("Project", r["name"], limit=5)
-        r["comments"] = _comments("Project", r["name"], limit=5)
-        r["attachments"] = _attachments("Project", r["name"])
+        r["reaction_counts"] = reactions.get(r["name"], {})             # CHANGED: lookup, not a query
+        r["wall_count"] = wall_counts.get(r["name"], 0)                 # CHANGED: lookup, not a query
+        r["activity"] = activity.get(r["name"], [])                    # CHANGED: lookup, not a query
+        r["comments"] = comments.get(r["name"], [])                    # CHANGED: lookup, not a query
+        r["attachments"] = attachments.get(r["name"], [])              # CHANGED: lookup, not a query
     return rows
 
+def _reaction_counts_bulk(doctype, names):
+    if not names:
+        return {}
+    Reaction = frappe.qb.DocType("Reaction")
+    rows = (
+        frappe.qb.from_(Reaction)
+        .select(Reaction.reference_name, Reaction.reaction_type, Reaction.user)
+        .where(Reaction.reference_doctype == doctype)
+        .where(Reaction.reference_name.isin(names))
+    ).run(as_dict=True)
 
+    current_user = frappe.session.user
+    result = {name: {} for name in names}   # start with an empty bucket for every project
+    for r in rows:
+        bucket = result[r.reference_name].setdefault(
+            r.reaction_type, {"count": 0, "users": [], "reacted_by_me": False}
+        )
+        bucket["count"] += 1
+        bucket["users"].append(r.user)
+        if r.user == current_user:
+            bucket["reacted_by_me"] = True
+    return result
+def _wall_count_bulk(doctype, names):
+    if not names:
+        return {}
+    rows = frappe.get_all(
+        "Wall Post",
+        filters={"reference_doctype": doctype, "reference_name": ["in", names]},
+        fields=["reference_name"],
+    )
+    counts = {name: 0 for name in names}
+    for r in rows:
+        counts[r.reference_name] += 1
+    return counts
+
+
+def _attachments_bulk(doctype, names):
+    if not names:
+        return {}
+    rows = frappe.get_all(
+        "File",
+        filters={"attached_to_doctype": doctype, "attached_to_name": ["in", names]},
+        fields=["attached_to_name", "file_name", "file_url"],
+    )
+    out = {name: [] for name in names}
+    for r in rows:
+        out[r.attached_to_name].append({"file_name": r.file_name, "file_url": r.file_url})
+    return out
+
+
+def _comments_bulk(doctype, names, limit=5):
+    if not names:
+        return {}
+    rows = frappe.get_all(
+        "Comment",
+        filters={"reference_doctype": doctype, "reference_name": ["in", names], "comment_type": "Comment"},
+        fields=["reference_name", "content", "comment_email", "creation"],
+        order_by="creation desc",
+    )
+    out = {name: [] for name in names}
+    for r in rows:
+        if len(out[r.reference_name]) < limit:
+            r["content"] = _strip_html(r.get("content"))
+            out[r.reference_name].append(r)
+    return out
+
+
+def _recent_activity_bulk(doctype, names, limit=5):
+    if not names:
+        return {}
+    raw_versions = frappe.get_all(
+        "Version",
+        filters={"ref_doctype": doctype, "docname": ["in", names]},
+        fields=["docname", "owner", "creation", "data"],
+        order_by="creation desc",
+    )
+    out = {name: [] for name in names}
+    for v in raw_versions:
+        if len(out[v.docname]) >= limit:
+            continue
+        try:
+            parsed = frappe.parse_json(v.data)
+        except Exception:
+            continue
+        changes = []
+        for field, old_val, new_val in parsed.get("changed", []):
+            if field in _NOISE_FIELDS:
+                continue
+            changes.append({"field": field, "old_value": _strip_html(old_val), "new_value": _strip_html(new_val)})
+        if changes:
+            out[v.docname].append({"owner": v.owner, "creation": v.creation, "changes": changes})
+    return out
 @frappe.whitelist()
 def get_doc_url(doc=None,id=None):
     if not doc or not id:
@@ -178,7 +276,6 @@ def get_doc_url(doc=None,id=None):
     doc_lowerCase = doc.lower().replace(" ", "-")
     url = frappe.utils.get_url(f"/app/{doc_lowerCase}/{id}")
     return url
-
 
 @frappe.whitelist()
 def get_tasks(project=None):
@@ -196,20 +293,25 @@ def get_tasks(project=None):
             "description", "_assign", "slack_channel_id", "whatsapp_channel_id", "completed_on", "completed_by","custom_module","imp_module"
         ],
     )
+
+    names = [r["name"] for r in rows]                              # NEW: collect all task names
+    reactions = _reaction_counts_bulk("Task", names)                 # NEW: 1 query for all
+    wall_counts = _wall_count_bulk("Task", names)                    # NEW: 1 query for all
+    activity = _recent_activity_bulk("Task", names, limit=5)         # NEW: 1 query for all
+    comments = _comments_bulk("Task", names, limit=5)                # NEW: 1 query for all
+    attachments = _attachments_bulk("Task", names)                   # NEW: 1 query for all
+
     for r in rows:
         r["description"] = _strip_html(r.get("description"))
         r["remaining_days"] = _remaining_days(r.get("deadline"))
-        r["reaction_counts"] = _reaction_counts("Task", r["name"])
-        r["wall_count"] = _wall_count("Task", r["name"])
-        r["assigned_to"] = json.loads(r.get("_assign") or "[]")
-        del r["_assign"]
-        r["activity"] = _recent_activity("Task", r["name"], limit=5)
-        r["comments"] = _comments("Task", r["name"], limit=5)
-        r["attachments"] = _attachments("Task", r["name"])
-        # r["modules"] = _project_modules(r.get("project"))
-        # r["imp_module"] = frappe.db.get_value("Project Module", r.get("imp_module"), "module_name") if r.get("custom_module") else None
+        r["reaction_counts"] = reactions.get(r["name"], {})          # CHANGED: lookup, not a query
+        r["wall_count"] = wall_counts.get(r["name"], 0)              # CHANGED: lookup, not a query
+        r["assigned_to"] = json.loads(r.get("_assign") or "[]")      # unchanged
+        del r["_assign"]                                             # unchanged
+        r["activity"] = activity.get(r["name"], [])                 # CHANGED: lookup, not a query
+        r["comments"] = comments.get(r["name"], [])                 # CHANGED: lookup, not a query
+        r["attachments"] = attachments.get(r["name"], [])           # CHANGED: lookup, not a query
     return rows
-
 @frappe.whitelist()
 def get_todos(task=None, project=None):
     filters = {}
@@ -235,24 +337,28 @@ def get_todos(task=None, project=None):
         ],
     )
 
-    task_ids = list({r["task"] for r in rows if r.get("task")})
-    task_to_project = {}
-    if task_ids:
+    task_ids = list({r["task"] for r in rows if r.get("task")})   # unchanged
+    task_to_project = {}                                          # unchanged
+    if task_ids:                                                  # unchanged
         task_rows = frappe.get_all("Task", filters={"name": ["in", task_ids]}, fields=["name", "project"])
         task_to_project = {t.name: t.project for t in task_rows}
 
-    for r in rows:
-        r["title"] = _strip_html(r.get("title"))
-        r["remaining_days"] = _remaining_days(r.get("deadline"))
-        r["reaction_counts"] = _reaction_counts("ToDo", r["name"])
-        r["wall_count"] = _wall_count("ToDo", r["name"])
-        r["activity"] = _recent_activity("ToDo", r["name"], limit=5)
-        r["comments"] = _comments("ToDo", r["name"], limit=5)
-        r["attachments"] = _attachments("ToDo", r["name"])
-        # r["modules"] = _project_modules(task_to_project.get(r.get("task")))
-        # r["imp_module"] = frappe.db.get_value("Project Module", r.get("imp_module"), "module_name") if r.get("imp_module") else None
-    return rows
+    names = [r["name"] for r in rows]                              # NEW: collect all todo names
+    reactions = _reaction_counts_bulk("ToDo", names)                 # NEW: 1 query for all
+    wall_counts = _wall_count_bulk("ToDo", names)                    # NEW: 1 query for all
+    activity = _recent_activity_bulk("ToDo", names, limit=5)         # NEW: 1 query for all
+    comments = _comments_bulk("ToDo", names, limit=5)                # NEW: 1 query for all
+    attachments = _attachments_bulk("ToDo", names)                   # NEW: 1 query for all
 
+    for r in rows:
+        r["title"] = _strip_html(r.get("title"))                    # unchanged
+        r["remaining_days"] = _remaining_days(r.get("deadline"))     # unchanged
+        r["reaction_counts"] = reactions.get(r["name"], {})          # CHANGED: lookup, not a query
+        r["wall_count"] = wall_counts.get(r["name"], 0)              # CHANGED: lookup, not a query
+        r["activity"] = activity.get(r["name"], [])                 # CHANGED: lookup, not a query
+        r["comments"] = comments.get(r["name"], [])                 # CHANGED: lookup, not a query
+        r["attachments"] = attachments.get(r["name"], [])           # CHANGED: lookup, not a query
+    return rows
 def _project_modules(project_name):
 	if not project_name:
 		return []

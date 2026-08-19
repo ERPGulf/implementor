@@ -3219,19 +3219,24 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 	var testTasks = [];
 	var testTodos = []
 	async function init() {
-		await loadProjects();
-		await Promise.all([
-			loadTasks(),
-			loadTodos(),
-			loadNotifCount(),
-			loadDashboard(),
-			loadTaskLeadOptions(),
-			getOptions()
-		]);
-		renderNotifyPanel();
-		renderEmergencyPanel();
-		loadFlatpickr();
-		renderPersonFilter();
+		try {
+			await loadProjects();
+			await Promise.all([
+				loadTasks(),
+				loadTodos(),
+				loadNotifCount(),
+				loadDashboard(),
+				loadTaskLeadOptions(),
+				getOptions()
+			]);
+			renderNotifyPanel();
+			renderEmergencyPanel();
+			loadFlatpickr();
+			renderPersonFilter();
+		} catch (err) {
+			console.error("Board init failed:", err);
+			frappe.msgprint("Something went wrong loading the board. Please refresh the page.");
+		}
 	}
 	init();
 }
