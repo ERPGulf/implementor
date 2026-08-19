@@ -779,6 +779,10 @@ def get_milestone(project):
         }
         for m in doc.get("payment_milestone")
     ]
+@frappe.whitelist(allow_guest=True)
+def deleteproj(doctype,id):
+    frappe.delete_doc(doctype,id,ignore_permissions=False); 
+    return "Deleted"
 
  
 @frappe.whitelist()

@@ -47,7 +47,8 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		{ act: "sendslackdm", icon: "send", label: "Send to Slack direct message", doc: "Project" },
 		{ act: "sendslackchannel", icon: "send", label: "Send to Slack Channel", doc: "Project" },
 		{ act: "addpaymentmilestone", icon: "wallet", label: "Add Payment Milestone", doc: "Project" },
-		{ act: "sendwhatsapp", icon: "send", label: "Send to WhatsApp", doc: "Project" }
+		{ act: "sendwhatsapp", icon: "send", label: "Send to WhatsApp", doc: "Project" },
+		{ act: "deletedoc", color: "var(--text-danger)", icon: "trash", label: "Delete Project", doc: "Project" },
 	];
 
 	var project_filters_fields = [{
@@ -199,7 +200,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			var mineOnly = !state.mineOnly || isMine(task.lead, currentUser)
 			var match_project = state.selectedProject === null || task.project == state.selectedProject;
 			var match_pct = pct(task) >= state.minPct && pct(task) <= state.maxPct;
-			var match_name = state.selectedProject ? true : (state.namedFilter === "" || task.name.toLowerCase().includes(state.namedFilter.toLowerCase()));
+			var match_name = state.selectedProject ? true : (state.namedFilter === "" || (todo.description || "").toLowerCase().includes(state.namedFilter.toLowerCase()));
 			var match_urgency = state.urgencyFilter === "" || task.urgency == state.urgencyFilter;
 			var match_person = state.personFilter === "" || task.lead && String(task.lead).toLowerCase().includes(state.personFilter.toLowerCase());
 			var match_div = state.taskDivFilter === "" || state.taskDivFilter === (task.div || "");
@@ -1371,6 +1372,10 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		var response = await frappe.xcall("implementor.api.get_milestone", { project: project_Id })
 		return response;
 	}
+	async function deleteDoc(doc, id) {
+		var res = frappe.xcall("implementor.api.deleteproj", { doctype: doc, id: id })
+		return res;
+	}
 	document.getElementById("d-projects").addEventListener("click", function (e) {
 		if (e.target.id === "due-date-input" || e.target.closest(".flatpickr-calendar")) {
 			return;
@@ -1381,6 +1386,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			var project = testProjects.find(function (p) {
 				return p.id === projectId
 			})
+			if (!state.menu) return;
 			state.menu.mode = "changedue"
 			showFilteredProjects();
 			requestAnimationFrame(function () {
@@ -1496,6 +1502,28 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			showFilteredProjects();
 			return;
 		}
+		var deleteProj = e.target.closest("[data-act='deletedoc']")
+		if (deleteProj) {
+			var doc = deleteProj.getAttribute("data-doc");
+			var id = deleteProj.getAttribute("data-id");
+			deleteDoc(doc, id).then(function (res) {
+				testProjects = testProjects.filter(function (p) {
+					return p.id !== id;
+				})
+				if (state.selectProject === id) {
+					state.selectProject = null;
+				}
+				showFilteredProjects();
+				frappe.msgprint({
+					title: __('Notification'),
+					indicator: 'green',
+					message: __(`${doc} Document deleted successfully`)
+				});
+			}).catch((function (err) {
+				frappe.msgprint("Could not delete project: " + (err.message || "unknown error"));
+			}))
+			return;
+		}
 		var copylink = e.target.closest("[data-act='copylink']")
 		if (copylink) {
 			var doc = copylink.getAttribute("data-doc");
@@ -1526,7 +1554,11 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 					project.status = newstatus;
 					state.menu = null;
 					showFilteredProjects();
-				})
+				}).catch(function (err) {
+					frappe.msgprint("Could not update status: " + (err.message || "unknown error"));
+					state.menu = null;
+					showFilteredProjects();
+				});
 			return;
 		};
 		var details = e.target.closest("[data-act='details']");
@@ -1616,6 +1648,28 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			})
 			return;
 
+		}
+		var deletedoc = e.target.closest("[data-act='deletedoc']")
+		if (deletedoc) {
+			var doc = deletedoc.getAttribute("data-doc");
+			var id = deletedoc.getAttribute("data-id");
+			deleteDoc(doc, id).then(function (res) {
+				testTasks = testTasks.filter(function (p) {
+					return p.id !== id;
+				})
+				if (state.selectedTask === id) {
+					state.selectedTask = null;
+				}
+				showFilteredTasks();
+				frappe.msgprint({
+					title: __('Notification'),
+					indicator: 'green',
+					message: __(`${doc} Document deleted successfully`)
+				});
+			}).catch((function (err) {
+				frappe.msgprint("Could not delete task: " + (err.message || "unknown error"));
+			}))
+			return;
 		}
 		var setcompletedby = e.target.closest("[data-act='setcompletedby']")
 		if (setcompletedby) {
@@ -1824,6 +1878,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		if (opt) {
 			id = opt.getAttribute("data-id");
 			newstatus = opt.getAttribute("data-value");
+			console.log(newstatus)
 			frappe.xcall("implementor.api.set_status", { doctype: "Task", name: id, status: newstatus }).then(
 				function () {
 					var task = testTasks.find(function (t) { return t.id === id; });
@@ -1884,6 +1939,28 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		selectTask(id)
 	});
 	document.getElementById("d-todos").addEventListener("click", function (e) {
+		var deletedoc = e.target.closest("[data-act='deletedoc']")
+		if (deletedoc) {
+			var doc = deletedoc.getAttribute("data-doc");
+			var id = deletedoc.getAttribute("data-id");
+			deleteDoc(doc, id).then(function (res) {
+				testTodos = testTodos.filter(function (p) {
+					return p.id !== id;
+				})
+				if (state.selectToDo === id) {
+					state.selectToDo = null;
+				}
+				frappe.msgprint({
+					title: __('Notification'),
+					indicator: 'green',
+					message: __(`${doc} Document deleted successfully`)
+				});
+				showToDosForSelectedTasks();
+			}).catch((function (err) {
+				frappe.msgprint("Could not delete task: " + (err.message || "unknown error"));
+			}))
+			return;
+		}
 		var savedue = e.target.closest("[data-act='savedue']")
 		if (savedue) {
 			var id = savedue.getAttribute("data-id");
@@ -2540,9 +2617,11 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		return project_menu_actions.map(function (p) {
 			var docAttr = p.doc ? ` data-doc="${p.doc}"` : "";
 			return `
-			<div class="d-act" data-act="${p.act}" data-id="${project.id}"${docAttr}>
+			<div class="d-act" data-act="${p.act}" data-id="${project.id}"${docAttr}  style="color:${p.color || 'inherit'}">
 			<div>
+			<span style="display:inline-flex; color:${p.color || 'inherit'};" class="${p.act === 'deletedoc' ? 'icon-danger' : ''}">
 			${frappe.utils.icon(p.icon, "sm")}
+			</span>
 			</div>
 			${p.label}
 			</div>
@@ -2559,15 +2638,18 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		{ act: "copylink", icon: "copy", label: "Copy link", doc: "Task" },
 		{ act: "sendslackdm", icon: "send", label: "Send to Slack direct message", doc: "Task" },
 		{ act: "sendslackchannel", icon: "send", label: "Send to Slack Channel", doc: "Task" },
-		{ act: "sendwhatsapp", icon: "send", label: "Send to WhatsApp", doc: "Task" }
+		{ act: "sendwhatsapp", icon: "send", label: "Send to WhatsApp", doc: "Task" },
+		{ act: "deletedoc", color: "var(--text-danger)", icon: "trash", label: "Delete Task", doc: "Task" }
 	];
 	function renderTaskMenuCards(task) {
 		return task_menu_actions.map(function (p) {
 			var docAttr = p.doc ? ` data-doc="${p.doc}"` : "";
 			return `
-			<div class="d-act" data-act="${p.act}" data-id="${task.id}"${docAttr}>
+			<div class="d-act" data-act="${p.act}" data-id="${task.id}"${docAttr} style="color:${p.color || 'inherit'}">
 			<div>
+			<span style="display:inline-flex; color:${p.color || 'inherit'};" class="${p.act === 'deletedoc' ? 'icon-danger' : ''}">
 			${frappe.utils.icon(p.icon, "sm")}
+			</span>
 			</div>
 			${p.label}
 			</div>
@@ -2686,7 +2768,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 				<div class="d-hd" style="background:transparent; border:none; padding:0 0 8px">Status</div>
 				<div style="display:flex; flex-wrap:wrap; gap:6px">
 				${task_status_options.map(function (s) {
-					return `<div class="d-opt" data-act="setstatus" data-id="${task.id}" data-value=${s}>${s}</div>`
+					return `<div class="d-opt" data-act="setstatus" data-id="${task.id}" data-value="${s}">${s}</div>`
 				}).join("")}
 				</div>
 				</div>
@@ -2698,7 +2780,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 					<div class="d-hd" style="background:transparent; border:none; padding:0 0 8px">Division (sets lead)</div>
 					<div style="display:flex; flex-wrap:wrap; gap:6px">
 					${divisions.map(function (d) {
-					return `<div class = "d-opt"  data-act="setdiv" data-id="${task.id}" data-value=${d}>${d}</div>`
+					return `<div class = "d-opt"  data-act="setdiv" data-id="${task.id}" data-value="${d}">${d}</div>`
 				}).join("")}
 					</div>
 					</div>
@@ -2726,9 +2808,9 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 				style="width:auto; max-width:180px; padding:6px 10px" autocomplete="off" readonly/>
 		</div>
 		<div id="due-date-calendar-container"></div>
-		<div class="due-date-footer" style="margin-top:10px; gap:6px>
-							<button class="btn btn-default btn-sm" data-doc="projects" data-act="close">Cancel</button>
-							<button class="btn btn-primary btn-sm" data-act="savedue" data-id="${project.id}">Save</button>
+		<div class="due-date-footer" style="margin-top:10px; gap:6px">
+		<button class="btn btn-default btn-sm" data-doc="projects" data-act="close">Cancel</button>
+		<button class="btn btn-primary btn-sm" data-act="savedue" data-id="${task.id}">Save</button>
 		</div>
 	</div>
 </div>
@@ -2838,14 +2920,21 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		{ act: "copylink", icon: "copy", label: "Copy link", doc: "ToDo" },
 		{ act: "sendslackdm", icon: "send", label: "Send to Slack direct message", doc: "ToDo" },
 		{ act: "sendslackchannel", icon: "send", label: "Send to Slack Channel", doc: "ToDo" },
-		{ act: "sendwhatsapp", icon: "send", label: "Send to WhatsApp", doc: "ToDo" }
+		{ act: "sendwhatsapp", icon: "send", label: "Send to WhatsApp", doc: "ToDo" },
+		{ act: "deletedoc", color: "var(--text-danger)", icon: "trash", label: "Delete ToDo", doc: "ToDo" }
 	];
 	function renderToDoMenuOptions(todo) {
 		return todo_menu_actions.map(function (action) {
 			var docAttr = action.doc ? ` data-doc="${action.doc}"` : "";
 			return `
-			<div class="d-act" data-act=${action.act} data-id="${todo.id}" ${docAttr}><div>${frappe.utils.icon(action.icon, "sm")}</div>${action.label}</div>
-			`;
+			<div class="d-act" data-act=${action.act} data-id="${todo.id}" ${docAttr} style="color:${action.color || 'inherit'}">
+			<div>
+			<span style="display:inline-flex; color:${action.color || 'inherit'};" class="${action.act === 'deletedoc' ? 'icon-danger' : ''}">
+			${frappe.utils.icon(action.icon, "sm")}
+			</span>
+			</div>
+			${action.label}
+			</div>`;
 		}).join("")
 	}
 	function renderToDoCard(todo) {
@@ -2859,7 +2948,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 				<div class="d-hd" style="background:transparent; border:none; padding:0 0 8px">Status</div>
 				<div style="display:flex; flex-wrap:wrap; gap:6px">
 				${todo_status_options.map(function (s) {
-					return `<div class="d-opt" data-act="setstatus" data-id="${todo.id}" data-value=${s}>${s}</div>`
+					return `<div class="d-opt" data-act="setstatus" data-id="${todo.id}" data-value="${s}">${s}</div>`
 				}).join("")}
 				</div>
 				</div>
@@ -2881,7 +2970,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 					<div class="d-hd" style="background:transparent; border:none; padding:0 0 8px">Set Urgency🔥</div>
 					<div style="display:flex; flex-wrap:wrap; gap:6px">
 					${todo_urg_options.map(function (s) {
-					return `<div class="d-opt" data-act="seturg" data-id="${todo.id}" data-value=${s}>${s}</div>`
+					return `<div class="d-opt" data-act="seturg" data-id="${todo.id}" data-value="${s}">${s}</div>`
 				}).join("")}
 					</div>
 					</div>
@@ -3078,7 +3167,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 	}
 	function loadurg(task) {
 		return urgency_options.map(function (u) {
-			return `<div class = "d-opt"  data-act="seturg" data-id="${task.id}" data-value=${u}>${u}</div>`
+			return `<div class = "d-opt"  data-act="seturg" data-id="${task.id}" data-value="${u}">${u}</div>`
 		}).join("")
 	}
 	function loadFlatpickr(callback = () => { }) {
@@ -3093,6 +3182,10 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		script.onload = function () {
 			window.implFlatpickr = window.flatpickr;
 			callback();
+		};
+		script.onerror = function () {
+			frappe.msgprint("Could not load the date picker. Check your connection and try again.");
+			onError();
 		};
 		document.head.appendChild(script);
 	}
