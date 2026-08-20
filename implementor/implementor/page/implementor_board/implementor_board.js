@@ -5,6 +5,9 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		title: 'None',
 		single_column: true
 	});
+	var PROJECTS_PAGE_SIZE = 50;
+	var projectsOffsets = 0;
+	var projectsHasMore = true;
 	var assignees = [];
 	var urgency_options = [];
 	var todo_status_options = [];
@@ -109,10 +112,49 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 	}
 	var runSearchFilter = debounce(function (value) {
 		state.namedFilter = value;
+		// if (!value) {
+		// 	return;
+		// }
+		// else {
+		// 	searchProjects(value);
+		// }
+
 		showFilteredProjects();
 		showFilteredTasks();
 		showToDosForSelectedTasks();
 	}, 200)
+	// async function searchProjects(value) {
+	// 	projectsOffset = 0;
+	// 	var rows = frappe.xcall("implementor.api.get_projects", {
+	// 		limit: PROJECTS_PAGE_SIZE,
+	// 		offset: 0,
+	// 		search: query
+	// 	})
+	// 	projectsHasMore = rows.length >= PROJECTS_PAGE_SIZE;
+	// 	testProjects = rows.map(function (r) {
+	// 		return {
+	// 			id: r.name,
+	// 			name: r.title,
+	// 			client: r.client,
+	// 			status: r.del_status,
+	// 			pm: r.pm,
+	// 			percent: r.percent,
+	// 			description: r.description,
+	// 			due: r.deadline,
+	// 			reactions: r.reaction_counts || {},
+	// 			activity: r.activity,
+	// 			comments: r.comments,
+	// 			attachments: r.attachments,
+	// 			slack_channel_id: r.slack_channel_id,
+	// 			percent_complete: r.percent_complete,
+	// 			whatsapp_channel_id: r.whatsapp_channel_id
+	// 		};
+	// 	});
+	// 	projectsById = new Map(testProjects.map(function (p) { return [p.id, p]; }));
+	// 	showFilteredProjects();
+	// 	updateLoadMoreButton();
+	// 	return;
+	// }
 	function summarizeActivityEntry(entry) {
 		if (!entry.data) {
 			return "Created";
@@ -252,14 +294,15 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		loadTodos(id);
 	};
 	async function selectToDo(id) {
-		var todo = testTodos.find(function (t) { return t.id === id; });
+		var todo = todosById.get(id);
+		if (!todo) return;
 		todo.done = !todo.done;
 		showToDosForSelectedTasks();
 		try {
 			var result = await frappe.xcall("implementor.api.toggle_todo_done", { todo: id });
-			var task = testTasks.find(function (t) { return t.id === result.task; });
+			var task = tasksById.get(result.task);
 			if (task) task.percent = result.task_percent;
-			var project = testProjects.find(function (p) { return p.id === result.project; });
+			var project = projectsById.get(result.project);
 			if (project) project.percent = result.project_percent;
 		} catch (err) {
 			todo.done = !todo.done;   // revert optimistic UI update
@@ -455,6 +498,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			<div id="colfilter-projects" class="filter-panel" style="display:none;"></div>
 			</div>
 			<div id="d-projects"></div>
+			<button id="btn-load-more-projects" class="d-info" style="width:100%; margin-top:8px;">Load more</button>
 			</div>
 			<div>
 				<div id="h-tasks" class="d-hd">
@@ -584,6 +628,46 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		})
 		console.log("Response", response)
 		return response;
+	}
+	var projectsHasMore = true;
+	async function loadMoreProjects() {
+		projectsOffsets += PROJECTS_PAGE_SIZE;
+		var rows = await frappe.xcall("implementor.api.get_projects", {
+			limit: PROJECTS_PAGE_SIZE,
+			offset: projectsOffsets
+		});
+		if (rows.length < PROJECTS_PAGE_SIZE) {
+			projectsHasMore = false
+		}
+		var mapped = rows.map(function (r) {
+			return {
+				id: r.name,
+				name: r.title,
+				client: r.client,
+				status: r.del_status,
+				pm: r.pm,
+				percent: r.percent,
+				description: r.description,
+				due: r.deadline,
+				reactions: r.reaction_counts || {},
+				activity: r.activity,
+				comments: r.comments,
+				attachments: r.attachments,
+				slack_channel_id: r.slack_channel_id,
+				percent_complete: r.percent_complete,
+				whatsapp_channel_id: r.whatsapp_channel_id
+			};
+		});
+
+		testProjects = testProjects.concat(mapped);
+		mapped.forEach(function (p) { projectsById.set(p.id, p); });
+		showFilteredProjects();
+		updateLoadMoreButton();
+	}
+	function updateLoadMoreButton() {
+		var btn = document.getElementById("btn-load-more-projects");
+		if (!btn) return;
+		btn.style.display = projectsHasMore ? "block" : "none";
 	}
 	function updateView() {
 		document.getElementById("btn-board").classList.toggle("on", state.view === "board");
@@ -756,10 +840,10 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		state.selectedTask = null;
 		state.selectToDo = null;
 		await loadProjects();
-		await Promise.all([
-			loadTasks(),
-			loadTodos()
-		]);
+		// await Promise.all([
+		// 	loadTasks(),
+		// 	loadTodos()
+		// ]);
 		// showFilteredProjects();
 		// showFilteredTasks();
 		// showToDosForSelectedTasks();
@@ -1383,9 +1467,8 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		var gotodue = e.target.closest("[data-act='gotodue']");
 		if (gotodue) {
 			var projectId = gotodue.getAttribute("data-id")
-			var project = testProjects.find(function (p) {
-				return p.id === projectId
-			})
+			var project = projectsById.get(projectId);
+			if (!project) return;
 			if (!state.menu) return;
 			state.menu.mode = "changedue"
 			showFilteredProjects();
@@ -1405,9 +1488,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			};
 			saveDueDate("Project", id, selectedDueDate).then(
 				function (newDate) {
-					var project = testProjects.find(function (p) {
-						return p.id === id
-					})
+					var project = projectsById.get(id)
 					if (project) project.due = newDate;
 					selectedDueDate = "";
 					state.menu = null;
@@ -1457,7 +1538,8 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			var doctype = "Project";
 			frappe.xcall("implementor.api.toggle_reaction", { doctype: doctype, name: id, reaction_type: key })
 				.then(function (reactions) {
-					var item = testProjects.find(function (p) { return p.id === id; });
+					var item = projectsById.get(id);
+					if (!item) return;
 					item.reactions = reactions;
 					showFilteredProjects();
 				});
@@ -1518,6 +1600,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 						testProjects = testProjects.filter(function (p) {
 							return p.id !== id;
 						})
+						projectsById.delete(id);
 						if (state.selectProject === id) {
 							state.selectProject = null;
 						}
@@ -1560,7 +1643,8 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			newstatus = opt.getAttribute("data-value");
 			frappe.xcall("implementor.api.set_status", { doctype: "Project", name: id, status: newstatus }).then(
 				function () {
-					var project = testProjects.find(function (p) { return p.id === id; });
+					var project = projectsById.get(id);
+					if (!project) return;
 					project.status = newstatus;
 					state.menu = null;
 					showFilteredProjects();
@@ -1586,7 +1670,8 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			newpm = setpm.getAttribute("data-value");
 			frappe.xcall("implementor.api.set_project_manager", { project: id, project_manager: newpm }).then(
 				function () {
-					var project = testProjects.find(function (p) { return p.id === id; });
+					var project = projectsById.get(id);
+					if (!project) return;
 					project.pm = newpm;
 					state.menu = null;
 					showFilteredProjects();
@@ -1657,7 +1742,8 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			var newlead = setlead.getAttribute("data-value");
 			frappe.xcall("implementor.api.set_lead", { task: id, lead: newlead }).then(
 				function () {
-					var task = testTasks.find(function (p) { return p.id === id; });
+					var task = tasksById.get(id);
+					if (!task) return;
 					task.lead = newlead;
 					state.menu = null;
 					showFilteredTasks();
@@ -1671,9 +1757,8 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			var value = savecompletedby.getAttribute("data-value");
 			saveCompleted(id, { "completed_by": value }).then(function (cby) {
 				console.log("cby", cby)
-				var task = testTasks.find(function (t) {
-					return t.id === id
-				})
+				var task = tasksById.get(id);
+				if (!task) return;
 				task.completed_by = cby;
 				state.menu = null;
 				showFilteredTasks();
@@ -1693,6 +1778,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 						testTasks = testTasks.filter(function (p) {
 							return p.id !== id;
 						})
+						tasksById.delete(id);
 						if (state.selectedTask === id) {
 							state.selectedTask = null;
 						}
@@ -1714,9 +1800,8 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		var setcompletedby = e.target.closest("[data-act='setcompletedby']")
 		if (setcompletedby) {
 			var id = setcompletedby.getAttribute("data-id");
-			var task = testTasks.find(function (t) {
-				return t.id === id;
-			})
+			var task = tasksById.get(id);
+			if (!task) return;
 			state.menu = { id: id, mode: "changecompletedby" };
 			showFilteredTasks();
 			return;
@@ -1725,9 +1810,8 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		var savecompleted = e.target.closest("[data-act='savecompleted']")
 		if (savecompleted) {
 			var id = savecompleted.getAttribute("data-id")
-			var task = testTasks.find(function (t) {
-				return t.id === id
-			});
+			var task = tasksById.get(id);
+			if (!task) return;
 			state.menu = null;
 			saveCompleted(id, { "completed_on": state.completedOn }).then(function (cdate) {
 				task.completed_on = cdate;
@@ -1735,12 +1819,8 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 				state.completedOn = null;
 				showFilteredTasks();
 				getProjPerc(id).then(function (percent_complete) {
-					var task = testTasks.find(function (t) {
-						return t.id === id
-					})
-					var project = testProjects.find(function (pro) {
-						return pro.id === task.project
-					})
+					var task = tasksById.get(id)
+					var project = projectsById.get(task.project)
 					project.percent_complete = percent_complete;
 					state.menu = null;
 					showFilteredProjects();
@@ -1755,7 +1835,8 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		if (setcompletedon) {
 			console.log("clicked")
 			var id = setcompletedon.getAttribute("data-id")
-			var task = testTasks.find(function (t) { return t.id === id })
+			var task = tasksById.get(id)
+			if (!task) return;
 			state.menu = { id: id, mode: "changecompletedon" };
 			state.completedOn = task.completed_on || null;
 			showFilteredTasks();
@@ -1774,9 +1855,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			};
 			var id = savedueDate.getAttribute("data-id")
 			saveDueDate("Task", id, selectedDueDate).then(function (newdate) {
-				var task = testTasks.find(function (t) {
-					return t.id === id
-				})
+				var task = tasksById.get(id)
 				if (task) task.due = newdate
 				state.menu = null;
 				selectedDueDate = "";
@@ -1792,10 +1871,8 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		var gotodue = e.target.closest("[data-act='gotodue']")
 		if (gotodue) {
 			var id = gotodue.getAttribute("data-id");
-			var task = testTasks.find(function (t) {
-				return t.id === id;
-			})
-			console.log(id)
+			var task = tasksById.get(id);
+			if (!task) return;
 			state.menu.mode = "changedue"
 			showFilteredTasks();
 			requestAnimationFrame(function () {
@@ -1815,7 +1892,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			var doctype = "Task";
 			frappe.xcall("implementor.api.toggle_reaction", { doctype: doctype, name: id, reaction_type: key })
 				.then(function (reactions) {
-					var item = testTasks.find(function (t) { return t.id === id; });
+					var item = tasksById.get(id)
 					item.reactions = reactions;
 					showFilteredTasks();
 					return;
@@ -1934,7 +2011,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			newstatus = opt.getAttribute("data-value");
 			frappe.xcall("implementor.api.set_status", { doctype: "Task", name: id, status: newstatus }).then(
 				function () {
-					var task = testTasks.find(function (t) { return t.id === id; });
+					var task = tasksById.get(id)
 					if (!task) return;
 					task.status = newstatus;
 					state.menu = null;
@@ -1960,9 +2037,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			id = setdiv.getAttribute("data-id");
 			newdiv = setdiv.getAttribute("data-value");
 			frappe.xcall("implementor.api.set_division", { task: id, division: newdiv }).then(function () {
-				var task = testTasks.find(function (p) {
-					return p.id === id;
-				})
+				var task = tasksById.get(id)
 				if (!task) return;
 				task.div = newdiv;
 				state.menu = null;
@@ -1990,7 +2065,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			newurg = seturg.getAttribute("data-value");
 			frappe.xcall("implementor.api.set_urgency", { doctype: "Task", name: id, urgency: newurg }).then(
 				function () {
-					var task = testTasks.find(function (t) { return t.id === id; });
+					var task = tasksById.get(id)
 					if (!task) return;
 					task.urgency = newurg;
 					state.menu = null;
@@ -2026,6 +2101,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 						testTodos = testTodos.filter(function (p) {
 							return p.id !== id;
 						})
+						todosById.delete(id);
 						if (state.selectToDo === id) {
 							state.selectToDo = null;
 						}
@@ -2052,13 +2128,8 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 				return
 			};
 			var id = savedue.getAttribute("data-id");
-			var todo = testTodos.find(function (f) {
-				return f.id === id
-			})
 			saveDueDate("ToDo", id, selectedDueDate).then(function (newdate) {
-				var todo = testTodos.find(function (t) {
-					return t.id === id
-				})
+				var todo = todosById.get(id)
 				if (todo) todo.due = newdate
 				state.menu = null;
 				selectedDueDate = "";
@@ -2072,9 +2143,8 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		var gotodue = e.target.closest("[data-act='gotodue']");
 		if (gotodue) {
 			var id = gotodue.getAttribute("data-id");
-			var todo = testTodos.find(function (f) {
-				return f.id === id
-			})
+			var todo = todosById.get(id);
+			if (!todo) return;
 			state.menu = { id: id, mode: "changedue" }
 			showToDosForSelectedTasks();
 			requestAnimationFrame(function () {
@@ -2092,7 +2162,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			var doctype = "ToDo";
 			frappe.xcall("implementor.api.toggle_reaction", { doctype: doctype, name: id, reaction_type: key })
 				.then(function (reactions) {
-					var item = testTodos.find(function (t) { return t.id === id; });
+					var item = todosById.get(id)
 					if (!item) return;
 					item.reactions = reactions;
 					showToDosForSelectedTasks();
@@ -2156,9 +2226,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			console.log("This is the ", id)
 			assignto_value = setassign.getAttribute("data-value");
 			frappe.xcall("implementor.api.assign_todo", { todo: id, user: assignto_value }).then(function () {
-				var todo = testTodos.find(function (t) {
-					return t.id === id;
-				});
+				var todo = todosById.get(id)
 				if (!todo) return;
 				todo.who = assignto_value;
 				state.menu = null;
@@ -2179,7 +2247,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			id = seturg.getAttribute("data-id");
 			neurg = seturg.getAttribute("data-value");
 			frappe.xcall("implementor.api.set_urgency", { urgency: neurg, name: id, doctype: "ToDo" }).then(function () {
-				var todo = testTodos.find(function (t) { return t.id === id; });
+				var todo = todosById.get(id)
 				if (!todo) return;
 				todo.urgency = neurg;
 				state.menu = null;
@@ -2214,7 +2282,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			newstatus = opt.getAttribute("data-value");
 			frappe.xcall("implementor.api.set_status", { doctype: "ToDo", name: id, status: newstatus }).then(
 				function () {
-					var todo = testTodos.find(function (t) { return t.id === id; });
+					var todo = todosById.get(id)
 					if (!todo) return;
 					todo.status = newstatus;
 					state.menu = null;
@@ -2451,7 +2519,8 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		}
 		el.style.display = "block";
 		if (state.drawer.type === "Project") {
-			var project = testProjects.find(function (p) { return state.drawer.id == p.id });
+			var project = projectsById.get(state.drawer.id);
+			if (!project) { state.drawer = null; el.style.display = "none"; return; }
 			el.innerHTML = `
 			<div class="dw-sec" style = "display:flex; justify-content:space-between; align-items:center" >
 		<div class="dw-lbl" style="margin-bottom:0;">${frappe.utils.icon("folder")} PROJECT</div>
@@ -2481,7 +2550,8 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		</div>
 		`}
 		else if (state.drawer.type === "Task") {
-			var task = testTasks.find(function (t) { return state.drawer.id == t.id });
+			var task = tasksById.get(state.drawer.id);
+			if (!task) { state.drawer = null; el.style.display = "none"; return; }
 			el.innerHTML = `
 			<div class="dw-sec" style = "display:flex; justify-content:space-between; align-items:center" >
 			<div class="dw-lbl" style="margin-bottom:0">${frappe.utils.icon("file")} TASK</div>
@@ -2523,7 +2593,8 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		</div>
 		`}
 		else if (state.drawer.type === "ToDo") {
-			var todo = testTodos.find(function (t) { return state.drawer.id == t.id });
+			var todo = todosById.get(state.drawer.id);
+			if (!todo) { state.drawer = null; el.style.display = "none"; return; }
 			el.innerHTML = `
   <div class="dw-sec" style="display:flex; justify-content:space-between; align-items:center">
     <div class="dw-lbl" style="margin-bottom:0">${frappe.utils.icon("circle-check-big", "sm")} TO-DO</div>
@@ -2999,10 +3070,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 	<div style="display:flex; flex-direction:column; gap:6px; flex:1">
 		<div style="display:flex; flex-direction:column; gap:4px">
 			<div style="font-weight:500">${task.name}</div>
-			<div class="d-meta" style="font-weight:400; margin-bottom:6px">${testProjects.find(function (p) {
-			return p.id === task.project
-		})?.name || task.project}
-			</div>
+			<div class="d-meta" style="font-weight:400; margin-bottom:6px">${projectsById.get(task.project)?.name || task.project}</div>
 			<div style="display:flex; gap:4px; flex-wrap:wrap">
 				${chip(task.stage)}
 				${chip(task.status)}
@@ -3193,10 +3261,18 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		return todos.map(renderToDoCard).join("")
 	}
 	function ppct(project) { return project.percent || 0; }
-
+	document.getElementById("btn-load-more-projects").addEventListener("click", function () {
+		loadMoreProjects();
+	});
 	function pct(task) { return task.percent || 0; }
 	async function loadProjects() {
-		var rows = await frappe.xcall("implementor.api.get_projects")
+		projectsOffsets = 0;
+		var rows = await frappe.xcall("implementor.api.get_projects", {
+			limit: PROJECTS_PAGE_SIZE,
+			offset: projectsOffsets
+		}
+		)
+		projectsHasMore = rows.length >= PROJECTS_PAGE_SIZE;
 		testProjects = rows.map(function (r) {
 			return {
 				id: r.name,
@@ -3216,7 +3292,10 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 				whatsapp_channel_id: r.whatsapp_channel_id
 			}
 		});
+		projectsById = new Map(testProjects.map(function (p) { return [p.id, p]; }));
 		showFilteredProjects();
+		updateLoadMoreButton();
+		return;
 
 	}
 	async function loadTodos(taskId, projectId) {
@@ -3242,6 +3321,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 				module: r.imp_module
 			};
 		});
+		todosById = new Map(testTodos.map(t => [t.id, t]));
 		showToDosForSelectedTasks();
 		return testTodos;
 	}
@@ -3274,6 +3354,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 				module: r.imp_module
 			};
 		});
+		tasksById = new Map(testTasks.map(t => [t.id, t]));
 		showFilteredTasks();
 
 	}
@@ -3337,15 +3418,18 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		assignees = TaskLeadOptions
 		// persons = TaskLeadOptions
 	}
-	var testProjects = []
+	var testProjects = [];
+	var projectsById = new Map();
 	var testTasks = [];
-	var testTodos = []
+	var tasksById = new Map();
+	var testTodos = [];
+	var todosById = new Map();
 	async function init() {
 		try {
 			await loadProjects();
 			await Promise.all([
-				loadTasks(),
-				loadTodos(),
+				// loadTasks(),
+				// loadTodos(),
 				loadNotifCount(),
 				loadDashboard(),
 				loadTaskLeadOptions(),

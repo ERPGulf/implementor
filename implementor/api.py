@@ -144,17 +144,24 @@ def send_slack_message(doctype, name, mode, message):
         )
         return [resp.json()]
 @frappe.whitelist()
-def get_projects(filters=None):
-    filters = frappe.parse_json(filters) if isinstance(filters, str) else (filters or {})
+def get_projects(limit=50, offset=0,filters=None,search=None):
+    # filters = frappe.parse_json(filters) if isinstance(filters, str) else (filters or {})
+    filters={}
+    if search:
+        filters["tittle"] = ["like",f"%{search}%"]
 
     rows = frappe.get_list(
         "Project",
+        filters=filters,
         fields=[
             "name", "project_name as title", "customer as client",
             "imp_status as del_status", "imp_project_manager as pm",
             "imp_percent as percent", "imp_deadline as deadline",
             "notes as description","slack_channel_id", "whatsapp_channel_id", "percent_complete" 
         ],
+        order_by="modified desc",
+        limit_page_length=limit,
+        limit_start=offset,
     )
 
     names = [r["name"] for r in rows]                                  # NEW: collect all project names
