@@ -537,6 +537,19 @@ def set_project_manager(project, project_manager):
     return {"project": project, "project_manager": project_manager}
 
 @frappe.whitelist()
+def set_lead(task, lead):
+    if not frappe.db.exists("Task",task):
+        frappe.throw(_("Task {0} does not exist").format(task))
+    if not frappe.db.exists("User", lead):
+        frappe.throw(_("User {0} does not exist").format(lead))
+
+    doc = frappe.get_doc("Task", task)
+    doc.custom_division_lead = lead
+    doc.save()
+
+    return {"task": task, "lead": lead}
+
+@frappe.whitelist()
 def set_division(task, division):
     if not frappe.db.exists("Task", task):
         frappe.throw(_("Task {0} does not exist").format(task))

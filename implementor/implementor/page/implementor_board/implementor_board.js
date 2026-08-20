@@ -1512,22 +1512,26 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		if (deleteProj) {
 			var doc = deleteProj.getAttribute("data-doc");
 			var id = deleteProj.getAttribute("data-id");
-			deleteDoc(doc, id).then(function (res) {
-				testProjects = testProjects.filter(function (p) {
-					return p.id !== id;
+			frappe.confirm('Are you sure you want to proceed?',
+				() => {
+					deleteDoc(doc, id).then(function (res) {
+						testProjects = testProjects.filter(function (p) {
+							return p.id !== id;
+						})
+						if (state.selectProject === id) {
+							state.selectProject = null;
+						}
+						showFilteredProjects();
+						frappe.msgprint({
+							title: __('Notification'),
+							indicator: 'green',
+							message: __(`${doc} Document deleted successfully`)
+						});
+					}).catch((function (err) {
+						frappe.msgprint("Could not delete project: " + (err.message || "unknown error"));
+					}))
+				}, () => {
 				})
-				if (state.selectProject === id) {
-					state.selectProject = null;
-				}
-				showFilteredProjects();
-				frappe.msgprint({
-					title: __('Notification'),
-					indicator: 'green',
-					message: __(`${doc} Document deleted successfully`)
-				});
-			}).catch((function (err) {
-				frappe.msgprint("Could not delete project: " + (err.message || "unknown error"));
-			}))
 			return;
 		}
 		var copylink = e.target.closest("[data-act='copylink']")
@@ -1576,10 +1580,9 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			showFilteredProjects();
 			return;
 		}
-		var setpm = e.target.closest("[data-act='setpm']");
+		var setpm = e.target.closest("[data-act='setuser']");
 		if (setpm) {
 			id = setpm.getAttribute("data-id");
-
 			newpm = setpm.getAttribute("data-value");
 			frappe.xcall("implementor.api.set_project_manager", { project: id, project_manager: newpm }).then(
 				function () {
@@ -1593,7 +1596,8 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		var changepm = e.target.closest("[data-act='changepm']");
 		if (changepm) {
 			state.menu.mode = "changepm";
-			loadOptions("pm").then(function () { showFilteredProjects(); })
+			var id = changepm.getAttribute("data-id")
+			loadOptions("pm", id).then(function () { showFilteredProjects(); })
 			return;
 		}
 		var close = e.target.closest("[data-act='close']");
@@ -1636,7 +1640,31 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		return response.percent_complete;
 	}
 
+
 	document.getElementById("d-tasks").addEventListener("click", function (e) {
+		var changelead = e.target.closest("[data-act='changelead']");
+		if (changelead) {
+			// var id = changelead.getAttribute("data-id");
+			state.menu.mode = "changelead"
+			var id = changelead.getAttribute("data-id")
+			loadOptions("", id).then(function () { showFilteredTasks(); })
+			return;
+		}
+		var setlead = e.target.closest("[data-act='assign']");
+		if (setlead) {
+			var id = setlead.getAttribute("data-id");
+			console.log(id)
+			var newlead = setlead.getAttribute("data-value");
+			frappe.xcall("implementor.api.set_lead", { task: id, lead: newlead }).then(
+				function () {
+					var task = testTasks.find(function (p) { return p.id === id; });
+					task.lead = newlead;
+					state.menu = null;
+					showFilteredTasks();
+					return;
+				})
+		}
+
 		var savecompletedby = e.target.closest("[data-act='savecompletedby']");
 		if (savecompletedby) {
 			var id = savecompletedby.getAttribute("data-id");
@@ -1659,23 +1687,29 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		if (deletedoc) {
 			var doc = deletedoc.getAttribute("data-doc");
 			var id = deletedoc.getAttribute("data-id");
-			deleteDoc(doc, id).then(function (res) {
-				testTasks = testTasks.filter(function (p) {
-					return p.id !== id;
+			frappe.confirm('Are you sure you want to proceed?',
+				() => {
+					deleteDoc(doc, id).then(function (res) {
+						testTasks = testTasks.filter(function (p) {
+							return p.id !== id;
+						})
+						if (state.selectedTask === id) {
+							state.selectedTask = null;
+						}
+						showFilteredTasks();
+						frappe.msgprint({
+							title: __('Notification'),
+							indicator: 'green',
+							message: __(`${doc} Document deleted successfully`)
+						});
+					}).catch((function (err) {
+						frappe.msgprint("Could not delete task: " + (err.message || "unknown error"));
+					}))
+				}, () => {
+					// action to perform if No is selected
 				})
-				if (state.selectedTask === id) {
-					state.selectedTask = null;
-				}
-				showFilteredTasks();
-				frappe.msgprint({
-					title: __('Notification'),
-					indicator: 'green',
-					message: __(`${doc} Document deleted successfully`)
-				});
-			}).catch((function (err) {
-				frappe.msgprint("Could not delete task: " + (err.message || "unknown error"));
-			}))
 			return;
+
 		}
 		var setcompletedby = e.target.closest("[data-act='setcompletedby']")
 		if (setcompletedby) {
@@ -1784,8 +1818,16 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 					var item = testTasks.find(function (t) { return t.id === id; });
 					item.reactions = reactions;
 					showFilteredTasks();
+					return;
+				})
+				.catch(function (err) {
+					console.error("Failed to toggle reaction:", err);
+					frappe.msgprint({
+						title: __("Error"),
+						message: __("Could not update reaction. Please try again."),
+						indicator: "red"
+					});
 				});
-			return;
 		}
 		var sendAct = e.target.closest("[data-act='sendslackdm'],[data-act='sendslackchannel'],[data-act='sendwhatsapp']");
 		if (sendAct) {
@@ -1890,15 +1932,22 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		if (opt) {
 			id = opt.getAttribute("data-id");
 			newstatus = opt.getAttribute("data-value");
-			console.log(newstatus)
 			frappe.xcall("implementor.api.set_status", { doctype: "Task", name: id, status: newstatus }).then(
 				function () {
 					var task = testTasks.find(function (t) { return t.id === id; });
+					if (!task) return;
 					task.status = newstatus;
 					state.menu = null;
 					showFilteredTasks();
 				})
-			return;
+				.catch(function (err) {
+					console.error("Failed to set status:", err);
+					frappe.msgprint({
+						title: __("Error"),
+						message: __("Could not update task status. Please try again."),
+						indicator: "red"
+					});
+				});
 		}
 		var changediv = e.target.closest("[data-act='gotodivision']");
 		if (changediv) {
@@ -1914,11 +1963,19 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 				var task = testTasks.find(function (p) {
 					return p.id === id;
 				})
+				if (!task) return;
 				task.div = newdiv;
 				state.menu = null;
 				showFilteredTasks();
 			})
-			return;
+				.catch(function (err) {
+					console.error("Failed to set division:", err);
+					frappe.msgprint({
+						title: __("Error"),
+						message: __("Could not update division for this task. Please try again."),
+						indicator: "red"
+					});
+				});
 		};
 		var changeurg = e.target.closest("[data-act='gotourgency']");
 		if (changeurg) {
@@ -1934,11 +1991,19 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			frappe.xcall("implementor.api.set_urgency", { doctype: "Task", name: id, urgency: newurg }).then(
 				function () {
 					var task = testTasks.find(function (t) { return t.id === id; });
+					if (!task) return;
 					task.urgency = newurg;
 					state.menu = null;
 					showFilteredTasks();
 				})
-			return;
+				.catch(function (err) {
+					console.error("Failed to set urgency:", err);
+					frappe.msgprint({
+						title: __("Error"),
+						message: __("Could not update urgency for this task. Please try again."),
+						indicator: "red"
+					});
+				});
 		};
 		var info = e.target.closest("[data-act='opendrawer']");
 		if (info) {
@@ -1955,22 +2020,27 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		if (deletedoc) {
 			var doc = deletedoc.getAttribute("data-doc");
 			var id = deletedoc.getAttribute("data-id");
-			deleteDoc(doc, id).then(function (res) {
-				testTodos = testTodos.filter(function (p) {
-					return p.id !== id;
+			frappe.confirm('Are you sure you want to proceed?',
+				() => {
+					deleteDoc(doc, id).then(function (res) {
+						testTodos = testTodos.filter(function (p) {
+							return p.id !== id;
+						})
+						if (state.selectToDo === id) {
+							state.selectToDo = null;
+						}
+						frappe.msgprint({
+							title: __('Notification'),
+							indicator: 'green',
+							message: __(`${doc} Document deleted successfully`)
+						});
+						showToDosForSelectedTasks();
+					}).catch((function (err) {
+						frappe.msgprint("Could not delete task: " + (err.message || "unknown error"));
+					}))
+				}, () => {
+					// action to perform if No is selected
 				})
-				if (state.selectToDo === id) {
-					state.selectToDo = null;
-				}
-				frappe.msgprint({
-					title: __('Notification'),
-					indicator: 'green',
-					message: __(`${doc} Document deleted successfully`)
-				});
-				showToDosForSelectedTasks();
-			}).catch((function (err) {
-				frappe.msgprint("Could not delete task: " + (err.message || "unknown error"));
-			}))
 			return;
 		}
 		var savedue = e.target.closest("[data-act='savedue']")
@@ -2023,10 +2093,18 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			frappe.xcall("implementor.api.toggle_reaction", { doctype: doctype, name: id, reaction_type: key })
 				.then(function (reactions) {
 					var item = testTodos.find(function (t) { return t.id === id; });
+					if (!item) return;
 					item.reactions = reactions;
 					showToDosForSelectedTasks();
+				})
+				.catch(function (err) {
+					console.error("Failed to toggle reaction:", err);
+					frappe.msgprint({
+						title: __("Error"),
+						message: __("Could not update reaction. Please try again."),
+						indicator: "red"
+					});
 				});
-			return;
 		}
 		var dots = e.target.closest("[data-act='dots']")
 		if (dots) {
@@ -2056,7 +2134,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		if (assignto) {
 			var id = assignto.getAttribute("data-id");
 			state.menu.mode = "assignto";
-			loadOptions().then(function () { showToDosForSelectedTasks(); });
+			loadOptions("", id).then(function () { showToDosForSelectedTasks(); });
 			return;
 		}
 		var copylink = e.target.closest("[data-act='copylink']")
@@ -2075,17 +2153,25 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		var setassign = e.target.closest("[data-act='assign']");
 		if (setassign) {
 			id = setassign.getAttribute("data-id");
+			console.log("This is the ", id)
 			assignto_value = setassign.getAttribute("data-value");
-
 			frappe.xcall("implementor.api.assign_todo", { todo: id, user: assignto_value }).then(function () {
-				todo = testTodos.find(function (t) {
+				var todo = testTodos.find(function (t) {
 					return t.id === id;
 				});
+				if (!todo) return;
 				todo.who = assignto_value;
 				state.menu = null;
 				showToDosForSelectedTasks();
 			})
-			return;
+				.catch(function (err) {
+					console.error("Failed to assign todo:", err);
+					frappe.msgprint({
+						title: __("Error"),
+						message: __("Could not assign this to-do. Please try again."),
+						indicator: "red"
+					});
+				});
 
 		}
 		var seturg = e.target.closest("[data-act='seturg']");
@@ -2094,11 +2180,20 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			neurg = seturg.getAttribute("data-value");
 			frappe.xcall("implementor.api.set_urgency", { urgency: neurg, name: id, doctype: "ToDo" }).then(function () {
 				var todo = testTodos.find(function (t) { return t.id === id; });
+				if (!todo) return;
 				todo.urgency = neurg;
 				state.menu = null;
 				showToDosForSelectedTasks();
 			})
-			return;
+				.catch(function (err) {
+					console.error("Failed to set urgency:", err);
+					frappe.msgprint({
+						title: __("Error"),
+						message: __("Could not update urgency for this to-do. Please try again."),
+						indicator: "red"
+					});
+				});
+
 		}
 
 		var close = e.target.closest("[data-act='close']");
@@ -2120,11 +2215,20 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			frappe.xcall("implementor.api.set_status", { doctype: "ToDo", name: id, status: newstatus }).then(
 				function () {
 					var todo = testTodos.find(function (t) { return t.id === id; });
+					if (!todo) return;
 					todo.status = newstatus;
 					state.menu = null;
 					showToDosForSelectedTasks();
 				})
-			return;
+				.catch(function (err) {
+					console.error("Failed to set status:", err);
+					frappe.msgprint({
+						title: __("Error"),
+						message: __("Could not update to-do status. Please try again."),
+						indicator: "red"
+					});
+				});
+
 		};
 		var sendAct = e.target.closest("[data-act='sendslackdm'],[data-act='sendslackchannel'],[data-act='sendwhatsapp']");
 		if (sendAct) {
@@ -2480,6 +2584,14 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 					if (doctype === "ToDo") await loadTodos(state.selectedTask);
 					renderDrawer();
 				})
+				.catch(function (err) {
+					console.error("Failed to add work note:", err);
+					frappe.msgprint({
+						title: __("Error"),
+						message: __("Could not add note. Please try again."),
+						indicator: "red"
+					});
+				});
 		}
 		var addattachment = e.target.closest("[data-act='addattachment']")
 		if (addattachment) {
@@ -2650,6 +2762,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		{ act: "details", icon: "info", label: "Details & activity" },
 		{ act: "gotostatus", icon: "circle-dot", label: "Change status" },
 		{ act: "gotodivision", icon: "tag", label: "Change Division" },
+		{ act: "changelead", icon: "user-check", label: "Change division lead" },
 		{ act: "gotourgency", icon: "flame", label: "Set Urgency" },
 		{ act: "gotodue", icon: "calendar-days", label: "Change Due date" },
 		{ act: "newtodo", icon: "plus", label: "Add ToDo" },
@@ -2757,20 +2870,19 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			`;
 	}
 	var OptionalHtml = "";
-	async function loadOptions(role) {
-		OptionalHtml = await list_users(role);
+	async function loadOptions(role, id) {
+		OptionalHtml = await list_users(role, id);
 	}
-	async function list_users(role) {
+	async function list_users(role, id) {
 		var users = await frappe.xcall("implementor.api.get_users", { role: role });
-		var id = ""
 		if (role === "pm") {
-			var id = state.selectedProject;
+			// var id = state.selectedProject;
 			return users.map(function (user) {
-				return `<div class="d-opt" data-act="setpm" data-id="${id}" data-value="${user.name}">${user.name}</div>`
+				return `<div class="d-opt" data-act="setuser" data-id="${id}" data-value="${user.name}">${user.name}</div>`
 			}).join("");
 		}
 		else {
-			var id = state.selectToDo;
+			console.log("Id inside optionhtml", id)
 			return users.map(function (user) {
 				return `<div class="d-opt" data-act="assign" data-id="${id}" data-value="${user.name}">${user.name}</div>`
 			}).join("");
@@ -2802,6 +2914,16 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 				}).join("")}
 					</div>
 					</div>
+			`;
+			}
+			else if (state.menu.mode === "changelead") {
+				menuHtml = `
+			<div class="d-menu" >
+			<div class="d-hd" style="background:transparent; border:none; padding:0 0 8px">Change Lead</div>
+			<div style="display:flex; flex-wrap:wrap; gap:6px">
+			${OptionalHtml}
+			</div>
+			</div>
 			`;
 			}
 			else if (state.menu.mode === "changeurg") {
