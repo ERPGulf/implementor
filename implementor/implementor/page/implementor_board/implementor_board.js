@@ -2754,6 +2754,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 	}
 	function dueChip(doc, dueDateString) {
 		var r = remDaysHours(dueDateString);
+		console.log(r)
 		if (r.totalHours === 0) {
 			return `<span style="color:orange">Due now</span>`;
 		}
