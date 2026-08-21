@@ -42,16 +42,16 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 	var currentUser = frappe.session.user;
 	var project_menu_actions = [
 		{ act: "details", icon: "info", label: "Details & activity" },
-		{ act: "gotostatus", icon: "circle-dot", label: "Change status" },
-		{ act: "changepm", icon: "user-check", label: "Change project manager" },
-		{ act: "gotodue", icon: "calendar-days", label: "Change Due Date" },
-		{ act: "newtask", icon: "plus", label: "Add Task" },
+		{ act: "gotostatus", icon: "circle-dot", label: "Change status", perm: "write" },
+		{ act: "changepm", icon: "user-check", label: "Change project manager", perm: "write" },
+		{ act: "gotodue", icon: "calendar-days", label: "Change Due Date", perm: "write" },
+		{ act: "newtask", icon: "plus", label: "Add Task", perm: "create:Task" },
 		{ act: "copylink", icon: "copy", label: "Copy link", doc: "Project" },
 		{ act: "sendslackdm", icon: "send", label: "Send to Slack direct message", doc: "Project" },
 		{ act: "sendslackchannel", icon: "send", label: "Send to Slack Channel", doc: "Project" },
-		{ act: "addpaymentmilestone", icon: "wallet", label: "Add Payment Milestone", doc: "Project" },
+		{ act: "addpaymentmilestone", icon: "wallet", label: "Add Payment Milestone", doc: "Project", perm: "write" },
 		{ act: "sendwhatsapp", icon: "send", label: "Send to WhatsApp", doc: "Project" },
-		{ act: "deletedoc", color: "var(--text-danger)", icon: "trash", label: "Delete Project", doc: "Project" },
+		{ act: "deletedoc", color: "var(--text-danger)", icon: "trash", label: "Delete Project", doc: "Project", perm: "delete" },
 	];
 
 	var project_filters_fields = [{
@@ -626,7 +626,6 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			duration: duration, percent: percent, cstatus: cstatus, pstatus: pstatus,
 			estart: estart, edate: edate, c_perc: c_perc, nofmod: nofmod, title: title
 		})
-		console.log("Response", response)
 		return response;
 	}
 	var projectsHasMore = true;
@@ -699,7 +698,6 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		var deletemilestone = e.target.closest("[data-act='deletemilestone'")
 		if (deletemilestone) {
 			var id = deletemilestone.getAttribute("data-row")
-			console.log(id)
 			deleteMilestone(id).then(function (rows) {
 				state.milestoneOpen = { project: id, rows: rows }
 				renderMilestonePopup()
@@ -725,7 +723,6 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			var project = state.selectedProject
 
 			setMileStone(project, duration, percent, cstatus, pstatus, estart, edate, c_perc, nofmod, title).then(function (rows) {
-				console.log("rows received:", rows);
 				state.milestoneOpen = { project: project, rows: rows }
 				renderMilestonePopup();
 				document.getElementById("ms-duration").value = "";
@@ -1054,6 +1051,20 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		state.add = !state.add;   // simple toggle, same pattern as your menu open/close
 		renderAddMenu();
 	});
+	function isAllowedTo(perm, doctype) {
+		console.log("Perm", perm)
+		if (!perm) { return true; }
+		if (perm === "write") {
+			return frappe.model.can_write(doctype)
+		}
+		if (perm === "delete") {
+			return frappe.model.can_delete(doctype)
+		}
+		if (perm.indexOf("create:") === 0) {
+			return frappe.model.can_create(perm.split(":")[1]);
+		}
+		return true;
+	}
 	function renderAddMenu() {
 		var el = document.getElementById("add-menu");
 		if (!state.add) {
@@ -1061,14 +1072,20 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			el.innerHTML = "";
 			return;
 		}
+		var canCreateProject = frappe.model.can_create("Project");
+		var canCreateTask = frappe.model.can_create("Task");
+		var canCreateToDo = frappe.model.can_create("ToDo");
 		el.style.display = "block";
 		el.innerHTML = `
-    <div class="d-act" data-act="newproject"><div>${frappe.utils.icon("folder-plus", "sm")}</div> New project</div>
-    <div class="d-act" data-act="newtask"><div>${frappe.utils.icon("file-plus", "sm")}</div> New task in project</div>
-    <div class="d-act" data-act="newtodo"><div>${frappe.utils.icon("circle-check-big", "sm")}</div> New to-do in task</div>
+    <div class="d-act ${canCreateProject ? '' : 'd-act-disabled'}" data-act="newproject" ${canCreateProject ? '' : 'data-disabled="true"'}><div>${frappe.utils.icon("folder-plus", "sm")} </div> New project</div>
+    <div class="d-act ${canCreateTask ? '' : 'd-act-disabled'}" data-act="newtask" ${canCreateTask ? '' : 'data-disabled="true"'}><div>${frappe.utils.icon("file-plus", "sm")}</div> New task in project</div>
+    <div class="d-act ${canCreateToDo ? '' : 'd-act-disabled'}" data-act="newtodo" ${canCreateToDo ? '' : 'data-disabled="true"'}><div>${frappe.utils.icon("circle-check-big", "sm")}</div> New to-do in task</div>
   `;
 	};
 	document.getElementById("add-menu").addEventListener("click", function (e) {
+		if (e.target.closest("[data-disabled='true']")) {
+			return;   // disabled item — do nothing
+		}
 		var newproject = e.target.closest("[data-act='newproject']");
 		if (newproject) {
 			state.add = false;
@@ -1392,7 +1409,6 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		}
 		el.style.display = "flex";
 		var rows = state.milestoneOpen.rows || [];
-		console.log(rows)
 		document.getElementById("milestone-list").innerHTML = rows.length === 0 ?
 			`<div class="d-meta">No milestones yet.</div>`
 			:
@@ -1461,6 +1477,9 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		return res;
 	}
 	document.getElementById("d-projects").addEventListener("click", function (e) {
+		if (e.target.closest("[data-disabled='true']")) {
+			return;
+		}
 		if (e.target.id === "due-date-input" || e.target.closest(".flatpickr-calendar")) {
 			return;
 		}
@@ -1523,7 +1542,6 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		var paymentmilestone = e.target.closest("[data-act='addpaymentmilestone']")
 		if (paymentmilestone) {
 			var id = paymentmilestone.getAttribute("data-id")
-			console.log("Inside it")
 			getMilestone(id).then(function (rows) {
 				state.milestoneOpen = { project: id, rows: rows }
 				renderMilestonePopup();
@@ -1721,12 +1739,14 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		var response = await frappe.xcall("implementor.api.get_project_percent_by_task", {
 			task_id: id,
 		})
-		console.log(response)
 		return response.percent_complete;
 	}
 
 
 	document.getElementById("d-tasks").addEventListener("click", function (e) {
+		if (e.target.closest("[data-disabled='true']")) {
+			return;
+		}
 		var changelead = e.target.closest("[data-act='changelead']");
 		if (changelead) {
 			// var id = changelead.getAttribute("data-id");
@@ -1738,7 +1758,6 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		var setlead = e.target.closest("[data-act='assign']");
 		if (setlead) {
 			var id = setlead.getAttribute("data-id");
-			console.log(id)
 			var newlead = setlead.getAttribute("data-value");
 			frappe.xcall("implementor.api.set_lead", { task: id, lead: newlead }).then(
 				function () {
@@ -1756,7 +1775,6 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			var id = savecompletedby.getAttribute("data-id");
 			var value = savecompletedby.getAttribute("data-value");
 			saveCompleted(id, { "completed_by": value }).then(function (cby) {
-				console.log("cby", cby)
 				var task = tasksById.get(id);
 				if (!task) return;
 				task.completed_by = cby;
@@ -1833,7 +1851,6 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		}
 		var setcompletedon = e.target.closest("[data-act='setcompletedon']")
 		if (setcompletedon) {
-			console.log("clicked")
 			var id = setcompletedon.getAttribute("data-id")
 			var task = tasksById.get(id)
 			if (!task) return;
@@ -1898,7 +1915,6 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 					return;
 				})
 				.catch(function (err) {
-					console.error("Failed to toggle reaction:", err);
 					frappe.msgprint({
 						title: __("Error"),
 						message: __("Could not update reaction. Please try again."),
@@ -2018,7 +2034,6 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 					showFilteredTasks();
 				})
 				.catch(function (err) {
-					console.error("Failed to set status:", err);
 					frappe.msgprint({
 						title: __("Error"),
 						message: __("Could not update task status. Please try again."),
@@ -2044,7 +2059,6 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 				showFilteredTasks();
 			})
 				.catch(function (err) {
-					console.error("Failed to set division:", err);
 					frappe.msgprint({
 						title: __("Error"),
 						message: __("Could not update division for this task. Please try again."),
@@ -2072,7 +2086,6 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 					showFilteredTasks();
 				})
 				.catch(function (err) {
-					console.error("Failed to set urgency:", err);
 					frappe.msgprint({
 						title: __("Error"),
 						message: __("Could not update urgency for this task. Please try again."),
@@ -2091,6 +2104,9 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		selectTask(id)
 	});
 	document.getElementById("d-todos").addEventListener("click", function (e) {
+		if (e.target.closest("[data-disabled='true']")) {
+			return;
+		}
 		var deletedoc = e.target.closest("[data-act='deletedoc']")
 		if (deletedoc) {
 			var doc = deletedoc.getAttribute("data-doc");
@@ -2223,7 +2239,6 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		var setassign = e.target.closest("[data-act='assign']");
 		if (setassign) {
 			id = setassign.getAttribute("data-id");
-			console.log("This is the ", id)
 			assignto_value = setassign.getAttribute("data-value");
 			frappe.xcall("implementor.api.assign_todo", { todo: id, user: assignto_value }).then(function () {
 				var todo = todosById.get(id)
@@ -2233,7 +2248,6 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 				showToDosForSelectedTasks();
 			})
 				.catch(function (err) {
-					console.error("Failed to assign todo:", err);
 					frappe.msgprint({
 						title: __("Error"),
 						message: __("Could not assign this to-do. Please try again."),
@@ -2478,8 +2492,10 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		return activity.map(renderActivityEntry).join("")
 
 	}
-	function renderAttachments(attachments) {
+	function renderAttachments(attachments, canWrite) {
 		var list;
+		var disabledAttr = canWrite ? "" : ` data-disabled='true'`;
+		var disabledClass = canWrite ? "" : ` d-act-disabled`;
 		if (!attachments || attachments.length === 0) {
 			list = `<div class="d-meta">None yet.</div>`;
 		} else {
@@ -2489,13 +2505,13 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		}
 
 		return `<div id="attachments-list">${list}</div>` + `
-    <input type="file" id="attachment-input" multiple style="display:none" />
-    <button class="d-info" data-act="addattachment" style="width:auto; padding:6px 12px; gap:6px; margin-top:8px">
+    <input type="file" id="attachment-input" multiple style="display:none"${canWrite ? "" : "disabled"} />
+    <button class="d-info" data-act="addattachment" style="width:auto; padding:6px 12px; gap:6px; margin-top:8px"${canWrite ? "" : "disabled"}>
       ${frappe.utils.icon("paperclip", "sm")} Add attachment
     </button>
   `;
 	}
-	function renderWorkNotes(notes) {
+	function renderWorkNotes(notes, canWrite) {
 		var list = (!notes || notes.length === 0)
 			? `<div class="d-meta" > No comments yet.</div> `
 			: notes.map(function (n) {
@@ -2505,8 +2521,8 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 
 		return list + `
 			<div style = "display:flex; gap:6px; margin-top:8px" >
-      <input id="drawer-note-input" placeholder="Add a work note..." style="flex:1" />
-      <button class="d-info" data-act="addnote">${frappe.utils.icon("send", "sm")}</button>
+      <input id="drawer-note-input" placeholder="Add a work note..." style="flex:1"${canWrite ? "" : "disabled"}/>
+      <button class="d-info" data-act="addnote"${canWrite ? "" : "disabled"}>${frappe.utils.icon("send", "sm")}</button>
     </div>
 			`;
 	}
@@ -2521,6 +2537,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		if (state.drawer.type === "Project") {
 			var project = projectsById.get(state.drawer.id);
 			if (!project) { state.drawer = null; el.style.display = "none"; return; }
+			var canWrite = frappe.model.can_write("Project");
 			el.innerHTML = `
 			<div class="dw-sec" style = "display:flex; justify-content:space-between; align-items:center" >
 		<div class="dw-lbl" style="margin-bottom:0;">${frappe.utils.icon("folder")} PROJECT</div>
@@ -2534,15 +2551,15 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		</div>
 		<div class="dw-sec">
 			<div class="dw-lbl">Description</div>
-			<textarea id="drawer-desc"> ${project.description || ""}</textarea>
+			<textarea id="drawer-desc"${canWrite ? "" : "disabled"}> ${project.description || ""}</textarea>
 		</div>
 		<div class="dw-sec">
 			<div class="dw-lbl">Attachments</div>
-			${renderAttachments(project.attachments)}
+			${renderAttachments(project.attachments, canWrite)}
 		</div>
 		<div class="dw-sec">
 			<div class="dw-lbl">Work Notes</div>
-			${renderWorkNotes(project.comments)}
+			${renderWorkNotes(project.comments, canWrite)}
 		</div>
 		<div class="dw-sec">
 			<div class="dw-lbl">Activity log</div>
@@ -2551,6 +2568,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		`}
 		else if (state.drawer.type === "Task") {
 			var task = tasksById.get(state.drawer.id);
+			var canWrite = frappe.model.can_write("Task");
 			if (!task) { state.drawer = null; el.style.display = "none"; return; }
 			el.innerHTML = `
 			<div class="dw-sec" style = "display:flex; justify-content:space-between; align-items:center" >
@@ -2577,15 +2595,15 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		</div> 
 		<div class="dw-sec">
 			<div class="dw-lbl">Description</div>
-			<textarea id="drawer-desc">${task.description || ""}</textarea>
+			<textarea id="drawer-desc"${canWrite ? "" : "disabled"}>${task.description || ""}</textarea>
 		</div>
 		<div class="dw-sec">
 			<div class="dw-lbl">Attachments</div>
-			${renderAttachments(task.attachments)}
+			${renderAttachments(task.attachments, canWrite)}
 		</div>
 		<div class="dw-sec">
 			<div class="dw-lbl">Work Notes</div>
-			${renderWorkNotes(task.comments)}
+			${renderWorkNotes(task.comments, canWrite)}
 		</div>
 		<div class="dw-sec">
 			<div class="dw-lbl">Activity log</div>
@@ -2594,6 +2612,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		`}
 		else if (state.drawer.type === "ToDo") {
 			var todo = todosById.get(state.drawer.id);
+			var canWrite = frappe.model.can_write("ToDo");
 			if (!todo) { state.drawer = null; el.style.display = "none"; return; }
 			el.innerHTML = `
   <div class="dw-sec" style="display:flex; justify-content:space-between; align-items:center">
@@ -2609,15 +2628,15 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
   </div>
   <div class="dw-sec">
     <div class="dw-lbl">Description</div>
-    <textarea id="drawer-desc">${todo.description || ""}</textarea>
+    <textarea id="drawer-desc"${canWrite ? "" : "disabled"}>${todo.description || ""}</textarea>
   </div>
   <div class="dw-sec">
     <div class="dw-lbl">Attachments</div>
-    ${renderAttachments(todo.attachments)}
+    ${renderAttachments(todo.attachments, canWrite)}
   </div>
   <div class="dw-sec">
     <div class="dw-lbl">Work Notes</div>
-    ${renderWorkNotes(todo.comments)}
+    ${renderWorkNotes(todo.comments, canWrite)}
   </div>
   <div class="dw-sec">
     <div class="dw-lbl">Activity log</div>
@@ -2754,13 +2773,15 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 	}
 	function dueChip(doc, dueDateString) {
 		var r = remDaysHours(dueDateString);
-		console.log(r)
 		if (r.totalHours === 0) {
 			return `<span style="color:orange">Due now</span>`;
 		}
 		if (!r.isOverdue) {
 			if (r.totalHours === null) {
 				return `<span>Deadline not set</span>`;
+			}
+			if (r.months > 0) {
+				return `<span>${r.months}mo left ${r.hours}h left</span>`;
 			}
 			else {
 				var label = r.days > 0 ? (r.days + "d " + r.hours + "h left") : (r.hours + "h left");
@@ -2771,7 +2792,10 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		// 	var overdueLabel = r.months > 0 ? (r.months + "mo " + r.hours + "h overdue") : (r.hours + "h overdue");
 		// 	return `<span style="color:var(--text-danger)">${overdueLabel}</span>`;
 		// }
-		var overdueLabel = r.months > 0 ? (r.months + "mo " + r.hours + "h overdue") : r.days > 0 ? (r.days + "d " + r.hours + "h overdue") : (r.hours + "h overdue");
+		if (r.months > 0) {
+			return `<span style="color:var(--text-danger)">${r.months}mo ${r.hours} h overdue</span>`;
+		}
+		var overdueLabel = r.days > 0 ? (r.days + "d " + r.hours + "h overdue") : (r.hours + "h overdue");
 		return `<span style="color:var(--text-danger)">${overdueLabel}</span>`;
 	}
 	// indicator to mark urgency
@@ -2818,8 +2842,12 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 	function renderProjectMenuCards(project) {
 		return project_menu_actions.map(function (p) {
 			var docAttr = p.doc ? ` data-doc="${p.doc}"` : "";
+			var allowed = isAllowedTo(p.perm, "Project");
+			console.log("Allowed?", allowed)
+			var disabledAttr = allowed ? "" : ` data-disabled='true'`;
+			var disabledClass = allowed ? "" : ` d-act-disabled`;
 			return `
-			<div class="d-act" data-act="${p.act}" data-id="${project.id}"${docAttr}  style="color:${p.color || 'inherit'}">
+			<div class="d-act${disabledClass}" data-act="${p.act}"  data-id="${project.id}" ${docAttr}${disabledAttr}  style="color:${p.color || 'inherit'}">
 			<div>
 			<span style="display:inline-flex; color:${p.color || 'inherit'};" class="${p.act === 'deletedoc' ? 'icon-danger' : ''}">
 			${frappe.utils.icon(p.icon, "sm")}
@@ -2832,23 +2860,26 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 	}
 	var task_menu_actions = [
 		{ act: "details", icon: "info", label: "Details & activity" },
-		{ act: "gotostatus", icon: "circle-dot", label: "Change status" },
-		{ act: "gotodivision", icon: "tag", label: "Change Division" },
-		{ act: "changelead", icon: "user-check", label: "Change division lead" },
-		{ act: "gotourgency", icon: "flame", label: "Set Urgency" },
-		{ act: "gotodue", icon: "calendar-days", label: "Change Due date" },
-		{ act: "newtodo", icon: "plus", label: "Add ToDo" },
+		{ act: "gotostatus", icon: "circle-dot", label: "Change status", perm: "write" },
+		{ act: "gotodivision", icon: "tag", label: "Change Division", perm: "write" },
+		{ act: "changelead", icon: "user-check", label: "Change division lead", perm: "write" },
+		{ act: "gotourgency", icon: "flame", label: "Set Urgency", perm: "write" },
+		{ act: "gotodue", icon: "calendar-days", label: "Change Due date", perm: "write" },
+		{ act: "newtodo", icon: "plus", label: "Add ToDo", perm: "create:ToDo" },
 		{ act: "copylink", icon: "copy", label: "Copy link", doc: "Task" },
 		{ act: "sendslackdm", icon: "send", label: "Send to Slack direct message", doc: "Task" },
 		{ act: "sendslackchannel", icon: "send", label: "Send to Slack Channel", doc: "Task" },
 		{ act: "sendwhatsapp", icon: "send", label: "Send to WhatsApp", doc: "Task" },
-		{ act: "deletedoc", color: "var(--text-danger)", icon: "trash", label: "Delete Task", doc: "Task" }
+		{ act: "deletedoc", color: "var(--text-danger)", icon: "trash", label: "Delete Task", doc: "Task", perm: "delete" }
 	];
 	function renderTaskMenuCards(task) {
 		return task_menu_actions.map(function (p) {
 			var docAttr = p.doc ? ` data-doc="${p.doc}"` : "";
+			var isAllowed = isAllowedTo(p.perm, "Task");
+			var disabledAttr = (isAllowed) ? "" : ` data-disabled="true"`;
+			var disabledClass = (isAllowed) ? "" : ` d-act-disabled`;
 			return `
-			<div class="d-act" data-act="${p.act}" data-id="${task.id}"${docAttr} style="color:${p.color || 'inherit'}">
+			<div class="d-act${disabledClass}" data-act="${p.act}" data-id="${task.id}"${docAttr}${disabledAttr} style="color:${p.color || 'inherit'}">
 			<div>
 			<span style="display:inline-flex; color:${p.color || 'inherit'};" class="${p.act === 'deletedoc' ? 'icon-danger' : ''}">
 			${frappe.utils.icon(p.icon, "sm")}
@@ -2954,7 +2985,6 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			}).join("");
 		}
 		else {
-			console.log("Id inside optionhtml", id)
 			return users.map(function (user) {
 				return `<div class="d-opt" data-act="assign" data-id="${id}" data-value="${user.name}">${user.name}</div>`
 			}).join("");
@@ -3121,22 +3151,25 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 	`;
 	}
 	var todo_menu_actions = [
-		{ act: "details", icon: "info", label: "Details & activity" },
-		{ act: "gotostatus", icon: "circle-dot", label: "Change status" },
-		{ act: "assignto", icon: "user-plus", label: "Assign" },
-		{ act: "gotourgency", icon: "flame", label: "Set Urgency" },
-		{ act: "gotodue", icon: "calendar-days", label: "Change Due date" },
+		{ act: "details", icon: "info", label: "Details & activity", },
+		{ act: "gotostatus", icon: "circle-dot", label: "Change status", perm: "write" },
+		{ act: "assignto", icon: "user-plus", label: "Assign", perm: "write" },
+		{ act: "gotourgency", icon: "flame", label: "Set Urgency", perm: "write" },
+		{ act: "gotodue", icon: "calendar-days", label: "Change Due date", perm: "write" },
 		{ act: "copylink", icon: "copy", label: "Copy link", doc: "ToDo" },
 		{ act: "sendslackdm", icon: "send", label: "Send to Slack direct message", doc: "ToDo" },
 		{ act: "sendslackchannel", icon: "send", label: "Send to Slack Channel", doc: "ToDo" },
 		{ act: "sendwhatsapp", icon: "send", label: "Send to WhatsApp", doc: "ToDo" },
-		{ act: "deletedoc", color: "var(--text-danger)", icon: "trash", label: "Delete ToDo", doc: "ToDo" }
+		{ act: "deletedoc", color: "var(--text-danger)", icon: "trash", label: "Delete ToDo", doc: "ToDo", perm: "delete" }
 	];
 	function renderToDoMenuOptions(todo) {
 		return todo_menu_actions.map(function (action) {
 			var docAttr = action.doc ? ` data-doc="${action.doc}"` : "";
+			var isAllowed = isAllowedTo(action.perm, "ToDo");
+			var disabledAttr = isAllowed ? "" : ` data-disabled = "true"`;
+			var disabledClass = isAllowed ? "" : ` d-act-disabled`;
 			return `
-			<div class="d-act" data-act=${action.act} data-id="${todo.id}" ${docAttr} style="color:${action.color || 'inherit'}">
+			<div class="d-act${disabledClass}" data-act=${action.act} data-id="${todo.id}" ${docAttr} ${disabledAttr} style="color:${action.color || 'inherit'}">
 			<div>
 			<span style="display:inline-flex; color:${action.color || 'inherit'};" class="${action.act === 'deletedoc' ? 'icon-danger' : ''}">
 			${frappe.utils.icon(action.icon, "sm")}

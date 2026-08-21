@@ -126,6 +126,22 @@
     cursor: pointer
 }
 
+.d-act-disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+.d-info:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+#drawer-note-input:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
 .d-menu {
     position: relative;
     flex-basis: 100%;
