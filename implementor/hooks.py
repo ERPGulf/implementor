@@ -10,6 +10,7 @@ fixtures = [
     "Role",
     "Role Profile",
     {"dt": "Custom Field", "filters": [["dt", "in", ["Project", "Task", "ToDo", "User", "Customer", "Notification Log"]]]},
+    {"dt": "Report", "filters": [["module", "=", "Implementor"]]},
 ]
 # Apps
 # ------------------

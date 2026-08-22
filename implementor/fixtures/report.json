@@ -1,0 +1,686 @@
+[
+ {
+  "add_total_row": 0,
+  "add_translate_data": 0,
+  "columns": [],
+  "disable_prepared_report_automation": 0,
+  "disabled": 0,
+  "docstatus": 0,
+  "doctype": "Report",
+  "doctype_to_sync": [],
+  "filters": [
+   {
+    "default": null,
+    "fieldname": "from_date",
+    "fieldtype": "Date",
+    "label": "From Date",
+    "mandatory": 0,
+    "options": null,
+    "wildcard_filter": 0
+   },
+   {
+    "default": null,
+    "fieldname": "to_date",
+    "fieldtype": "Date",
+    "label": "To Date",
+    "mandatory": 0,
+    "options": null,
+    "wildcard_filter": 0
+   },
+   {
+    "default": null,
+    "fieldname": "allocated_to",
+    "fieldtype": "Link",
+    "label": "User",
+    "mandatory": 0,
+    "options": "User",
+    "wildcard_filter": 0
+   },
+   {
+    "default": null,
+    "fieldname": "project",
+    "fieldtype": "Link",
+    "label": "Project",
+    "mandatory": 0,
+    "options": "Project",
+    "wildcard_filter": 0
+   },
+   {
+    "default": null,
+    "fieldname": "task",
+    "fieldtype": "Link",
+    "label": "Task",
+    "mandatory": 0,
+    "options": "Task",
+    "wildcard_filter": 0
+   },
+   {
+    "default": null,
+    "fieldname": "status",
+    "fieldtype": "Select",
+    "label": "Status",
+    "mandatory": 0,
+    "options": "\nOpen\nClosed\nCancelled",
+    "wildcard_filter": 0
+   },
+   {
+    "default": null,
+    "fieldname": "priority",
+    "fieldtype": "Select",
+    "label": "Priority",
+    "mandatory": 0,
+    "options": "\nLow\nMedium\nHigh",
+    "wildcard_filter": 0
+   }
+  ],
+  "is_standard": "Yes",
+  "javascript": null,
+  "json": null,
+  "letter_head": null,
+  "modified": "2026-08-22 09:13:06.993085",
+  "module": "Implementor",
+  "name": "ToDo Report V3",
+  "prepared_report": 0,
+  "query": null,
+  "ref_doctype": "ToDo",
+  "reference_report": null,
+  "report_name": "ToDo Report V3",
+  "report_script": null,
+  "report_type": "Script Report",
+  "roles": [
+   {
+    "role": "Technical Consultant"
+   },
+   {
+    "role": "Functional Consultant"
+   },
+   {
+    "role": "System Manager"
+   }
+  ],
+  "snapshot_report": 0,
+  "timeout": 0
+ },
+ {
+  "add_total_row": 0,
+  "add_translate_data": 0,
+  "columns": [],
+  "disable_prepared_report_automation": 0,
+  "disabled": 0,
+  "docstatus": 0,
+  "doctype": "Report",
+  "doctype_to_sync": [],
+  "filters": [
+   {
+    "default": null,
+    "fieldname": "status",
+    "fieldtype": "Select",
+    "label": "Status",
+    "mandatory": 0,
+    "options": "\nDiscovery\nActive\nAMC\nClosed",
+    "wildcard_filter": 0
+   },
+   {
+    "default": null,
+    "fieldname": "pm",
+    "fieldtype": "Link",
+    "label": "Project Manager",
+    "mandatory": 0,
+    "options": "User",
+    "wildcard_filter": 0
+   },
+   {
+    "default": null,
+    "fieldname": "customer",
+    "fieldtype": "Link",
+    "label": "Client",
+    "mandatory": 0,
+    "options": "Customer",
+    "wildcard_filter": 0
+   }
+  ],
+  "is_standard": "Yes",
+  "javascript": null,
+  "json": null,
+  "letter_head": null,
+  "modified": "2026-08-22 09:43:02.501059",
+  "module": "Implementor",
+  "name": "All Projects Report",
+  "prepared_report": 0,
+  "query": null,
+  "ref_doctype": "Project",
+  "reference_report": null,
+  "report_name": "All Projects Report",
+  "report_script": null,
+  "report_type": "Script Report",
+  "roles": [
+   {
+    "role": "Delivery Manager"
+   },
+   {
+    "role": "Projects Manager"
+   },
+   {
+    "role": "System Manager"
+   },
+   {
+    "role": "Technical Consultant"
+   },
+   {
+    "role": "Functional Consultant"
+   }
+  ],
+  "snapshot_report": 0,
+  "timeout": 0
+ },
+ {
+  "add_total_row": 0,
+  "add_translate_data": 0,
+  "columns": [],
+  "disable_prepared_report_automation": 0,
+  "disabled": 0,
+  "docstatus": 0,
+  "doctype": "Report",
+  "doctype_to_sync": [],
+  "filters": [
+   {
+    "default": null,
+    "fieldname": "project",
+    "fieldtype": "Link",
+    "label": "Project",
+    "mandatory": 0,
+    "options": "Project",
+    "wildcard_filter": 0
+   },
+   {
+    "default": null,
+    "fieldname": "division",
+    "fieldtype": "Select",
+    "label": "Division",
+    "mandatory": 0,
+    "options": "\nTechnical\nFunctional",
+    "wildcard_filter": 0
+   },
+   {
+    "default": null,
+    "fieldname": "status",
+    "fieldtype": "Select",
+    "label": "Status",
+    "mandatory": 0,
+    "options": "\nOpen\nWorking\nCompleted\nCancelled",
+    "wildcard_filter": 0
+   }
+  ],
+  "is_standard": "Yes",
+  "javascript": null,
+  "json": null,
+  "letter_head": null,
+  "modified": "2026-08-22 09:47:52.769988",
+  "module": "Implementor",
+  "name": "Project Progress Report",
+  "prepared_report": 0,
+  "query": null,
+  "ref_doctype": "Task",
+  "reference_report": null,
+  "report_name": "Project Progress Report",
+  "report_script": null,
+  "report_type": "Script Report",
+  "roles": [
+   {
+    "role": "Delivery Manager"
+   },
+   {
+    "role": "Projects Manager"
+   },
+   {
+    "role": "System Manager"
+   },
+   {
+    "role": "Technical Consultant"
+   },
+   {
+    "role": "Functional Consultant"
+   }
+  ],
+  "snapshot_report": 0,
+  "timeout": 0
+ },
+ {
+  "add_total_row": 0,
+  "add_translate_data": 0,
+  "columns": [],
+  "disable_prepared_report_automation": 0,
+  "disabled": 0,
+  "docstatus": 0,
+  "doctype": "Report",
+  "doctype_to_sync": [],
+  "filters": [
+   {
+    "default": null,
+    "fieldname": "customer",
+    "fieldtype": "Link",
+    "label": "Customer",
+    "mandatory": 0,
+    "options": "Customer",
+    "wildcard_filter": 0
+   },
+   {
+    "default": null,
+    "fieldname": "project",
+    "fieldtype": "Link",
+    "label": "Project",
+    "mandatory": 0,
+    "options": "Project",
+    "wildcard_filter": 0
+   },
+   {
+    "default": null,
+    "fieldname": "status",
+    "fieldtype": "Select",
+    "label": "Status",
+    "mandatory": 0,
+    "options": "\nOpen\nIn Progress\nResolved\nClosed",
+    "wildcard_filter": 0
+   },
+   {
+    "default": null,
+    "fieldname": "priority",
+    "fieldtype": "Select",
+    "label": "Priority",
+    "mandatory": 0,
+    "options": "\nLow\nMedium\nHigh\nUrgent",
+    "wildcard_filter": 0
+   }
+  ],
+  "is_standard": "Yes",
+  "javascript": null,
+  "json": null,
+  "letter_head": null,
+  "modified": "2026-08-22 09:50:30.216853",
+  "module": "Implementor",
+  "name": "Support Ticket Report",
+  "prepared_report": 0,
+  "query": null,
+  "ref_doctype": "Support Ticket",
+  "reference_report": null,
+  "report_name": "Support Ticket Report",
+  "report_script": null,
+  "report_type": "Script Report",
+  "roles": [
+   {
+    "role": "Support Team"
+   },
+   {
+    "role": "Delivery Manager"
+   },
+   {
+    "role": "Projects Manager"
+   },
+   {
+    "role": "System Manager"
+   }
+  ],
+  "snapshot_report": 0,
+  "timeout": 0
+ },
+ {
+  "add_total_row": 0,
+  "add_translate_data": 0,
+  "columns": [],
+  "disable_prepared_report_automation": 0,
+  "disabled": 0,
+  "docstatus": 0,
+  "doctype": "Report",
+  "doctype_to_sync": [],
+  "filters": [
+   {
+    "default": null,
+    "fieldname": "project",
+    "fieldtype": "Link",
+    "label": "Project",
+    "mandatory": 0,
+    "options": "Project",
+    "wildcard_filter": 0
+   },
+   {
+    "default": null,
+    "fieldname": "payment_status",
+    "fieldtype": "Select",
+    "label": "Payment Status",
+    "mandatory": 0,
+    "options": "\nPaid\nUnPaid\nOverdue\nPartially Paid\nPending",
+    "wildcard_filter": 0
+   },
+   {
+    "default": null,
+    "fieldname": "completion_status",
+    "fieldtype": "Select",
+    "label": "Completion Status",
+    "mandatory": 0,
+    "options": "\nNot Started\nIn Progress\nPartially Completed\nOn Hold\nDue\nCompleted",
+    "wildcard_filter": 0
+   }
+  ],
+  "is_standard": "Yes",
+  "javascript": null,
+  "json": null,
+  "letter_head": null,
+  "modified": "2026-08-22 09:53:17.891297",
+  "module": "Implementor",
+  "name": "Payment Timeline Report",
+  "prepared_report": 0,
+  "query": null,
+  "ref_doctype": "Project",
+  "reference_report": null,
+  "report_name": "Payment Timeline Report",
+  "report_script": null,
+  "report_type": "Script Report",
+  "roles": [
+   {
+    "role": "Accounts Manager"
+   },
+   {
+    "role": "Sales Manager"
+   },
+   {
+    "role": "Delivery Manager"
+   },
+   {
+    "role": "System Manager"
+   }
+  ],
+  "snapshot_report": 0,
+  "timeout": 0
+ },
+ {
+  "add_total_row": 0,
+  "add_translate_data": 0,
+  "columns": [],
+  "disable_prepared_report_automation": 0,
+  "disabled": 0,
+  "docstatus": 0,
+  "doctype": "Report",
+  "doctype_to_sync": [],
+  "filters": [
+   {
+    "default": null,
+    "fieldname": "project",
+    "fieldtype": "Link",
+    "label": "Project",
+    "mandatory": 0,
+    "options": "Project",
+    "wildcard_filter": 0
+   },
+   {
+    "default": null,
+    "fieldname": "customer",
+    "fieldtype": "Link",
+    "label": "Customer",
+    "mandatory": 0,
+    "options": "Customer",
+    "wildcard_filter": 0
+   },
+   {
+    "default": null,
+    "fieldname": "payment_status",
+    "fieldtype": "Select",
+    "label": "Payment Status",
+    "mandatory": 0,
+    "options": "\nPaid\nUnPaid\nOverdue\nPartially Paid\nPending",
+    "wildcard_filter": 0
+   }
+  ],
+  "is_standard": "Yes",
+  "javascript": null,
+  "json": null,
+  "letter_head": null,
+  "modified": "2026-08-22 09:54:39.190408",
+  "module": "Implementor",
+  "name": "Billing and Collection Report",
+  "prepared_report": 0,
+  "query": null,
+  "ref_doctype": "Project",
+  "reference_report": null,
+  "report_name": "Billing and Collection Report",
+  "report_script": null,
+  "report_type": "Script Report",
+  "roles": [
+   {
+    "role": "Accounts Manager"
+   },
+   {
+    "role": "Sales Manager"
+   },
+   {
+    "role": "Delivery Manager"
+   },
+   {
+    "role": "System Manager"
+   }
+  ],
+  "snapshot_report": 0,
+  "timeout": 0
+ },
+ {
+  "add_total_row": 0,
+  "add_translate_data": 0,
+  "columns": [],
+  "disable_prepared_report_automation": 0,
+  "disabled": 0,
+  "docstatus": 0,
+  "doctype": "Report",
+  "doctype_to_sync": [],
+  "filters": [
+   {
+    "default": null,
+    "fieldname": "project",
+    "fieldtype": "Link",
+    "label": "Project",
+    "mandatory": 0,
+    "options": "Project",
+    "wildcard_filter": 0
+   },
+   {
+    "default": null,
+    "fieldname": "status",
+    "fieldtype": "Select",
+    "label": "Status",
+    "mandatory": 0,
+    "options": "\nOpen\nWorking\nCompleted\nCancelled",
+    "wildcard_filter": 0
+   }
+  ],
+  "is_standard": "Yes",
+  "javascript": null,
+  "json": null,
+  "letter_head": null,
+  "modified": "2026-08-22 09:55:47.423809",
+  "module": "Implementor",
+  "name": "Training and Handover Report",
+  "prepared_report": 0,
+  "query": null,
+  "ref_doctype": "Task",
+  "reference_report": null,
+  "report_name": "Training and Handover Report",
+  "report_script": null,
+  "report_type": "Script Report",
+  "roles": [
+   {
+    "role": "Functional Consultant"
+   },
+   {
+    "role": "Delivery Manager"
+   },
+   {
+    "role": "Projects Manager"
+   },
+   {
+    "role": "System Manager"
+   }
+  ],
+  "snapshot_report": 0,
+  "timeout": 0
+ },
+ {
+  "add_total_row": 0,
+  "add_translate_data": 0,
+  "columns": [],
+  "disable_prepared_report_automation": 0,
+  "disabled": 0,
+  "docstatus": 0,
+  "doctype": "Report",
+  "doctype_to_sync": [],
+  "filters": [
+   {
+    "default": null,
+    "fieldname": "from_date",
+    "fieldtype": "Date",
+    "label": "From Date",
+    "mandatory": 0,
+    "options": null,
+    "wildcard_filter": 0
+   },
+   {
+    "default": null,
+    "fieldname": "to_date",
+    "fieldtype": "Date",
+    "label": "To Date",
+    "mandatory": 0,
+    "options": null,
+    "wildcard_filter": 0
+   }
+  ],
+  "is_standard": "Yes",
+  "javascript": null,
+  "json": null,
+  "letter_head": null,
+  "modified": "2026-08-22 09:56:43.449166",
+  "module": "Implementor",
+  "name": "Activity Comparison - User-wise",
+  "prepared_report": 0,
+  "query": null,
+  "ref_doctype": "ToDo",
+  "reference_report": null,
+  "report_name": "Activity Comparison - User-wise",
+  "report_script": null,
+  "report_type": "Script Report",
+  "roles": [
+   {
+    "role": "Delivery Manager"
+   },
+   {
+    "role": "Projects Manager"
+   },
+   {
+    "role": "System Manager"
+   }
+  ],
+  "snapshot_report": 0,
+  "timeout": 0
+ },
+ {
+  "add_total_row": 0,
+  "add_translate_data": 0,
+  "columns": [],
+  "disable_prepared_report_automation": 0,
+  "disabled": 0,
+  "docstatus": 0,
+  "doctype": "Report",
+  "doctype_to_sync": [],
+  "filters": [
+   {
+    "default": null,
+    "fieldname": "from_date",
+    "fieldtype": "Date",
+    "label": "From Date",
+    "mandatory": 0,
+    "options": null,
+    "wildcard_filter": 0
+   },
+   {
+    "default": null,
+    "fieldname": "to_date",
+    "fieldtype": "Date",
+    "label": "To Date",
+    "mandatory": 0,
+    "options": null,
+    "wildcard_filter": 0
+   }
+  ],
+  "is_standard": "Yes",
+  "javascript": null,
+  "json": null,
+  "letter_head": null,
+  "modified": "2026-08-22 09:57:39.531216",
+  "module": "Implementor",
+  "name": "Activity Comparison - Project-wise",
+  "prepared_report": 0,
+  "query": null,
+  "ref_doctype": "Task",
+  "reference_report": null,
+  "report_name": "Activity Comparison - Project-wise",
+  "report_script": null,
+  "report_type": "Script Report",
+  "roles": [
+   {
+    "role": "Delivery Manager"
+   },
+   {
+    "role": "Projects Manager"
+   },
+   {
+    "role": "System Manager"
+   }
+  ],
+  "snapshot_report": 0,
+  "timeout": 0
+ },
+ {
+  "add_total_row": 0,
+  "add_translate_data": 0,
+  "columns": [],
+  "disable_prepared_report_automation": 0,
+  "disabled": 0,
+  "docstatus": 0,
+  "doctype": "Report",
+  "doctype_to_sync": [],
+  "filters": [
+   {
+    "default": null,
+    "fieldname": "division",
+    "fieldtype": "Select",
+    "label": "Division",
+    "mandatory": 0,
+    "options": "\nFunctional\nTechnical\nInfra-Cloud",
+    "wildcard_filter": 0
+   }
+  ],
+  "is_standard": "Yes",
+  "javascript": null,
+  "json": null,
+  "letter_head": null,
+  "modified": "2026-08-22 09:58:16.701344",
+  "module": "Implementor",
+  "name": "Team Workload Report",
+  "prepared_report": 0,
+  "query": null,
+  "ref_doctype": "ToDo",
+  "reference_report": null,
+  "report_name": "Team Workload Report",
+  "report_script": null,
+  "report_type": "Script Report",
+  "roles": [
+   {
+    "role": "Delivery Manager"
+   },
+   {
+    "role": "Projects Manager"
+   },
+   {
+    "role": "System Manager"
+   }
+  ],
+  "snapshot_report": 0,
+  "timeout": 0
+ }
+]

@@ -1,0 +1,46 @@
+{
+ "add_total_row": 0,
+ "add_translate_data": 0,
+ "columns": [],
+ "creation": "2026-08-22 09:58:16.701344",
+ "disable_prepared_report_automation": 0,
+ "disabled": 0,
+ "docstatus": 0,
+ "doctype": "Report",
+ "doctype_to_sync": [],
+ "filters": [
+  {
+   "fieldname": "division",
+   "fieldtype": "Select",
+   "label": "Division",
+   "mandatory": 0,
+   "options": "\nFunctional\nTechnical\nInfra-Cloud",
+   "wildcard_filter": 0
+  }
+ ],
+ "idx": 0,
+ "is_standard": "Yes",
+ "letter_head": null,
+ "modified": "2026-08-22 09:58:16.701344",
+ "modified_by": "Administrator",
+ "module": "Implementor",
+ "name": "Team Workload Report",
+ "owner": "Administrator",
+ "prepared_report": 0,
+ "ref_doctype": "ToDo",
+ "report_name": "Team Workload Report",
+ "report_type": "Script Report",
+ "roles": [
+  {
+   "role": "Delivery Manager"
+  },
+  {
+   "role": "Projects Manager"
+  },
+  {
+   "role": "System Manager"
+  }
+ ],
+ "snapshot_report": 0,
+ "timeout": 0
+}

@@ -73,4 +73,14 @@ def execute(filters=None):
         {"label": "ToDo", "fieldname": "name", "fieldtype": "Link", "options": "ToDo", "width": 0},
     ]
 
-    return columns, data
+    total_count = len(data)
+    overdue_count = sum(1 for row in data if row.get("overdue"))
+    completed_count = sum(1 for row in data if row.get("status") == "Closed")
+
+    report_summary = [
+        {"value": total_count, "label": "Total ToDos", "datatype": "Int"},
+        {"value": overdue_count, "label": "Overdue", "datatype": "Int", "indicator": "Red"},
+        {"value": completed_count, "label": "Completed", "datatype": "Int", "indicator": "Green"},
+    ]
+
+    return columns, data, None, None, report_summary
