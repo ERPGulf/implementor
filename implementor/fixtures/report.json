@@ -79,12 +79,12 @@
   "letter_head": null,
   "modified": "2026-08-22 09:13:06.993085",
   "module": "Implementor",
-  "name": "ToDo Report V3",
+  "name": "ToDo Report",
   "prepared_report": 0,
   "query": null,
   "ref_doctype": "ToDo",
   "reference_report": null,
-  "report_name": "ToDo Report V3",
+  "report_name": "ToDo Report",
   "report_script": null,
   "report_type": "Script Report",
   "roles": [
@@ -117,7 +117,7 @@
     "fieldtype": "Select",
     "label": "Status",
     "mandatory": 0,
-    "options": "\nDiscovery\nActive\nAMC\nClosed",
+    "options": "\nDiscovery\nActive\nGo-Live\nAMC\nHypercare\nClosed",
     "wildcard_filter": 0
    },
    {
@@ -143,7 +143,7 @@
   "javascript": null,
   "json": null,
   "letter_head": null,
-  "modified": "2026-08-22 09:43:02.501059",
+  "modified": "2026-08-22 10:12:00.746499",
   "module": "Implementor",
   "name": "All Projects Report",
   "prepared_report": 0,
@@ -198,7 +198,7 @@
     "fieldtype": "Select",
     "label": "Division",
     "mandatory": 0,
-    "options": "\nTechnical\nFunctional",
+    "options": "\nFunctional\nTechnical\nInfra-Cloud",
     "wildcard_filter": 0
    },
    {
@@ -207,7 +207,7 @@
     "fieldtype": "Select",
     "label": "Status",
     "mandatory": 0,
-    "options": "\nOpen\nWorking\nCompleted\nCancelled",
+    "options": "\nOpen\nWorking\nPending Review\nOverdue\nTemplate\nCompleted\nCancelled",
     "wildcard_filter": 0
    }
   ],
@@ -215,7 +215,7 @@
   "javascript": null,
   "json": null,
   "letter_head": null,
-  "modified": "2026-08-22 09:47:52.769988",
+  "modified": "2026-08-22 10:09:56.933991",
   "module": "Implementor",
   "name": "Project Progress Report",
   "prepared_report": 0,
@@ -279,7 +279,7 @@
     "fieldtype": "Select",
     "label": "Status",
     "mandatory": 0,
-    "options": "\nOpen\nIn Progress\nResolved\nClosed",
+    "options": "\nNew\nTriaged\nIn Progress\nWaiting on Client\nResolved\nClosed",
     "wildcard_filter": 0
    },
    {
@@ -288,7 +288,7 @@
     "fieldtype": "Select",
     "label": "Priority",
     "mandatory": 0,
-    "options": "\nLow\nMedium\nHigh\nUrgent",
+    "options": "\nEmergency\nUrgent\nNormal\nLow",
     "wildcard_filter": 0
    }
   ],
@@ -296,7 +296,7 @@
   "javascript": null,
   "json": null,
   "letter_head": null,
-  "modified": "2026-08-22 09:50:30.216853",
+  "modified": "2026-08-22 10:08:30.291092",
   "module": "Implementor",
   "name": "Support Ticket Report",
   "prepared_report": 0,
@@ -486,7 +486,7 @@
     "fieldtype": "Select",
     "label": "Status",
     "mandatory": 0,
-    "options": "\nOpen\nWorking\nCompleted\nCancelled",
+    "options": "\nOpen\nWorking\nPending Review\nOverdue\nTemplate\nCompleted\nCancelled",
     "wildcard_filter": 0
    }
   ],
@@ -494,7 +494,7 @@
   "javascript": null,
   "json": null,
   "letter_head": null,
-  "modified": "2026-08-22 09:55:47.423809",
+  "modified": "2026-08-22 10:04:25.744349",
   "module": "Implementor",
   "name": "Training and Handover Report",
   "prepared_report": 0,

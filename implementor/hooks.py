@@ -146,11 +146,16 @@ fixtures = [
 # Hook on document methods and events
 
 # doc_events = {
-# 	"*": {
-# 		"on_update": "method",
-# 		"on_cancel": "method",
-# 		"on_trash": "method"
-# 	}
+# 	"Employee": {
+#         "on_update": "implementor.implementor.auth.pycreate_qr_code",
+#         "on_trash": "implementor.implementor.auth.delete_qr_code_file"
+
+#     },
+# 	# "*": {
+# 	# 	"on_update": "method",
+# 	# 	"on_cancel": "method",
+# 	# 	"on_trash": "method"
+# 	# }
 # }
 
 doc_events = {
@@ -162,6 +167,11 @@ doc_events = {
 	"Task": {
 		"on_update": "implementor.rollup.on_task",
 	},
+	"Employee": {
+        "on_update": "implementor.implementor.auth.create_qr_code",
+        "on_trash": "implementor.implementor.auth.delete_qr_code_file"
+
+    },
 }
 
 # Scheduled Tasks

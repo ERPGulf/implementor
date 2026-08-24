@@ -1130,21 +1130,32 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		var newtask = e.target.closest("[data-act='newtask']");
 		if (newtask) {
 			state.add = false;
+			project_id = state.selectedProject
 			renderAddMenu();
-			frappe.new_doc("Task", { project: state.selectedProject }, (quick_entry) => {
+			var slackID = ""
+			var project = projectsById.get(project_id);
+			console.log("Proje", project)
+			if (project && project.slack_channel_id) {
+				slackID = project.slack_channel_id;
+			}
+			console.log("This ", slackID)
+			frappe.new_doc("Task", { project: state.selectedProject, slack_channel_id: slackID }, (quick_entry) => {
 				if (!quick_entry || !quick_entry.dialog) {
 					return
 				}
 				const dialog = quick_entry.dialog;
+
 				dialog.set_primary_action(__('Save'), () => {
 					const values = dialog.get_values(true); // true = validate
+					var selectedProjectId = values.project || state.selectedProject;
 
 					frappe.call({
 						method: "frappe.client.insert",
 						args: {
 							doc: {
 								doctype: "Task",
-								project: state.selectedProject,
+								project: selectedProjectId,
+								slack_channel_id: slackID,
 								...values
 							}
 						},
@@ -1157,7 +1168,6 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 						}
 					});
 				});
-
 			});
 			loadTasks();
 			showFilteredTasks();
@@ -1166,8 +1176,12 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		var newtodo = e.target.closest("[data-act='newtodo']");
 		if (newtodo) {
 			state.add = false;
+			var task = tasksById.get(state.selectedTask);
+			if (task && task.slack_channel_id) {
+				var slackID = task.slack_channel_id;
+			}
 			renderAddMenu();
-			frappe.new_doc("ToDo", { reference_type: "Task", reference_name: state.selectedTask }, (quick_entry) => {
+			frappe.new_doc("ToDo", { reference_type: "Task", reference_name: state.selectedTask, slack_channel_id: slackID }, (quick_entry) => {
 				if (!quick_entry || !quick_entry.dialog) {
 					return
 				}
@@ -1182,6 +1196,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 								doctype: "ToDo",
 								reference_type: "Task",
 								reference_name: state.selectedTask,
+								slack_channel_id: slackID,
 								...values
 							}
 						},
@@ -1567,10 +1582,16 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 
 		if (newtask) {
 			project_id = newtask.getAttribute("data-id");
-			frappe.new_doc("Task", { project: project_id }, (quick_entry) => {
+			var slackId = ""
+			var project = projectsById.get(state.selectedProject);
+			if (project && project.slack_channel_id) {
+				slackId = project.slack_channel_id;
+			}
+			frappe.new_doc("Task", { project: project_id, slack_channel_id: slackId }, (quick_entry) => {
 				if (!quick_entry || !quick_entry.dialog) {
 					return
 				}
+
 				const dialog = quick_entry.dialog;
 				dialog.set_primary_action(__('Save'), () => {
 					const values = dialog.get_values(true); // true = validate
@@ -1581,6 +1602,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 							doc: {
 								doctype: "Task",
 								project: project_id,
+								slack_channel_id: slackId,
 								...values
 							}
 						},
@@ -1947,7 +1969,12 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 
 		if (newtodo) {
 			task_id = newtodo.getAttribute("data-id");
-			frappe.new_doc("ToDo", { reference_type: "Task", reference_name: task_id }, (quick_entry) => {
+			var slackId = ""
+			var task = tasksById.get(task_id);
+			if (task && task.slack_channel_id) {
+				slackId = task.slack_channel_id;
+			}
+			frappe.new_doc("ToDo", { reference_type: "Task", reference_name: task_id, slack_channel_id: slackId }, (quick_entry) => {
 				if (!quick_entry || !quick_entry.dialog) {
 					return
 				}
@@ -1962,6 +1989,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 								doctype: "ToDo",
 								reference_type: "Task",
 								reference_name: task_id,
+								slack_channel_id: slackId,
 								...values
 							}
 						},
@@ -2440,6 +2468,10 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 	document.getElementById("f-mine").addEventListener("click", function (e) {
 		state.mineOnly = !state.mineOnly;
 		e.target.textContent = state.mineOnly ? "✓ My work" : "My work";
+		// state.selectedProject = null;
+		// state.selectedTask = null;
+		// state.selectToDo = null;
+
 		showFilteredProjects();
 		showFilteredTasks();
 		showToDosForSelectedTasks();
@@ -3462,8 +3494,8 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		try {
 			await loadProjects();
 			await Promise.all([
-				// loadTasks(),
-				// loadTodos(),
+				loadTasks(),
+				loadTodos(),
 				loadNotifCount(),
 				loadDashboard(),
 				loadTaskLeadOptions(),

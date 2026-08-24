@@ -18,26 +18,32 @@ def execute(filters=None):
     where_clause = "WHERE " + " AND ".join(conditions)
 
     data = frappe.db.sql(f"""
-        SELECT
-            p.project_name as project_name,
-            t.subject as subject,
-            t.imp_stage as stage,
-            COALESCE(u.full_name, t.custom_division_lead) as lead_name,
-            t.status as status,
-            t.imp_deadline as due_date,
-            t.completed_on as completed_on,
-            CASE WHEN t.completed_on IS NOT NULL THEN 1 ELSE 0 END as signed_off
-        FROM `tabTask` t
-        LEFT JOIN `tabProject` p ON t.project = p.name
-        LEFT JOIN `tabUser` u ON t.custom_division_lead = u.name
-        {where_clause}
-        ORDER BY p.project_name ASC, t.imp_deadline ASC
-    """, values, as_dict=True)
+    SELECT
+        p.project_name as project_name,
+        t.subject as subject,
+        t.imp_stage as stage,
+        COALESCE(u.full_name, t.custom_division_lead) as lead_name,
+        t.status as status,
+        t.imp_deadline as due_date,
+        t.completed_on as completed_on,
+        CASE WHEN t.completed_on IS NOT NULL THEN 1 ELSE 0 END as signed_off,
+        (
+            SELECT GROUP_CONCAT(tr.user SEPARATOR ', ')
+            FROM `tabTask Trainer` tr
+            WHERE tr.parent = t.name
+        ) as trainers
+    FROM `tabTask` t
+    LEFT JOIN `tabProject` p ON t.project = p.name
+    LEFT JOIN `tabUser` u ON t.custom_division_lead = u.name
+    {where_clause}
+    ORDER BY p.project_name ASC, t.imp_deadline ASC
+""", values, as_dict=True)
 
     columns = [
         {"label": "Project", "fieldname": "project_name", "fieldtype": "Data", "width": 180},
         {"label": "Task", "fieldname": "subject", "fieldtype": "Data", "width": 220},
         {"label": "Stage", "fieldname": "stage", "fieldtype": "Data", "width": 110},
+{"label": "Trainer(s)", "fieldname": "trainers", "fieldtype": "Data", "width": 180},
         {"label": "Lead", "fieldname": "lead_name", "fieldtype": "Data", "width": 140},
         {"label": "Status", "fieldname": "status", "fieldtype": "Data", "width": 100},
         {"label": "Due Date", "fieldname": "due_date", "fieldtype": "Date", "width": 110},

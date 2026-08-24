@@ -1,4 +1,4 @@
-frappe.query_reports["ToDo Report V3"] = {
+frappe.query_reports["ToDo Report"] = {
 	filters: [
 		{
 			fieldname: "from_date",
