@@ -8,6 +8,7 @@
     --border-strong: #b7c1c8;
     --radius: 8px;
     --text-primary: #192734;
+    --text-search: :#6b7280;
     --text-secondary: #68737a;
     --text-muted: #98a1a9;
     --text-accent: #2490ef;
@@ -126,6 +127,279 @@
     cursor: pointer
 }
 
+#report-view {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+}
+
+.rb-row {
+    display: grid;
+    grid-template-columns: 1fr 140px 140px 40px;
+    align-items: center;
+    padding: 16px 32px 16px 32px;
+    /* top right bottom left */
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+}
+
+.rb-row:last-child {
+    border-bottom: none;
+}
+
+.rb-row:hover {
+    background: #fafafa;
+}
+
+.rb-title {
+    font-weight: 500;
+    font-size: 14px;
+}
+
+.rb-mod {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-top: 2px;
+}
+
+.rb-doctype,
+.rb-type {
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+.rb-toolbar-actions {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    position: relative;
+}
+
+.rb-filter-panel {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    margin-top: 8px;
+    width: 240px;
+    gap: 2px;
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+    z-index: 50;
+    overflow: hidden;
+    padding: 6px;
+}
+
+.rb-filter-options {
+    max-height: 150px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    border-radius: 18px;
+    /* rounds the scrollable clipping area itself */
+}
+
+.rb-filter-options::-webkit-scrollbar-thumb {
+    background: var(--border-strong);
+    border-radius: 999px;
+    min-height: 24px;
+    /* already fully rounded — this one's already matching */
+}
+
+.rb-filter-panel .filter-opt {
+    background: #fff;
+    border-radius: 18px;
+    padding: 14px 16px;
+    height: 42px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-primary);
+    border: 1px solid transparent;
+    /* reserve space so selected border doesn't shift layout */
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.rb-filter-search {
+    display: flex;
+    align-items: center;
+    height: 42px;
+    background: transparent;
+    /* light warm gray, close to the reference */
+    border: none;
+    /* no visible border — the fill itself defines the shape */
+    border-radius: 16px;
+    border-bottom: 1px solid var(--border);
+    /* border-radius: 0; */
+    /* a straight divider line looks odd with rounded corners on just one edge */
+    padding-bottom: 12px;
+    padding: 14px 16px;
+    margin-bottom: 3px;
+}
+
+.rb-filter-search svg {
+    color: #9a9891;
+    /* muted warm gray, matches icon tone in reference */
+    flex: none;
+    width: 18px;
+    height: 18px;
+}
+
+.rb-filter-search input {
+    border: none;
+    background: transparent;
+    outline: none;
+    font-size: 15px;
+    width: 100%;
+    color: #9a9891;
+    /* placeholder-colored text tone, matches reference's muted look */
+}
+
+.rb-filter-search input:focus {
+    outline: none;
+    box-shadow: none;
+    border: none;
+}
+
+
+.rb-filter-search input::placeholder {
+    color: #9a9891;
+}
+
+
+.rb-filter-panel .filter-opt:hover {
+    background: var(--surface-1);
+}
+
+.rb-filter-panel .filter-opt.on {
+    background: transparent;
+    color: var(--text-primary);
+    border: 1px solid transparent;
+    padding-left: 16px;
+    /* full ring, replaces the old left-border */
+    /* padding-left: 16px; */
+    /* no longer needs the old +2px compensation */
+}
+
+.rb-search {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 1px 16px;
+    color: var(--text-muted);
+    min-width: 220px;
+}
+
+.rb-search input {
+    border: none;
+    background: transparent;
+    outline: none;
+    font-size: 13.5px;
+    width: 100%;
+    color: var(--text-search);
+}
+
+.rb-search input:focus {
+    outline: none;
+    box-shadow: none;
+    border: none;
+}
+
+.rb-search svg,
+.rb-search svg[width],
+.rb-search svg[height] {
+    width: 20px !important;
+    height: 20px !important;
+    stroke-width: 2 !important;
+    flex: none;
+}
+
+.rb-toolbar-actions {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+.rb-search,
+.rb-filter-btn {
+    height: 35px;
+    box-sizing: border-box;
+    /* so padding doesn't add on top of the 44px */
+}
+
+.rb-filter-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    border: none;
+    border-radius: 900px;
+    background: var(--surface-1);
+    padding: 5px 12px;
+    /* was 9px 16px — less horizontal padding = narrower button */
+    font-size: 13.5px;
+    font-weight: 500;
+    color: var(--text-primary);
+    cursor: pointer;
+}
+
+.rb-filter-btn svg {
+    stroke-width: 2.5;
+    /* default is usually 2 */
+}
+
+.rb-filter-btn:hover {
+    background: var(--border);
+}
+
+.rb-search input::placeholder {
+    color: var(--text-muted);
+}
+
+
+.rb-card {
+    background: #fff;
+    border-radius: 14px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.05);
+    overflow: hidden;
+}
+
+.rb-heading {
+    font-size: 20px;
+    font-weight: 400;
+    margin: 0;
+}
+
+.rb-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 22px;
+}
+
+.rb-title {
+    /* font-weight: 500; */
+    color: var(--text-primary);
+}
+
+.rb-mod {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-top: 2px;
+}
+
+.rb-chev {
+    color: var(--text-muted);
+    justify-self: end;
+}
+
+.rb-row:hover .rb-chev {
+    color: var(--text-accent);
+}
+
 .d-act-disabled {
     opacity: 0.4;
     cursor: not-allowed;
@@ -179,10 +453,25 @@
     vertical-align: middle;
 }
 
+.rb-table-head {
+    display: grid;
+    grid-template-columns: 1fr 140px 140px 40px;
+    align-items: center;
+    padding: 12px 16px;
+    margin: 0 16px;
+    /* ← inset from card edges */
+    background: var(--surface-1);
+    font-size: 12px;
+    font-weight: 400;
+    color: var(--text-secondary);
+    border-radius: 8px;
+    /* ← rounds the band itself, since it's no longer full-bleed */
+}
+
 .impl-board-root {
-    background: var(--surface-0);
+    background: var(--surface-1);
     color: var(--text-primary);
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     font-size: 14px;
     line-height: 1.5;
     padding: 0 20px 20px;

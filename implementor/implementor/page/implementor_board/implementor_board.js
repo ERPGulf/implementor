@@ -239,7 +239,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 	}
 	function showFilteredTasks() {
 		var filtered = testTasks.filter(function (task) {
-			var mineOnly = !state.mineOnly || isMine(task.lead, currentUser)
+			var mineOnly = !state.mineOnly || isMine(task.lead, currentUser) || isMine(task.assigned_by, currentUser) || isMine(task.completed, currentUser)
 			var match_project = state.selectedProject === null || task.project == state.selectedProject;
 			var match_pct = pct(task) >= state.minPct && pct(task) <= state.maxPct;
 			var match_name = state.selectedProject ? true : (state.namedFilter === "" || (todo.description || "").toLowerCase().includes(state.namedFilter.toLowerCase()));
@@ -264,7 +264,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 	}
 	function showToDosForSelectedTasks() {
 		var filtered = testTodos.filter(function (todo) {
-			var mineOnly = !state.mineOnly || isMine(todo.who, currentUser)
+			var mineOnly = !state.mineOnly || isMine(todo.who, currentUser) || isMine(todo.assigned_by, currentUser)
 			var todo_filtered = state.selectedTask === null || todo.task == state.selectedTask;
 			var match_name = state.selectedProject ? true : (state.namedFilter === "" || todo.description.toLowerCase().includes(state.namedFilter.toLowerCase()));
 			var match_person = state.personFilter === "" || (todo.who || "").toLowerCase().includes(state.personFilter.toLowerCase());
@@ -296,15 +296,27 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 	async function selectToDo(id) {
 		var todo = todosById.get(id);
 		if (!todo) return;
-		todo.done = !todo.done;
+		var wasDone = todo.done;
+		var wasStatus = todo.status;
+
+		todo.done = !wasDone;
+		todo.status = todo.done ? "Closed" : "Open"
+
 		showToDosForSelectedTasks();
 		try {
 			var result = await frappe.xcall("implementor.api.toggle_todo_done", { todo: id });
+			await frappe.xcall("implementor.api.set_status", {
+				doctype: "ToDo",
+				name: id,
+				status: todo.status
+			});
 			var task = tasksById.get(result.task);
 			if (task) task.percent = result.task_percent;
 			var project = projectsById.get(result.project);
 			if (project) project.percent = result.project_percent;
 		} catch (err) {
+			todo.done = wasDone;
+			todo.status = wasStatus;
 			todo.done = !todo.done;   // revert optimistic UI update
 			frappe.msgprint("Could not update to-do: " + (err.message || "unknown error"));
 		}
@@ -426,17 +438,85 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
         ${statusBarSection(false, d.by_division)}</div>
     `;
 	}
+
 	async function loadDashboard() {
 		dashboardData = await frappe.xcall("implementor.api.dashboard_summary", { project_id: state.selectedProject });
 		updateEmergencyBadge(dashboardData);
 		renderDashBoard();
 	}
+	var allReports = [];
+	var reportSearchTerm = "";
+	var reportDoctypeFilter = "";
+	var runReportSearch = debounce(function (value) {
+		reportSearchTerm = value;
+		applyReportFilters();
+	}, 200);
+
+	function applyReportFilters() {
+		var filtered = allReports.filter(function (r) {
+			var matchesSearch = reportSearchTerm === "" || r.name.toLowerCase().includes(reportSearchTerm.toLowerCase());
+			var matchFilter = reportDoctypeFilter === "" || r.ref_doctype === reportDoctypeFilter
+			return matchFilter && matchesSearch
+		});
+		renderReportRows(filtered)
+	}
+
+	async function loadReports() {
+		allReports = await frappe.xcall("implementor.api.get_reports")
+		renderReport(allReports)
+	}
+
+	function renderReportRows(reports) {
+		document.getElementById("rb-rows").innerHTML = reports.map(function (row) {
+			return `
+      <div class="rb-row" data-report="${row.name}">
+	  <div class="rb-name-cell">
+	    <div class="rb-title">${row.name}</div>
+        <div class="rb-mod">${row.module}</div>
+	  </div>
+		<span class="rb-doctype">${row.ref_doctype}</span>
+		<span class="rb-type">${row.report_type}</span>
+        <span class="rb-chev">${frappe.utils.icon("chevron-right", "xs")}</span>
+      </div>
+    `;
+		}).join("");
+	}
+	function renderReport(reports) {
+		var el = document.getElementById("report-view");
+		el.innerHTML = `
+		<div class="rb-card">
+		<div class="rb-toolbar">
+		<h3 class="rb-heading">Generated Reports</h3>
+		<div class="rb-toolbar-actions">
+		<div class="rb-search">
+		${frappe.utils.icon("search", "xs")}
+		<input id="rb-search-input" placeholder="Search here..." />
+		</div>
+		<button id="rb-filter-btn" class="rb-filter-btn">
+              ${frappe.utils.icon("settings-2", "xs")} Filter
+        </button>
+		<div id="rb-filter-panel" class="rb-filter-panel" style="display:none;"></div>
+		</div>
+		</div>
+		<div class="rb-table-head">
+		<span>Report Name</span>
+		<span>Doctype</span>
+		<span>Type</span>
+		<span></span>
+		</div>
+		<div id="rb-rows"></div>
+		</div>`;
+		renderReportRows(reports);
+		// .innerHTML = reports.map(renderReportRows).join("")
+	}
+
 	$(page.body).html(`
 		<div class="impl-board-root">
 		<div style="display:flex; align-items:center; justify-content:space-between; padding:8px 10px; border-bottom:0.5px solid var(--border)">
 			<div style="display:flex; align-items:center; gap:16px">
 				<button id="btn-board" class="on">${frappe.utils.icon("layout-list", "xs")} Board</button>
 				<button id="btn-dashboard">${frappe.utils.icon("chart-bar", "xs")} Dashboard</button>
+				<button id="btn-report">${frappe.utils.icon("file-chart-column-increasing", "xs")} Report Board</button>
 				<div class="legend" id="project-count"></div>
 				<div class="legend"><span class="dot" style="background:var(--lvl-project)"></span> Project</div>
 				<div class="legend" id="task-count"></div>
@@ -608,8 +688,8 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		</div>
 		</div>
 
-		<div id="dashboard-view" style="display:none; padding:16px;">
-		</div>
+		<div id="dashboard-view" style="display:none; padding:16px;"></div>
+		<div id="report-view" style="display:none; padding:16px;"></div>
 		</div>
 	  `);
 	var elTaskCount = document.getElementById("task-count");
@@ -671,11 +751,22 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 	function updateView() {
 		document.getElementById("btn-board").classList.toggle("on", state.view === "board");
 		document.getElementById("btn-dashboard").classList.toggle("on", state.view === "dashboard");
-		var showBoard = state.view === "board";
-		document.querySelector(".topbar").style.display = showBoard ? "block" : "none";
-		document.querySelector(".grid").style.display = showBoard ? "grid" : "none";
-		document.getElementById("dashboard-view").style.display = !showBoard ? "block" : "none";
-		var target = showBoard ? document.querySelector(".grid") : document.getElementById("dashboard-view");
+		document.getElementById("btn-report").classList.toggle("on", state.view === "report");
+
+		var panels = {
+			board: [document.querySelector(".topbar"), document.querySelector(".grid")],
+			dashboard: [document.getElementById("dashboard-view")],
+			report: [document.getElementById("report-view")]
+		};
+
+		Object.keys(panels).forEach(function (viewName) {
+			var isActive = state.view === viewName;
+			panels[viewName].forEach(function (el) {
+				el.style.display = isActive ? (viewName === "board" ? "" : "block") : "none";
+			});
+		});
+
+		var target = panels[state.view][panels[state.view].length - 1];
 		target.style.opacity = 0;
 		requestAnimationFrame(function () { target.style.opacity = 1; });
 	}
@@ -805,6 +896,10 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 	document.getElementById("btn-dashboard").addEventListener("click", function (e) {
 		state.view = "dashboard";
 		loadDashboard().then(function () { updateView(); });
+	});
+	document.getElementById("btn-report").addEventListener("click", function (e) {
+		state.view = "report";
+		loadReports().then(function () { updateView(); });
 	});
 	document.getElementById("btn-emergency").addEventListener("click", async function () {
 		state.emergencyPanelOpen = !state.emergencyPanelOpen;
@@ -1092,11 +1187,9 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			renderAddMenu();
 			frappe.new_doc(
 				"Project",
-				{}, // route_options
+				{ imp_project_manager: currentUser, }, // route_options
 				(quick_entry) => {
-					// This runs only if Quick Entry dialog is used
 					if (!quick_entry || !quick_entry.dialog) {
-						// Full form opened instead of Quick Entry – nothing to override
 						return;
 					}
 
@@ -1111,6 +1204,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 							args: {
 								doc: {
 									doctype: "Project",
+									imp_project_manager: currentUser,
 									...values
 								}
 							},
@@ -1139,7 +1233,9 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 				slackID = project.slack_channel_id;
 			}
 			console.log("This ", slackID)
-			frappe.new_doc("Task", { project: state.selectedProject, slack_channel_id: slackID }, (quick_entry) => {
+			frappe.new_doc("Task", {
+				project: state.selectedProject, slack_channel_id: slackID, custom_assigned_by: currentUser, custom_division_lead: currentUser,
+			}, (quick_entry) => {
 				if (!quick_entry || !quick_entry.dialog) {
 					return
 				}
@@ -1155,7 +1251,9 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 							doc: {
 								doctype: "Task",
 								project: selectedProjectId,
+								custom_division_lead: currentUser,
 								slack_channel_id: slackID,
+								custom_assigned_by: currentUser,
 								...values
 							}
 						},
@@ -1181,7 +1279,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 				var slackID = task.slack_channel_id;
 			}
 			renderAddMenu();
-			frappe.new_doc("ToDo", { reference_type: "Task", reference_name: state.selectedTask, slack_channel_id: slackID }, (quick_entry) => {
+			frappe.new_doc("ToDo", { reference_type: "Task", reference_name: state.selectedTask, slack_channel_id: slackID, assigned_by: currentUser, allocated_to: currentUser, }, (quick_entry) => {
 				if (!quick_entry || !quick_entry.dialog) {
 					return
 				}
@@ -1197,6 +1295,8 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 								reference_type: "Task",
 								reference_name: state.selectedTask,
 								slack_channel_id: slackID,
+								assigned_by: currentUser,
+								allocated_to: currentUser,
 								...values
 							}
 						},
@@ -1587,7 +1687,9 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			if (project && project.slack_channel_id) {
 				slackId = project.slack_channel_id;
 			}
-			frappe.new_doc("Task", { project: project_id, slack_channel_id: slackId }, (quick_entry) => {
+			frappe.new_doc("Task", {
+				project: project_id, slack_channel_id: slackId, custom_assigned_by: currentUser, custom_division_lead: currentUser,
+			}, (quick_entry) => {
 				if (!quick_entry || !quick_entry.dialog) {
 					return
 				}
@@ -1603,6 +1705,9 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 								doctype: "Task",
 								project: project_id,
 								slack_channel_id: slackId,
+								custom_division_lead: currentUser,
+								custom_assigned_by: currentUser,
+
 								...values
 							}
 						},
@@ -1974,7 +2079,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			if (task && task.slack_channel_id) {
 				slackId = task.slack_channel_id;
 			}
-			frappe.new_doc("ToDo", { reference_type: "Task", reference_name: task_id, slack_channel_id: slackId }, (quick_entry) => {
+			frappe.new_doc("ToDo", { reference_type: "Task", reference_name: task_id, slack_channel_id: slackId, assigned_by: currentUser, allocated_to: currentUser, }, (quick_entry) => {
 				if (!quick_entry || !quick_entry.dialog) {
 					return
 				}
@@ -1990,6 +2095,8 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 								reference_type: "Task",
 								reference_name: task_id,
 								slack_channel_id: slackId,
+								allocated_to: currentUser,
+								assigned_by: currentUser,
 								...values
 							}
 						},
@@ -2407,7 +2514,64 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 				renderPersonFilter();
 			}
 		}
+		var filterPanel = document.getElementById("rb-filter-panel");
+		if (filterPanel && filterPanel.style.display === "block" && !e.target.closest("#rb-filter-panel") && !e.target.closest("#rb-filter-btn")) {
+			filterPanel.style.display = "none";
+			return;
+		}
 
+	});
+	document.getElementById("report-view").addEventListener("click", function (e) {
+		var filterbtn = e.target.closest("#rb-filter-btn");
+		if (filterbtn) {
+			var panel = document.getElementById("rb-filter-panel");
+			if (panel.style.display === "block") { panel.style.display = "none"; return; }
+			var doctypes = Array.from(new Set(allReports.map(function (r) { return r.ref_doctype; }).filter(Boolean)));
+			panel.innerHTML = `
+			<div class="rb-filter-search">
+				${frappe.utils.icon("search", "xs")}
+			<input id="rb-filter-search-input" placeholder="Search" />
+			</div>
+			<div class="rb-filter-options" id="rb-filter-options">
+          <div class="filter-opt ${reportDoctypeFilter === "" ? "on" : ""}" data-doctype="">Any</div>
+          ${doctypes.map(function (d) {
+				return `<div class="filter-opt ${reportDoctypeFilter === d ? "on" : ""}" data-doctype="${d}">${d}</div>`;
+			}).join("")}
+		</div>
+        `;
+			panel.style.display = "block";
+			return;
+		}
+		var row = e.target.closest("[data-report]");
+		if (row) {
+			var reportName = row.getAttribute("data-report");
+			if (reportName) {
+				frappe.set_route('query-report', reportName);
+				return;
+			}
+		}
+		var filterOpt = e.target.closest("[data-doctype]")
+		if (filterOpt) {
+			console.log("Here")
+			reportDoctypeFilter = filterOpt.getAttribute("data-doctype");
+			applyReportFilters();
+			document.getElementById("rb-filter-panel").style.display = "none"
+		}
+
+	});
+	document.getElementById("report-view").addEventListener("input", function (e) {
+
+		if (e.target && e.target.id === "rb-search-input") {
+			runReportSearch(e.target.value)
+		}
+		if (e.target && e.target.id === "rb-filter-search-input") {
+			var q = e.target.value.toLowerCase();
+			document.querySelectorAll("#rb-filter-options .filter-opt").forEach(function (opt) {
+				var text = opt.textContent.toLowerCase();
+				opt.style.display = text.includes(q) ? "" : "none";
+			})
+
+		}
 	});
 	document.getElementById("f-name").addEventListener("input", function (e) {
 		runSearchFilter(e.target.value);
@@ -3148,6 +3312,10 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			<span class="d-own">${task.div} Lead:</span>
 			${renderLeads(task.lead)}
 		</div>
+		<div class="d-own-row">
+			<span class="d-own">Assigned By:</span>
+			${renderLeads(task.assigned_by)}
+		</div>
 
 		<div class="d-meta">
 			${task.due ? fmtDate(task.due) : "No Due date"} · ${task.status === "Completed" ? `<span style="color:var(--text-success)">Completed</span>` : dueChip("Task", task.due)}
@@ -3293,7 +3461,11 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 				${renderModuleCards(todo.module)}
 			</div>
 				<div class="d-own">Assigned To · ${renderLeads(todo.who)}</div>
-							<div style="margin-top:8px">
+				<div class="d-own-row">
+				<span class="d-own">Assigned By:</span>
+				${renderLeads(todo.assigned_by)}
+				</div>
+			<div style="margin-top:8px">
 			<div class="d-meta" >${frappe.utils.icon("calendar-days")} ${fmtDate(todo.due)} · ${dueChip("ToDo", todo.due)}</div></div>
 				<div style="display:flex; gap:6px">${renderReactions(todo)}</div>
 			</div>
@@ -3372,6 +3544,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 				task: r.task || taskId,
 				name: r.title,
 				who: r.assignee,
+				assigned_by: r.assigned_by,
 				done: !!r.done,
 				status: r.status || "Open",
 				priority: r.priority || "Low",
@@ -3387,6 +3560,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 				module: r.imp_module
 			};
 		});
+		console.log(testTodos)
 		todosById = new Map(testTodos.map(t => [t.id, t]));
 		showToDosForSelectedTasks();
 		return testTodos;
@@ -3400,6 +3574,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 				completed_by: r.completed_by,
 				project: r.project || projectId,
 				name: r.title,
+				assigned_by: r.assigned_by,
 				description: r.description,
 				stage: r.stage,
 				div: r.division,
@@ -3420,6 +3595,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 				module: r.imp_module
 			};
 		});
+		console.log(testTasks)
 		tasksById = new Map(testTasks.map(t => [t.id, t]));
 		showFilteredTasks();
 

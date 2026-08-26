@@ -294,7 +294,7 @@ def get_tasks(project=None):
         filters=filters,
         fields=[
             "name", "subject as title", "project", "imp_stage as stage",
-            "imp_division as division",
+            "imp_division as division","custom_assigned_by as assigned_by",
             "status", "imp_urgency as urgency", "progress as percent",
             "imp_deadline as deadline", "custom_division_lead as lead","imp_started_on as started_on",
             "imp_doing as doing", "imp_escalated as escalated",
@@ -341,7 +341,7 @@ def get_todos(task=None, project=None):
             "name", "description as title", "reference_type", "reference_name as task",
             "allocated_to as assignee", "status", "priority", "imp_done as done",
             "imp_urgency as urgency", "date as deadline", "imp_escalated as escalated",
-            "slack_channel_id", "whatsapp_channel_id","imp_module"
+            "slack_channel_id", "whatsapp_channel_id","imp_module","assigned_by as assigned_by"
         ],
     )
 
@@ -376,7 +376,11 @@ def _project_modules(project_name):
         fields=["module_name", "in_scope", "notes"],
         order_by="idx asc",
     )
- 
+@frappe.whitelist(allow_guest=False)
+def get_reports():
+    reports = frappe.get_list("Report",filters= { "module": "Implementor","disabled": 0 },fields=["name","ref_doctype","reference_report","report_type","module"])
+    return reports
+
 def _comments(doctype, name, limit=5):
     rows = frappe.get_all(
         "Comment",
