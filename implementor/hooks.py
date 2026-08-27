@@ -9,7 +9,7 @@ app_license = "mit"
 fixtures = [
     "Role",
     "Role Profile",
-    {"dt": "Custom Field", "filters": [["dt", "in", ["Project", "Task", "ToDo", "User", "Customer", "Notification Log"]]]},
+    {"dt": "Custom Field", "filters": [["dt", "in", ["Project", "Task", "ToDo", "User", "Customer", "Employee","Notification Log"]]]},
     {"dt": "Report", "filters": [["module", "=", "Implementor"]]},
 ]
 # Apps

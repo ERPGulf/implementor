@@ -29,6 +29,7 @@
 
 /* so the pin can poke above the card without being clipped */
 
+
 .d-pin-hang {
     position: absolute;
     top: -2px;
@@ -40,6 +41,7 @@
     align-items: center;
     justify-content: center;
     width: 24px;
+
     padding: 4px 4px 6px;
     color: var(--text-muted);
     border-radius: 0 0 4px 4px;
@@ -67,6 +69,7 @@
 
 .view-tabs {
     position: relative;
+    /* anchor for the sliding highlight */
     display: flex;
     align-items: center;
     gap: 2px;
@@ -75,9 +78,11 @@
     padding: 4px;
 }
 
+
 .view-tabs button {
     position: relative;
     z-index: 2;
+    /* sits above the slider */
     border: none;
     background: transparent;
     border-radius: 999px;
@@ -95,6 +100,8 @@
     color: var(--text-primary);
 }
 
+
+
 .view-tabs-slider {
     position: absolute;
     top: 4px;
@@ -104,6 +111,7 @@
     border-radius: 999px;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
     transition: transform 0.18s cubic-bezier(0.4, 0, 0.2, 1), width 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+
     z-index: 1;
 }
 
@@ -218,6 +226,7 @@
     margin-bottom: 12px;
     position: relative;
     overflow: visible;
+
 }
 
 .d-row:last-child {
@@ -284,6 +293,7 @@
     column-gap: 8px;
     margin-top: 10px;
     padding-top: 12px;
+    /* was 10px */
     border-top: 1px solid var(--surface-1);
 }
 
@@ -364,6 +374,12 @@
     flex: none;
 }
 
+/* .d-row .card-avatar-group {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+} */
+
 .d-row .card-avatar-label {
     font-size: 11.5px;
     color: var(--text-secondary);
@@ -389,6 +405,7 @@
     grid-template-columns: 1fr 140px 140px 40px;
     align-items: center;
     padding: 16px 32px 16px 32px;
+    /* top right bottom left */
     border-bottom: 1px solid var(--border);
     cursor: pointer;
 }
@@ -404,7 +421,6 @@
 .rb-title {
     font-weight: 500;
     font-size: 14px;
-    color: var(--text-primary);
 }
 
 .rb-mod {
@@ -440,8 +456,17 @@
     z-index: 50;
     overflow: hidden;
     padding: 6px;
-    animation: panelFadeIn 0.12s ease-out;
+    /* opacity: 0;
+    transform: translateY(-6px);
+    transition: opacity 0.15s ease, transform 0.15s ease;
+    pointer-events: none; */
 }
+
+/* .rb-filter-panel.open {
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: auto;
+} */
 
 .rb-filter-options {
     max-height: 150px;
@@ -450,12 +475,14 @@
     flex-direction: column;
     gap: 2px;
     border-radius: 18px;
+    /* rounds the scrollable clipping area itself */
 }
 
 .rb-filter-options::-webkit-scrollbar-thumb {
     background: var(--border-strong);
     border-radius: 999px;
     min-height: 24px;
+    /* already fully rounded — this one's already matching */
 }
 
 .rb-filter-panel .filter-opt {
@@ -467,6 +494,7 @@
     font-weight: 500;
     color: var(--text-primary);
     border: 1px solid transparent;
+    /* reserve space so selected border doesn't shift layout */
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
 }
 
@@ -475,9 +503,13 @@
     align-items: center;
     height: 42px;
     background: transparent;
+    /* light warm gray, close to the reference */
     border: none;
+    /* no visible border — the fill itself defines the shape */
     border-radius: 16px;
     border-bottom: 1px solid var(--border);
+    /* border-radius: 0; */
+    /* a straight divider line looks odd with rounded corners on just one edge */
     padding-bottom: 12px;
     padding: 14px 16px;
     margin-bottom: 3px;
@@ -485,6 +517,7 @@
 
 .rb-filter-search svg {
     color: var(--text-muted);
+    /* muted warm gray, matches icon tone in reference */
     flex: none;
     width: 18px;
     height: 18px;
@@ -497,6 +530,7 @@
     font-size: 15px;
     width: 100%;
     color: var(--text-muted);
+    /* placeholder-colored text tone, matches reference's muted look */
 }
 
 .rb-filter-search input:focus {
@@ -505,9 +539,11 @@
     border: none;
 }
 
+
 .rb-filter-search input::placeholder {
     color: var(--text-muted);
 }
+
 
 .rb-filter-panel .filter-opt:hover {
     background: var(--surface-1);
@@ -518,6 +554,9 @@
     color: var(--text-primary);
     border: 1px solid transparent;
     padding-left: 16px;
+    /* full ring, replaces the old left-border */
+    /* padding-left: 16px; */
+    /* no longer needs the old +2px compensation */
 }
 
 .rb-search {
@@ -556,10 +595,17 @@
     flex: none;
 }
 
+.rb-toolbar-actions {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
 .rb-search,
 .rb-filter-btn {
     height: 35px;
     box-sizing: border-box;
+    /* so padding doesn't add on top of the 44px */
 }
 
 .rb-filter-btn {
@@ -570,6 +616,7 @@
     border-radius: 900px;
     background: var(--surface-1);
     padding: 5px 12px;
+    /* was 9px 16px — less horizontal padding = narrower button */
     font-size: 13.5px;
     font-weight: 500;
     color: var(--text-primary);
@@ -578,6 +625,7 @@
 
 .rb-filter-btn svg {
     stroke-width: 2.5;
+    /* default is usually 2 */
 }
 
 .rb-filter-btn:hover {
@@ -587,6 +635,7 @@
 .rb-search input::placeholder {
     color: var(--text-muted);
 }
+
 
 .rb-card {
     background: var(--surface-2);
@@ -599,7 +648,6 @@
     font-size: 20px;
     font-weight: 400;
     margin: 0;
-    color: var(--text-primary);
 }
 
 .rb-toolbar {
@@ -607,6 +655,17 @@
     align-items: center;
     justify-content: space-between;
     padding: 20px 22px;
+}
+
+.rb-title {
+    /* font-weight: 500; */
+    color: var(--text-primary);
+}
+
+.rb-mod {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-top: 2px;
 }
 
 .rb-chev {
@@ -662,7 +721,7 @@
 }
 
 .impl-board-root * {
-    box-sizing: border-box;
+    box-sizing: border-box
 }
 
 .impl-board-root .icon {
@@ -677,11 +736,13 @@
     align-items: center;
     padding: 12px 16px;
     margin: 0 16px;
+    /* ← inset from card edges */
     background: var(--surface-1);
     font-size: 12px;
     font-weight: 400;
     color: var(--text-secondary);
     border-radius: 8px;
+    /* ← rounds the band itself, since it's no longer full-bleed */
 }
 
 .impl-board-root {
@@ -691,7 +752,7 @@
     font-size: 14px;
     line-height: 1.5;
     padding: 0 20px 20px;
-    min-height: calc(100vh - 60px);
+    min-height: calc(100vh - 60px)
 }
 
 input,
@@ -705,20 +766,20 @@ select {
     border-radius: var(--radius);
     height: 34px;
     padding: 0 10px;
-    outline: none;
+    outline: none
 }
 
 input:focus,
 select:focus {
     box-shadow: 0 0 0 2px var(--bg-accent);
-    border-color: var(--text-accent);
+    border-color: var(--text-accent)
 }
 
 button {
     cursor: pointer;
     display: inline-flex;
     align-items: center;
-    gap: 5px;
+    gap: 5px
 }
 
 .impl-board-root .flatpickr-calendar {
@@ -824,8 +885,9 @@ button {
     color: var(--text-secondary);
     text-transform: uppercase;
     letter-spacing: 0.4px;
-    padding: 14px 12px 4px;
+    padding: 10px 12px 4px;
 }
+
 
 .impl-board-root .flatpickr-current-month input.cur-year {
     color: var(--text-primary);
@@ -892,6 +954,19 @@ button {
     box-sizing: border-box;
 }
 
+.due-date-label {
+    padding: 14px 12px 4px;
+}
+
+.due-date-picker-wrapper .flatpickr-day,
+.due-date-picker-wrapper span.flatpickr-weekday {
+    flex: 1 1 calc(100% / 7);
+    max-width: calc(100% / 7);
+    box-sizing: border-box;
+    text-align: center;
+    margin: 0;
+}
+
 .impl-board-root .flatpickr-calendar {
     border: none;
     box-shadow: none;
@@ -952,20 +1027,20 @@ button {
 }
 
 button:hover {
-    background: var(--surface-1);
+    background: var(--surface-1)
 }
 
 button.on {
     background: var(--bg-accent);
     color: var(--text-accent);
-    border-color: var(--text-accent);
+    border-color: var(--text-accent)
 }
 
 .d-card {
     background: var(--surface-2);
     border: 0.5px solid var(--border);
     border-radius: 12px;
-    overflow: hidden;
+    overflow: hidden
 }
 
 .d-row.lvl-project {
@@ -1137,8 +1212,16 @@ button.on {
     opacity: 0.8;
 }
 
-#f-person,
-#f-sort,
+#f-person {
+    position: relative;
+    z-index: 1000;
+}
+
+#f-sort {
+    position: relative;
+    z-index: 1000;
+}
+
 #f-urgency {
     position: relative;
     z-index: 1000;
@@ -1149,6 +1232,7 @@ button.on {
     z-index: 1000;
     width: 250px;
     max-height: 220px;
+    /* ~5-6 rows, adjust to taste */
     overflow-y: auto;
     background: #fff;
     box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
@@ -1160,36 +1244,33 @@ button.on {
 
 .d-row.sel:hover {
     background: var(--bg-accent);
+    /* stays the same when hovering the selected one - no double-highlight confusion */
 }
 
 .lvl-project {
-    border-left-color: var(--lvl-project);
+    border-left-color: var(--lvl-project)
 }
 
 .lvl-task {
-    border-left-color: var(--lvl-task);
+    border-left-color: var(--lvl-task)
 }
 
 .lvl-todo {
-    border-left-color: var(--lvl-todo);
+    border-left-color: var(--lvl-todo)
 }
 
 .legend {
     display: inline-flex;
     align-items: center;
     gap: 4px;
-    font-size: 11.5px;
-    color: var(--text-secondary);
-    background: var(--surface-2);
-    border: 1px solid var(--border);
-    padding: 4px 10px;
-    border-radius: 999px;
+    font-size: 11px;
+    color: var(--text-secondary)
 }
 
 .legend .dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
+    width: 10px;
+    height: 10px;
+    border-radius: 3px
 }
 
 .d-chip {
@@ -1199,7 +1280,7 @@ button.on {
     white-space: nowrap;
     display: inline-flex;
     align-items: center;
-    gap: 3px;
+    gap: 3px
 }
 
 .d-own {
@@ -1207,7 +1288,7 @@ button.on {
     color: var(--text-secondary);
     display: inline-flex;
     align-items: center;
-    gap: 3px;
+    gap: 3px
 }
 
 .d-meta {
@@ -1215,7 +1296,7 @@ button.on {
     color: var(--text-secondary);
     display: inline-flex;
     align-items: center;
-    gap: 3px;
+    gap: 3px
 }
 
 .d-bar {
@@ -1224,13 +1305,12 @@ button.on {
     background: var(--surface-0);
     border: 0.5px solid var(--border);
     overflow: hidden;
-    width: 52px;
+    width: 52px
 }
 
 .d-fill {
     height: 100%;
-    background: var(--progress);
-    transition: width 0.25s ease;
+    background: var(--progress)
 }
 
 .card-icon-group {
@@ -1238,6 +1318,7 @@ button.on {
     align-items: center;
     gap: 4px;
     margin-right: 40px;
+    /* shifts both dots + info left, away from card's right edge */
 }
 
 .d-dots,
@@ -1255,44 +1336,34 @@ button.on {
     cursor: pointer;
     color: var(--text-secondary);
     flex: none;
-    padding: 0;
+    padding: 0
 }
 
 .d-info {
-    border: none;
+    border: none
 }
 
 .d-dots:hover,
 .d-info:hover {
     background: var(--surface-2);
-    color: var(--text-accent);
+    color: var(--text-accent)
 }
 
-/* ===== Column headers (Projects / Tasks / To-dos) ===== */
 .d-hd {
     font-size: 13px;
     font-weight: 500;
     color: var(--text-secondary);
     position: relative;
-    padding: 4px 0;
+    padding: 8px 12px;
     background: transparent;
-    border-radius: 0;
+    border-radius: 10px;
     box-shadow: none;
     border-bottom: none;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-bottom: 6px;
-}
-
-.d-hd-label {
-    font-weight: 500;
-    color: var(--text-secondary);
-    background: var(--surface-1);
-    padding: 6px 12px;
-    border-radius: 8px;
     display: inline-flex;
     align-items: center;
+    gap: 8px;
+    margin-bottom: 2px;
+    /* was 12px — tightened */
 }
 
 .d-hd .d-hd-count {
@@ -1305,43 +1376,9 @@ button.on {
     line-height: 1.4;
 }
 
-.d-hd .d-info {
-    margin-left: auto;
-}
-
-/* ===== Toolbar (search + filters row) ===== */
-.topbar {
-    padding: 10px 16px 8px;
-}
-
-.toolbar-card {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 16px;
-    background: transparent;
-    border-radius: 0;
-    padding: 0;
-    box-shadow: none;
-    flex-wrap: wrap;
-}
-
-.toolbar-left {
-    display: flex;
-    align-items: center;
-}
-
-.toolbar-right {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    flex-wrap: wrap;
-}
-
 /* Search — floating pill */
 .toolbar-card #f-name {
     height: 38px;
-    width: 280px;
     border: none;
     background: var(--surface-2);
     border-radius: 999px;
@@ -1361,13 +1398,15 @@ button.on {
     outline: none;
 }
 
+/* Filter buttons — floating, slight curve, with press transition */
 .toolbar-card #f-urgency-trigger,
 .toolbar-card #f-person-trigger,
 .toolbar-card #f-sort-trigger,
 .toolbar-card #f-mine,
 .toolbar-card #f-clear {
-    height: 38px;
     border: none !important;
+    height: 38px;
+    border: none;
     background: var(--surface-2);
     border-radius: 10px;
     padding: 0 14px;
@@ -1378,21 +1417,9 @@ button.on {
     align-items: center;
     gap: 6px;
     white-space: nowrap;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
-    transition: background 0.18s ease, box-shadow 0.15s ease;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+    transition: box-shadow 0.15s ease, transform 0.1s ease, background 0.15s ease;
     cursor: pointer;
-}
-
-#btn-notif {
-    position: relative;
-    z-index: 1000;
-    /* confirm this exists — earlier I only saw it explicitly added for #btn-emergency */
-}
-
-#btn-add {
-    position: relative;
-    z-index: 1000;
-    /* confirm this exists — earlier I only saw it explicitly added for #btn-emergency */
 }
 
 .toolbar-card #f-urgency-trigger:hover,
@@ -1400,8 +1427,17 @@ button.on {
 .toolbar-card #f-sort-trigger:hover,
 .toolbar-card #f-mine:hover,
 .toolbar-card #f-clear:hover {
-    background: var(--surface-1);
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.08);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.05);
+    transform: translateY(-1px);
+}
+
+.toolbar-card #f-urgency-trigger:active,
+.toolbar-card #f-person-trigger:active,
+.toolbar-card #f-sort-trigger:active,
+.toolbar-card #f-mine:active,
+.toolbar-card #f-clear:active {
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+    transform: translateY(0px) scale(0.98);
 }
 
 .toolbar-card #f-mine.on {
@@ -1409,19 +1445,9 @@ button.on {
     color: var(--text-accent);
 }
 
-@keyframes panelFadeIn {
-    from {
-        opacity: 0;
-        transform: translateY(-4px);
-    }
-
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
+.d-hd .d-info {
+    margin-left: auto;
 }
-
-
 
 .d-act {
     display: flex;
@@ -1429,11 +1455,11 @@ button.on {
     gap: 8px;
     padding: 8px 12px;
     font-size: 13px;
-    cursor: pointer;
+    cursor: pointer
 }
 
 .d-act:hover {
-    background: var(--surface-1);
+    background: var(--surface-1)
 }
 
 .d-row,
@@ -1448,10 +1474,18 @@ button,
     transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
 }
 
+.d-fill {
+    height: 100%;
+    background: var(--progress);
+    transition: width 0.25s ease;
+    /* add this line */
+}
+
 .dbar-fill {
     height: 100%;
     background: var(--text-success);
     transition: width 0.25s ease;
+    /* add this line */
 }
 
 .icon-btn-lg .badge {
@@ -1470,6 +1504,7 @@ button,
     justify-content: center;
     padding: 0 3px;
     animation: badgePop 0.15s ease-out;
+    /* add this line */
 }
 
 @keyframes badgePop {
@@ -1492,12 +1527,13 @@ button,
     padding: 8px;
     display: flex;
     flex-direction: column;
+    /* gap: 8px; */
     width: 220px;
     background: var(--surface-2);
     border: 0.5px solid var(--border);
     border-radius: var(--radius);
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-    z-index: 2000;
+    z-index: 50;
     overflow: hidden;
     animation: panelFadeIn 0.12s ease-out;
 }
@@ -1512,17 +1548,17 @@ button,
     border-radius: 999px;
     font-size: 12px;
     cursor: pointer;
-    background: var(--surface-2);
+    background: var(--surface-2)
 }
 
 .d-opt:hover {
-    background: var(--surface-1);
+    background: var(--surface-1)
 }
 
 .d-empty {
     padding: 16px 12px;
     font-size: 12px;
-    color: var(--text-muted);
+    color: var(--text-muted)
 }
 
 .icon-btn-lg {
@@ -1543,11 +1579,22 @@ button,
     background: var(--surface-1);
 }
 
+.d-hd-label {
+    font-weight: 500;
+    color: var(--text-secondary);
+    background: var(--surface-1);
+    padding: 6px 12px;
+    border-radius: 8px;
+    display: inline-flex;
+    align-items: center;
+}
+
 #h-projects,
 #h-tasks,
 #h-todos {
     position: relative;
 }
+
 
 .filter-panel {
     position: absolute;
@@ -1588,6 +1635,41 @@ button,
     border-bottom: 1px solid var(--border);
 }
 
+.legend {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11.5px;
+    color: var(--text-secondary);
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    padding: 4px 10px;
+    border-radius: 999px;
+}
+
+.legend .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    /* was 3px square-ish, now a true dot */
+}
+
+#btn-add {
+    height: 38px;
+    padding: 0 18px;
+    border-radius: 999px;
+    background: var(--text-accent);
+    color: #fff;
+    border: none;
+    font-weight: 600;
+    font-size: 13px;
+}
+
+#btn-add:hover {
+    background: var(--text-accent);
+    opacity: 0.9;
+}
+
 .filter-panel-back {
     display: flex;
     align-items: center;
@@ -1616,6 +1698,7 @@ button,
 .chevron-right {
     opacity: 0.5;
 }
+
 
 .filter-values-wrap.scrollable {
     max-height: 200px;
@@ -1662,10 +1745,12 @@ button,
     background-size: 5px 5px;
 }
 
+/* Firefox fallback — no arrow buttons possible, but thin visible track */
 .filter-values-wrap.scrollable {
     scrollbar-width: thin;
     scrollbar-color: var(--text-muted) var(--surface-2);
 }
+
 
 .filter-opt {
     padding: 8px 10px;
@@ -1686,6 +1771,7 @@ button,
     color: var(--text-accent);
     border-left: 2px solid var(--text-accent);
     padding-left: 12px;
+    /* 14px - 2px border, keeps text aligned */
 }
 
 .header-panel {
@@ -1693,14 +1779,14 @@ button,
     top: 100%;
     right: 0;
     margin-top: 8px;
-    width: 340px;
+    width: 420px;
     max-height: 360px;
     overflow-y: auto;
     background: var(--surface-2);
     border: 0.5px solid var(--border);
     border-radius: 12px;
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
-    z-index: 2000;
+    z-index: 60;
     animation: panelFadeIn 0.12s ease-out;
 }
 
@@ -1726,15 +1812,73 @@ button,
     border-bottom: none;
 }
 
+.icon-btn-lg .badge {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    background: var(--text-danger-light);
+    color: #fff;
+    font-size: 10px;
+    font-weight: 600;
+    min-width: 16px;
+    height: 16px;
+    border-radius: 999px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 3px;
+}
+
 #btn-emergency {
     position: relative;
-    z-index: 1000;
 }
 
 .impl-board-root .grid,
 .impl-board-root .topbar,
 #dashboard-view {
     transition: opacity 0.15s ease;
+}
+
+.topbar {
+    padding: 12px 8px 4px;
+}
+
+.toolbar-card {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    background: var(--surface-2);
+    border-radius: 20px;
+    padding: 8px 10px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.topbar {
+    padding: 16px 16px 12px;
+}
+
+.toolbar-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    background: transparent;
+    /* remove the boxed card look */
+    border-radius: 0;
+    padding: 0;
+    box-shadow: none;
+}
+
+.toolbar-left {
+    display: flex;
+    align-items: center;
+}
+
+.toolbar-right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
 }
 
 #btn-emergency .icon {
@@ -1745,7 +1889,7 @@ button,
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     gap: 16px;
-    min-height: 440px;
+    min-height: 440px
 }
 
 .rbtn {
@@ -1759,16 +1903,16 @@ button,
     gap: 3px;
     border-radius: var(--radius);
     cursor: pointer;
-    font-size: 12px;
+    font-size: 12px
 }
 
 .rbtn:hover {
     background: var(--surface-0);
-    color: var(--text-secondary);
+    color: var(--text-secondary)
 }
 
 .rbtn i {
-    font-size: 16px;
+    font-size: 16px
 }
 
 .dbar-row {
@@ -1792,6 +1936,11 @@ button,
     border: 0.5px solid var(--border);
     border-radius: 999px;
     overflow: hidden;
+}
+
+.dbar-fill {
+    height: 100%;
+    background: var(--text-success);
 }
 
 .dash-list-row {
@@ -1832,13 +1981,14 @@ button,
     overflow-wrap: anywhere;
 }
 
+
 .dash-list-row .dash-right {
     white-space: nowrap;
 }
 
 .dw-sec {
     padding: 14px 18px;
-    border-bottom: 0.5px solid var(--border);
+    border-bottom: 0.5px solid var(--border)
 }
 
 .dw-lbl .icon {
@@ -1895,18 +2045,18 @@ button,
     border-radius: var(--radius);
     padding: 8px 10px;
     resize: vertical;
-    outline: none;
+    outline: none
 }
 
 .dw-act {
     display: flex;
     gap: 10px;
     padding: 8px 0;
-    border-bottom: 0.5px solid var(--border);
+    border-bottom: 0.5px solid var(--border)
 }
 
 .dw-act:last-child {
-    border-bottom: none;
+    border-bottom: none
 }
 
 .dw-dot {
@@ -1919,7 +2069,7 @@ button,
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 13px;
+    font-size: 13px
 }
 
 .dw-file {
@@ -1931,7 +2081,7 @@ button,
     border: 0.5px solid var(--border);
     border-radius: var(--radius);
     margin-bottom: 6px;
-    font-size: 12px;
+    font-size: 12px
 }
 
 .uploading-row {

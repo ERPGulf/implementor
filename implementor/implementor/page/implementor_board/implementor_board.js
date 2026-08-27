@@ -56,30 +56,45 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 
 	var project_filters_fields = [{
 		"field": "status", "label": "Delivery Status", "icon": "circle-dot"
+	},
+	{
+		"field": "pm", "label": "Project Manager", "icon": "circle-dot"
 	}]
 	var task_filters_fields = [
-		{ field: "lead", label: "Person", icon: "user" },
-		{ field: "div", label: "Division", icon: "tag" }
+		{ field: "assignedto", label: "Assign To", icon: "user" },
+		{ field: "assignedby", label: "Assign By", icon: "user" },
+		{ field: "div", label: "Division", icon: "tag" },
+		{ field: "completedby", label: "Completed by", icon: "user" }
+
 	];
 	var todosfilterfields = [
 		{
 			field: "status", label: "Status"
 		},
 		{
-			field: "assignto", label: "Assign To"
+			field: "assignedto", label: "Assign To"
+		},
+		{
+			field: "assignedby", label: "Assign By"
 		}
 	]
 	page.set_title('Implementor');
 	var state = {
 		milestoneOpen: null,
+		sortPanelOpen: null,
+		urgencuFilterPanelOpen: null,
 		notification_doc: "",
 		notification_id: "",
+		projectpmfilter: "",
 		completedBy: "",
+		todoAssignByFilter: "",
+		taskassignbyfilter: "",
 		completedOn: null,
 		todoStatusFilter: "",
 		todoAssignToFilter: "",
 		taskLeadFilter: "",
 		taskDivFilter: "",
+		completedByFilter: "",
 		projectStatusFilter: "",
 		colFilterField: null,
 		colFilterOpen: null,
@@ -199,13 +214,17 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		return { isOverdue: isOverdue, months: months, days: days, hours: hours, totalHours: totalHours };
 	}
 	function sortedBy(arr) {
+		var out = arr.slice()
 		if (state.sortFilter === "name") {
-			return arr.slice().sort(function (a, b) { return a.name.localeCompare(b.name); })
+			return out.sort(function (a, b) { return a.name.localeCompare(b.name); })
 		}
 		if (state.sortFilter === "pct") {
-			return arr.slice().sort(function (a, b) { return b.percent - a.percent; })
+			return out.sort(function (a, b) { return b.percent - a.percent; })
 		}
-		return arr;
+		out.sort(function (a, b) {
+			return ((b.pinned ? 1 : 0) - (a.pinned ? 1 : 0))
+		})
+		return out;
 	}
 	function isMine(value, currentUser) {
 		if (!value) return false;
@@ -216,12 +235,13 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 	function showFilteredProjects() {
 		var filtered = testProjects.filter(function (project) {
 			var mineOnly = !state.mineOnly || isMine(project.pm, currentUser)
-			var match_pct = ppct(project) >= state.minPct && ppct(project) <= state.maxPct;
+			// var match_pct = ppct(project) >= state.minPct && ppct(project) <= state.maxPct;
 			// var match_single = !state.selectedProject || state.selectedProject === project.id;
 			var match_name = state.namedFilter === "" || project.name.toLowerCase().includes(state.namedFilter.toLowerCase());
 			var match_person_name = state.personFilter === "" || (project.pm || "").toLowerCase().includes(state.personFilter.toLowerCase());
+			var match_pm_name = state.projectpmfilter === "" || (project.pm || "").toLowerCase().includes(state.projectpmfilter.toLowerCase());
 			var match_del_status = !state.projectStatusFilter || state.projectStatusFilter == project.status
-			return match_del_status && mineOnly && match_pct && match_name && match_person_name;
+			return match_pm_name && match_del_status && mineOnly && match_name && match_person_name;
 		}
 		)
 		var sorted = sortedBy(filtered);
@@ -233,7 +253,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 				sorted.unshift(selectedProject);
 			}
 		}
-		document.getElementById("project-count").textContent = sorted.length + " projects shown";
+		document.getElementById("projects-hd-count").textContent = sorted.length
 		document.getElementById("d-projects").innerHTML = renderProjectsColumn(sorted);
 
 	}
@@ -242,12 +262,16 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			var mineOnly = !state.mineOnly || isMine(task.lead, currentUser) || isMine(task.assigned_by, currentUser) || isMine(task.completed, currentUser)
 			var match_project = state.selectedProject === null || task.project == state.selectedProject;
 			var match_pct = pct(task) >= state.minPct && pct(task) <= state.maxPct;
-			var match_name = state.selectedProject ? true : (state.namedFilter === "" || (todo.description || "").toLowerCase().includes(state.namedFilter.toLowerCase()));
+			var match_name = state.selectedProject ? true : (state.namedFilter === "" || (task.name || "").toLowerCase().includes(state.namedFilter.toLowerCase()));
 			var match_urgency = state.urgencyFilter === "" || task.urgency == state.urgencyFilter;
-			var match_person = state.personFilter === "" || task.lead && String(task.lead).toLowerCase().includes(state.personFilter.toLowerCase());
+			var match_person = matchesPerson(state.personFilter, task.lead, task.assigned_by, task.completed_by);
 			var match_div = state.taskDivFilter === "" || state.taskDivFilter === (task.div || "");
+			var match_assignto_person = state.personFilter === "" || task.assigned_by && String(task.assigned_by).toLowerCase().includes(state.personFilter.toLowerCase());
+			var match_completedBy = state.completedByFilter === "" || state.completedByFilter === (task.completed_by || "");
 			var match_lead_filter = state.taskLeadFilter === "" || state.taskLeadFilter === (task.lead || "");
-			return match_lead_filter && match_div && match_pct && mineOnly && match_project && match_name && match_urgency && match_person;
+			var match_assign_by = state.taskassignbyfilter === "" || state.taskassignbyfilter === (task.assigned_by || "");
+
+			return match_assignto_person && match_assign_by && match_completedBy && match_lead_filter && match_div && match_pct && mineOnly && match_project && match_name && match_urgency && match_person;
 		});
 		var sorted = sortedBy(filtered);
 		if (state.selectedTask) {
@@ -258,24 +282,33 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 				sorted.unshift(selectedTask);
 			}
 		}
-		elTaskCount.textContent = sorted.length + " tasks shown";
+		elTaskCount.textContent = sorted.length;
 		elTasks.innerHTML = renderTasksColumn(sorted);
 
+	}
+	function matchesPerson(filterValue, ...fields) {
+		if (filterValue === "") return true;
+		var lower = filterValue.toLowerCase();
+		return fields.some(function (f) {
+			return f && String(f).toLowerCase().includes(lower);
+		});
 	}
 	function showToDosForSelectedTasks() {
 		var filtered = testTodos.filter(function (todo) {
 			var mineOnly = !state.mineOnly || isMine(todo.who, currentUser) || isMine(todo.assigned_by, currentUser)
 			var todo_filtered = state.selectedTask === null || todo.task == state.selectedTask;
-			var match_name = state.selectedProject ? true : (state.namedFilter === "" || todo.description.toLowerCase().includes(state.namedFilter.toLowerCase()));
-			var match_person = state.personFilter === "" || (todo.who || "").toLowerCase().includes(state.personFilter.toLowerCase());
+			var match_name = state.namedFilter === "" || project.name.toLowerCase().includes(state.namedFilter.toLowerCase());
+			var match_person = matchesPerson(state.personFilter, todo.who, todo.assigned_by);
 			var match_urgency = state.urgencyFilter === "" || todo.urgency == state.urgencyFilter;
 			var match_filter_status = state.todoStatusFilter === "" || (todo.status || "") === state.todoStatusFilter
 			var match_assignee = state.todoAssignToFilter === "" || (todo.who || "") === state.todoAssignToFilter;
+			var match_assignedby = state.todoAssignByFilter === "" || (todo.assigned_by || "") === state.todoAssignByFilter;
+
 			// var match_single = !state.single_todo_select || todo.id === state.single_todo_select;
-			return match_assignee && match_filter_status && match_name && mineOnly && todo_filtered && match_person && match_urgency;
+			return match_assignedby && match_assignee && match_filter_status && match_name && mineOnly && todo_filtered && match_person && match_urgency;
 		});
 		var sorted = sortedBy(filtered);
-		document.getElementById("todo-count").textContent = sorted.length + " todos shown";
+		document.getElementById("todos-hd-count").textContent = sorted.length;
 		document.getElementById("d-todos").innerHTML = renderToDosColumn(sorted);
 	}
 
@@ -509,96 +542,99 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		renderReportRows(reports);
 		// .innerHTML = reports.map(renderReportRows).join("")
 	}
-
+	function positionViewTabsSlider() {
+		var activeBtn = document.querySelector(".view-tabs button.on");
+		var slider = document.getElementById("view-tabs-slider");
+		if (!activeBtn || !slider) return;
+		slider.style.width = activeBtn.offsetWidth + "px";
+		slider.style.transform = "translateX(" + activeBtn.offsetLeft + "px)";
+	}
 	$(page.body).html(`
 		<div class="impl-board-root">
-		<div style="display:flex; align-items:center; justify-content:space-between; padding:8px 10px; border-bottom:0.5px solid var(--border)">
-			<div style="display:flex; align-items:center; gap:16px">
-				<button id="btn-board" class="on">${frappe.utils.icon("layout-list", "xs")} Board</button>
-				<button id="btn-dashboard">${frappe.utils.icon("chart-bar", "xs")} Dashboard</button>
-				<button id="btn-report">${frappe.utils.icon("file-chart-column-increasing", "xs")} Report Board</button>
-				<div class="legend" id="project-count"></div>
-				<div class="legend"><span class="dot" style="background:var(--lvl-project)"></span> Project</div>
-				<div class="legend" id="task-count"></div>
-				<div class="legend"><span class="dot" style="background:var(--lvl-task)"></span> Task</div>
-				<div class="legend" id="todo-count"></div>
-				<div class="legend"><span class="dot" style="background:var(--lvl-todo)"></span> To-do</div>
-			</div>
-			<div style="display:flex; align-items:center; gap:10px">
-			<div style="position:relative">
-			<button id="btn-notif" class="icon-btn-lg">
-				${frappe.utils.icon("bell")}
-				<span class="badge" id="notif-badge" style="display:none">0</span>
-			</button>
-			<div id="notification-panel" class="header-panel" style="display:none;"></div>
-			</div>
-			<div style="position:relative">
-			<button id="btn-emergency" class="icon-btn-lg">
-				${frappe.utils.icon("triangle-alert")}
-				<span class="badge" id="emergency-badge" style="display:none">0</span>
-			</button>
-			<div id="emergency-panel" class="header-panel" style="display:none;"></div>
-			</div>
-			<div style="position:relative">
-			<button id="btn-load" class="icon-btn-lg">
-				${frappe.utils.icon("refresh-cw")}
-				<span class="badge" style="display:none">0</span>
-			</button>
-			</div>
-			<div style="position:relative">
-				<button id="btn-add">${frappe.utils.icon("plus", "xs")} Add</button>
-				<div id="add-menu" class="add-popover" style="display:none;right:0;"></div>
-			</div>
-			</div>
-		</div>
+		<div style="display:flex; align-items:center; justify-content:space-between; padding:6px 8px; border-bottom:0.5px solid var(--border)">
+	<div style="display:flex; align-items:center; gap:16px">
+	<div class="view-tabs-wrap">
+	<div class="view-tabs">
+		<div class="view-tabs-slider" id="view-tabs-slider"></div>
+		<button id="btn-board" class="on">${frappe.utils.icon("layout-list", "xs")} Overview</button>
+		<button id="btn-dashboard">${frappe.utils.icon("chart-bar", "xs")} Dashboard</button>
+		<button id="btn-report">${frappe.utils.icon("file-chart-column-increasing", "xs")} Reports</button>
+	</div>
+	</div>
+	</div>
+	<div style="display:flex; align-items:center; gap:10px">
+	<div style="position:relative">
+	<button id="btn-notif" class="icon-btn-lg">
+		${frappe.utils.icon("bell")}
+		<span class="badge" id="notif-badge" style="display:none">0</span>
+	</button>
+	<div id="notification-panel" class="header-panel" style="display:none;"></div>
+	</div>
+	<div style="position:relative">
+	<button id="btn-emergency" class="icon-btn-lg">
+		${frappe.utils.icon("triangle-alert")}
+		<span class="badge" id="emergency-badge" style="display:none">0</span>
+	</button>
+	<div id="emergency-panel" class="header-panel" style="display:none;"></div>
+	</div>
+	<div style="position:relative">
+	<button id="btn-load" class="icon-btn-lg">
+		${frappe.utils.icon("refresh-cw")}
+		<span class="badge" style="display:none">0</span>
+	</button>
+	</div>
+	<div style="position:relative">
+		<button id="btn-add">${frappe.utils.icon("plus", "xs")} Add</button>
+		<div id="add-menu" class="add-popover" style="display:none;right:0;"></div>
+	</div>
+	</div>
+</div>
 		<div class="topbar">
-		<div style="display:flex; gap:12px; padding:16px 16px 12px; flex-wrap:wrap">
+		<div class="toolbar-card">
+			<div class="toolbar-left">
 		<input id="f-name" placeholder="Search project/task/to-do" />
-		<select id ="f-urgency">
-		</select>
-		<div id="f-person">
-		</div>
-		<select id ="f-sort">
-			<option value="">Sort: default</option>
-			<option value="pct">% complete</option>
-			<option value="name">Name</option>
-		</select>
+	</div>
+	<div class="toolbar-right">
+		<div id="f-urgency"></div>
+		<div id="f-person"></div>
+		<div id="f-sort"></div>
 		<button id="f-mine">My work</button>
 		<button id="f-clear">${frappe.utils.icon("x")}  Clear</button>
+	</div>
 		</div>
 		</div>
 		<div class="grid">
 		<div>
 			<div id="h-projects" class="d-hd">
-			<div style="display:inline-flex">${frappe.utils.icon("folder", "sm")}</div>
-			Projects
-			<button class="d-info" data-act="colfilter" data-col="projects" style="margin-left:auto">
-					${frappe.utils.icon("filter", "xs")}
-			</button>
-			<div id="colfilter-projects" class="filter-panel" style="display:none;"></div>
+			<span class="d-hd-label">Projects</span>
+			<span class="d-hd-count" id="projects-hd-count">0</span>
+			    <button class="d-info" data-act="colfilter" data-col="projects">
+					${frappe.utils.icon("settings-2", "xs")}
+				</button>
+			<div id="colfilter-projects" class="rb-filter-panel" style="display:none;"></div>
 			</div>
 			<div id="d-projects"></div>
 			<button id="btn-load-more-projects" class="d-info" style="width:100%; margin-top:8px;">Load more</button>
 			</div>
 			<div>
 				<div id="h-tasks" class="d-hd">
-				<div style="display:inline-flex">${frappe.utils.icon("file", "sm")}</div>
 				Tasks
+				<span class="d-hd-count" id="tasks-hd-count">0</span>
 				<button class="d-info" data-act="colfilter" data-col="tasks" style="margin-left:auto">
-				${frappe.utils.icon("filter", "xs")}
+				${frappe.utils.icon("settings-2", "xs")}
 				</button>
-				<div id="colfilter-tasks" class="filter-panel" style="display:none;"></div>
+				<div id="colfilter-tasks" class="rb-filter-panel" style="display:none;"></div>
 				</div>
 				<div id="d-tasks"></div>
 			</div>
 			<div>
 				<div id="h-todos" class="d-hd">
-				<div style="display:inline-flex">${frappe.utils.icon("circle-check-big", "sm")}</div>
 				To-dos
+				<span class="d-hd-count" id="todos-hd-count">0</span>
 				<button class="d-info" data-act="colfilter" data-col="todos" style="margin-left:auto">
-					${frappe.utils.icon("filter", "xs")}
+					${frappe.utils.icon("settings-2", "xs")}
 				</button>
-				<div id="colfilter-todos" class="filter-panel" style="display:none;"></div>
+				<div id="colfilter-todos" class="rb-filter-panel" style="display:none;"></div>
 				</div>
 				<div id="d-todos"></div>
 			</div>
@@ -692,7 +728,8 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		<div id="report-view" style="display:none; padding:16px;"></div>
 		</div>
 	  `);
-	var elTaskCount = document.getElementById("task-count");
+	positionViewTabsSlider();
+	var elTaskCount = document.getElementById("tasks-hd-count");
 	var elTasks = document.getElementById("d-tasks");
 	function scrollToSelected() {
 		requestAnimationFrame(function () {
@@ -715,6 +752,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			limit: PROJECTS_PAGE_SIZE,
 			offset: projectsOffsets
 		});
+
 		if (rows.length < PROJECTS_PAGE_SIZE) {
 			projectsHasMore = false
 		}
@@ -748,10 +786,15 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		if (!btn) return;
 		btn.style.display = projectsHasMore ? "block" : "none";
 	}
+
 	function updateView() {
 		document.getElementById("btn-board").classList.toggle("on", state.view === "board");
 		document.getElementById("btn-dashboard").classList.toggle("on", state.view === "dashboard");
 		document.getElementById("btn-report").classList.toggle("on", state.view === "report");
+		requestAnimationFrame(function () {
+			positionViewTabsSlider();
+			setTimeout(positionViewTabsSlider, 50);   // re-measure once more after everything's settled
+		});
 
 		var panels = {
 			board: [document.querySelector(".topbar"), document.querySelector(".grid")],
@@ -853,6 +896,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			if (pickField) {
 				e.stopPropagation();
 				state.colFilterField = pickField.getAttribute("data-field");
+				console.log(state.colFilterField)
 				renderColFilter(col);
 				return;
 			}
@@ -861,10 +905,15 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 				e.stopPropagation();
 				var value = setcolfilter.getAttribute("data-value");
 				if (col === "projects" && state.colFilterField === "status") state["projectStatusFilter"] = value;
-				if (col === "tasks" && state.colFilterField === "lead") state["taskLeadFilter"] = value;
+				if (col === "projects" && state.colFilterField === "pm") state["projectpmfilter"] = value;
+				if (col === "tasks" && state.colFilterField === "assignedto") state["taskLeadFilter"] = value;
 				if (col === "tasks" && state.colFilterField === "div") state["taskDivFilter"] = value;
+				if (col === "tasks" && state.colFilterField === "assignedby") state["taskassignbyfilter"] = value;
+				if (col === "tasks" && state.colFilterField === "completedby") state["completedByFilter"] = value;
 				if (col === "todos" && state.colFilterField === "status") state["todoStatusFilter"] = value;
-				if (col === "todos" && state.colFilterField === "assignto") state["todoAssignToFilter"] = value;
+				if (col === "todos" && state.colFilterField === "assignedto") state["todoAssignToFilter"] = value;
+				if (col === "todos" && state.colFilterField === "assignedby") state["todoAssignByFilter"] = value;
+
 
 				state.colFilterField = null;
 				state.colFilterOpen = null;
@@ -911,36 +960,61 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 	document.getElementById("btn-load").addEventListener("click", async function () {
 		state.menu = null;
 		state.drawer = null;
+		state.add = false;
+		state.milestoneOpen = null;
+		state.sendPopupOpen = null;
+
 		state.namedFilter = "";
 		state.personFilter = "";
 		state.mineOnly = false;
 		state.sortFilter = "";
 		state.urgencyFilter = "";
+
 		state.taskDivFilter = "";
-		state.todoAssignToFilter = "";
-		state.todoStatusFilter = "";
 		state.taskLeadFilter = "";
+		state.taskassignbyfilter = "";
+		state.completedByFilter = "";
+		state.completedOn = null;
+
+		state.todoAssignToFilter = "";
+		state.todoAssignByFilter = "";
+		state.todoStatusFilter = "";
+		state.projectpmfilter = "";
+
 		state.projectStatusFilter = "";
-		document.getElementById("f-name").value = "";
-		document.getElementById("f-urgency").value = "";
-		document.getElementById("f-person").value = "";
-		// document.getElementById("f-min").value = "";
-		// document.getElementById("f-max").value = "";
-		document.getElementById("f-sort").value = "";
-		document.getElementById("f-mine").textContent = "My work";
+
+		state.colFilterField = null;
+		state.colFilterOpen = null;
+
 		state.selectedProject = null;
 		state.selectedTask = null;
 		state.selectToDo = null;
+
+		state.minPct = 0;
+		state.maxPct = 100;
+
+		// btn-load handler
+
+		document.getElementById("f-name").value = "";
+		document.getElementById("f-mine").textContent = "My work";
+		renderUrgOptions();
+		renderSortFilters();
+
 		await loadProjects();
-		// await Promise.all([
-		// 	loadTasks(),
-		// 	loadTodos()
-		// ]);
-		// showFilteredProjects();
-		// showFilteredTasks();
-		// showToDosForSelectedTasks();
+		await Promise.all([
+			loadTasks(),
+			loadTodos()
+		]);
+		showFilteredProjects();
+		showFilteredTasks();
+		showToDosForSelectedTasks();
 		renderPersonFilter();
 
+		// close any panels that were left open, since their backing state just got wiped
+		renderAddMenu();
+		renderMilestonePopup();
+		renderSendPopup();
+		["projects", "tasks", "todos"].forEach(renderColFilter);
 	});
 	document.getElementById("btn-notif").addEventListener("click", async function () {
 		state.notifyPanelOpen = !state.notifyPanelOpen;
@@ -1322,29 +1396,42 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			el.style.display = "none";
 			return;
 		}
+		console.log(col)
 		el.style.display = "block";
 		if (col === "projects") {
 			if (!state.colFilterField) {
 				el.innerHTML = `
-					<div class="filter-panel-title">Filter by</div>
+				<div class="rb-filter-options" id="rb-filter-options">
 					${project_filters_fields.map(function (f) {
-					return `<div class="filter-panel-row" data-act="pickfilterfield" data-field="${f.field}">
+					return `<div class="filter-opt ${state.colFilterField === f.field ? "on" : ""}" data-act="pickfilterfield" data-field="${f.field}">
 					<span>${f.label}</span>
-					<span class="chevron-right">${frappe.utils.icon("chevron-right", "xs")}</span>
 					</div>`;
 				}).join("")}
+				</div>
 				`;
+
+			}
+			else if (state.colFilterField === "pm") {
+				el.innerHTML = `
+			<div class="rb-filter-search">
+				${frappe.utils.icon("search", "xs")}
+			<input id="rb-filter-search-input" placeholder="Search" />
+			</div>
+	<div class="rb-filter-options" id="rb-filter-options">
+		<div class="filter-opt ${state.projectpmfilter === "" ? "on" : ""}" data-act="setcolfilter" data-value="">Any</div>
+		${TaskLeadOptions.map(function (s) {
+					return `<div class="filter-opt ${state.projectpmfilter === s ? "on" : ""}" data-act="setcolfilter" data-value="${s}">${s}</div>`;
+				}).join("")}
+  </div>
+`;
 			}
 			else if (state.colFilterField === "status") {
 				el.innerHTML = `
-	<div class="filter-panel-title">
-	<span class="filter-panel-back" data-act="backfilterfield">
-		<span class="back-icon">${frappe.utils.icon("chevron-left", "xs")}</span>
-		<span>Delivery status</span>
-	</span>
-	<button class="d-info" data-act="close" style="margin-left:auto">${frappe.utils.icon("close", "xs")}</button>
-	</div>
-	<div class="filter-values-wrap scrollable">
+			<div class="rb-filter-search">
+				${frappe.utils.icon("search", "xs")}
+			<input id="rb-filter-search-input" placeholder="Search" />
+			</div>
+	<div class="rb-filter-options" id="rb-filter-options">
 		<div class="filter-opt ${state.projectStatusFilter === "" ? "on" : ""}" data-act="setcolfilter" data-value="">Any</div>
 		${DeliverystatusOptions.map(function (s) {
 					return `<div class="filter-opt ${state.projectStatusFilter === s ? "on" : ""}" data-act="setcolfilter" data-value="${s}">${s}</div>`;
@@ -1357,25 +1444,22 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		else if (col === "tasks") {
 			if (!state.colFilterField) {
 				el.innerHTML = `
-					<div class="filter-panel-title">Filter by</div>
+			<div class="rb-filter-options" id="rb-filter-options">
 					${task_filters_fields.map(function (f) {
-					return `<div class="filter-panel-row" data-act="pickfilterfield" data-field="${f.field}">
+					return `<div class="filter-opt" data-act="pickfilterfield" data-field="${f.field}">
 					<span>${f.label}</span>
-					<span class="chevron-right">${frappe.utils.icon("chevron-right", "xs")}</span>
 					</div>`;
 				}).join("")}
+				</div>
 				`;
 			}
-			else if (state.colFilterField === "lead") {
+			else if (state.colFilterField === "assignedto") {
 				el.innerHTML = `
-    <div class="filter-panel-title">
-      <span class="filter-panel-back" data-act="backfilterfield">
-        <span class="back-icon">${frappe.utils.icon("chevron-left", "xs")}</span>
-        <span>Person</span>
-      </span>
-      <button class="d-info" data-act="close" style="margin-left:auto">${frappe.utils.icon("close", "xs")}</button>
-    </div>
-    <div class="filter-values-wrap scrollable">
+    			<div class="rb-filter-search">
+				${frappe.utils.icon("search", "xs")}
+			<input id="rb-filter-search-input" placeholder="Search" />
+			</div>
+			<div class="rb-filter-options" id="rb-filter-options">
       <div class="filter-opt ${state.taskLeadFilter === "" ? "on" : ""}" data-act="setcolfilter" data-value="">Any</div>
       ${TaskLeadOptions.map(function (u) {
 					return `<div class="filter-opt ${state.taskLeadFilter === u ? "on" : ""}" data-act="setcolfilter" data-value="${u}">${u}</div>`;
@@ -1383,16 +1467,23 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
     </div>
   `;
 			}
+			else if (state.colFilterField === "assignedby") {
+				el.innerHTML = `
+    			<div class="rb-filter-search">
+				${frappe.utils.icon("search", "xs")}
+			<input id="rb-filter-search-input" placeholder="Search" />
+			</div>
+    <div class="rb-filter-options" id="rb-filter-options">
+      <div class="filter-opt ${state.taskassignbyfilter === "" ? "on" : ""}" data-act="setcolfilter" data-value="">Any</div>
+      ${TaskLeadOptions.map(function (u) {
+					return `<div class="filter-opt ${state.taskassignbyfilter === u ? "on" : ""}" data-act="setcolfilter" data-value="${u}">${u}</div>`;
+				}).join("")}
+    </div>
+  `;
+			}
 			else if (state.colFilterField === "div") {
 				el.innerHTML = `
-    <div class="filter-panel-title">
-      <span class="filter-panel-back" data-act="backfilterfield">
-        <span class="back-icon">${frappe.utils.icon("chevron-left", "xs")}</span>
-        <span>Division</span>
-      </span>
-      <button class="d-info" data-act="close" style="margin-left:auto">${frappe.utils.icon("close", "xs")}</button>
-    </div>
-    <div class="filter-values-wrap scrollable">
+    <div class="rb-filter-options" id="rb-filter-options">
       <div class="filter-opt ${state.taskDivFilter === "" ? "on" : ""}" data-act="setcolfilter" data-value="">Any</div>
       ${divisions.map(function (d) {
 					var isOn = state.taskDivFilter === d;
@@ -1403,30 +1494,43 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
     </div>
   `;
 			}
+			else if (state.colFilterField === "completedby") {
+				el.innerHTML = `
+    			<div class="rb-filter-search">
+				${frappe.utils.icon("search", "xs")}
+			<input id="rb-filter-search-input" placeholder="Search" />
+			</div>
+    <div class="rb-filter-options" id="rb-filter-options">
+      <div class="filter-opt ${state.completedByFilter === "" ? "on" : ""}" data-act="setcolfilter" data-value="">Any</div>
+      ${TaskLeadOptions.map(function (u) {
+					return `<div class="filter-opt ${state.completedByFilter === u ? "on" : ""}" data-act="setcolfilter" data-value="${u}">${u}</div>`;
+				}).join("")}
+    </div>
+  `;
+			}
+
 		}
 		else if (col === "todos") {
 			if (!state.colFilterField) {
 				el.innerHTML = `
-				<div class="filter-panel-title" > Filter by</div>
+								<div class="rb-filter-options" id="rb-filter-options">
+
 				${todosfilterfields.map(function (f) {
-					return `<div class="filter-panel-row" data-act="pickfilterfield" data-field="${f.field}">
+					return `<div class="filter-opt" data-act="pickfilterfield" data-field="${f.field}">
 					<span>${f.label}</span>
-					<span class="chevron-right">${frappe.utils.icon("chevron-right", "xs")}</span>
 					</div>`
 				}).join("")
 					}
+					</div>
 				`;
 			}
 			else if (state.colFilterField === "status") {
 				el.innerHTML = `
-				<div class="filter-panel-title">
-				<span class="filter-panel-back" data-act="backfilterfield">
-					<span class="back-icon">${frappe.utils.icon("chevron-left", "xs")}</span>
-					<span>Status</span>
-				</span>
-				<button class="d-info" data-act="close" style="margin-left:auto">${frappe.utils.icon("close", "xs")}</button>
-				</div>
-				<div class="filter-values-wrap scrollable">
+   			<div class="rb-filter-search">
+				${frappe.utils.icon("search", "xs")}
+			<input id="rb-filter-search-input" placeholder="Search" />
+			</div>
+    <div class="rb-filter-options" id="rb-filter-options">
 				<div class="filter-opt ${state.todoStatusFilter === "" ? "on" : ""}" data-act="setcolfilter" data-value="">Any</div>
 				${todo_status_options.map(function (d) {
 					var isOn = state.todoStatusFilter === d;
@@ -1436,19 +1540,32 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 				</div>
 				`;
 			}
-			else if (state.colFilterField === "assignto") {
+			else if (state.colFilterField === "assignedto") {
 				el.innerHTML = `
-    <div class="filter-panel-title">
-      <span class="filter-panel-back" data-act="backfilterfield">
-        <span class="back-icon">${frappe.utils.icon("chevron-left", "xs")}</span>
-        <span>Assign To</span>
-      </span>
-      <button class="d-info" data-act="close" style="margin-left:auto">${frappe.utils.icon("close", "xs")}</button>
-    </div>
-    <div class="filter-values-wrap scrollable">
-      <div class="filter-opt ${state.todoAssignToFilter === "" ? "on" : ""}" data-act="setcolfilter" data-value="">Any</div>
-      ${assignees.map(function (d) {
+   			<div class="rb-filter-search">
+				${frappe.utils.icon("search", "xs")}
+			<input id="rb-filter-search-input" placeholder="Search" />
+			</div>
+		<div class="rb-filter-options" id="rb-filter-options">
+		<div class="filter-opt ${state.todoAssignToFilter === "" ? "on" : ""}" data-act="setcolfilter" data-value="">Any</div>
+			${assignees.map(function (d) {
 					var isOn = state.todoAssignToFilter === d;
+					return `<div class="filter-opt ${isOn ? "on" : ""}" data-act="setcolfilter" data-value="${d}">${d}
+				</div>`;
+				}).join("")}
+		</div>`;
+
+			}
+			else if (state.colFilterField === "assignedby") {
+				el.innerHTML = `
+   			<div class="rb-filter-search">
+				${frappe.utils.icon("search", "xs")}
+			<input id="rb-filter-search-input" placeholder="Search" />
+			</div>
+    <div class="rb-filter-options" id="rb-filter-options">
+      <div class="filter-opt ${state.todoAssignByFilter === "" ? "on" : ""}" data-act="setcolfilter" data-value="">Any</div>
+      ${assignees.map(function (d) {
+					var isOn = state.todoAssignByFilter === d;
 					return `<div class="filter-opt ${isOn ? "on" : ""}" data-act="setcolfilter" data-value="${d}">${d}
 				</div>`;
 				}).join("")}</div>`;
@@ -1593,6 +1710,29 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 	}
 	document.getElementById("d-projects").addEventListener("click", function (e) {
 		if (e.target.closest("[data-disabled='true']")) {
+			return;
+		}
+		togglePin = e.target.closest("[data-act='togglepin'")
+		if (togglePin) {
+			var doctype = togglePin.getAttribute("data-doc");
+			var id = togglePin.getAttribute("data-id");
+			var map = doctype === "Project" ? projectsById : (doctype === "Task") ? tasksById : todosById;
+			var item = map.get(id)
+			console.log(item);
+			if (!item) return;
+			var wasPinned = item.pinned;
+			item.pinned = !wasPinned;
+			if (doctype === "Project") showFilteredProjects();
+			if (doctype === "Task") showFilteredTasks();
+			if (doctype === "ToDo") showToDosForSelectedTasks();
+			frappe.xcall("implementor.api.toggle_pin", { doctype: doctype, id: id }).then(function () {
+			}).catch(function (err) {
+				item.pinned = wasPinned;
+				if (doctype === "Project") showFilteredProjects();
+				if (doctype === "Task") showFilteredTasks();
+				if (doctype === "ToDo") showToDosForSelectedTasks();
+				frappe.msgprint("Could not update pin: " + (err.message || "unknown error"));
+			});
 			return;
 		}
 		if (e.target.id === "due-date-input" || e.target.closest(".flatpickr-calendar")) {
@@ -1872,6 +2012,29 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 
 	document.getElementById("d-tasks").addEventListener("click", function (e) {
 		if (e.target.closest("[data-disabled='true']")) {
+			return;
+		}
+		togglePin = e.target.closest("[data-act='togglepin'")
+		if (togglePin) {
+			var doctype = togglePin.getAttribute("data-doc");
+			var id = togglePin.getAttribute("data-id");
+			var map = doctype === "Project" ? projectsById : (doctype === "Task") ? tasksById : todosById;
+			var item = map.get(id)
+			console.log(item);
+			if (!item) return;
+			var wasPinned = item.pinned;
+			item.pinned = !wasPinned;
+			if (doctype === "Project") showFilteredProjects();
+			if (doctype === "Task") showFilteredTasks();
+			if (doctype === "ToDo") showToDosForSelectedTasks();
+			frappe.xcall("implementor.api.toggle_pin", { doctype: doctype, id: id }).then(function () {
+			}).catch(function (err) {
+				item.pinned = wasPinned;
+				if (doctype === "Project") showFilteredProjects();
+				if (doctype === "Task") showFilteredTasks();
+				if (doctype === "ToDo") showToDosForSelectedTasks();
+				frappe.msgprint("Could not update pin: " + (err.message || "unknown error"));
+			});
 			return;
 		}
 		var changelead = e.target.closest("[data-act='changelead']");
@@ -2242,6 +2405,29 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		if (e.target.closest("[data-disabled='true']")) {
 			return;
 		}
+		togglePin = e.target.closest("[data-act='togglepin'")
+		if (togglePin) {
+			var doctype = togglePin.getAttribute("data-doc");
+			var id = togglePin.getAttribute("data-id");
+			var map = doctype === "Project" ? projectsById : (doctype === "Task") ? tasksById : todosById;
+			var item = map.get(id)
+			console.log(item);
+			if (!item) return;
+			var wasPinned = item.pinned;
+			item.pinned = !wasPinned;
+			if (doctype === "Project") showFilteredProjects();
+			if (doctype === "Task") showFilteredTasks();
+			if (doctype === "ToDo") showToDosForSelectedTasks();
+			frappe.xcall("implementor.api.toggle_pin", { doctype: doctype, id: id }).then(function () {
+			}).catch(function (err) {
+				item.pinned = wasPinned;
+				if (doctype === "Project") showFilteredProjects();
+				if (doctype === "Task") showFilteredTasks();
+				if (doctype === "ToDo") showToDosForSelectedTasks();
+				frappe.msgprint("Could not update pin: " + (err.message || "unknown error"));
+			});
+			return;
+		}
 		var deletedoc = e.target.closest("[data-act='deletedoc']")
 		if (deletedoc) {
 			var doc = deletedoc.getAttribute("data-doc");
@@ -2508,10 +2694,24 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			state.colFilterField = null;
 			renderColFilter(openCol);
 		}
-		if (!e.target.closest("[id ='f-person-trigger']")) {
+		if (!e.target.closest("[id ='f-person-trigger']") && !e.target.closest("[id='f-person-panel']")) {
 			if (state.personPanelOpen) {
 				state.personPanelOpen = false;
 				renderPersonFilter();
+			}
+		}
+		if (!e.target.closest("[id ='f-sort-trigger']") && !e.target.closest("[id='f-sort-panel']")) {
+			if (state.sortPanelOpen) {
+				state.sortPanelOpen = false;
+				document.getElementById("f-sort-panel").style.display = "none"
+				return;
+			}
+		}
+		if (!e.target.closest("[id ='f-urgency-trigger']") && !e.target.closest("[id='f-urgency-panel']")) {
+			if (state.urgencuFilterPanelOpen) {
+				state.urgencuFilterPanelOpen = null;
+				document.getElementById("f-urgency-panel").style.display = "none"
+				return;
 			}
 		}
 		var filterPanel = document.getElementById("rb-filter-panel");
@@ -2559,6 +2759,51 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		}
 
 	});
+	document.getElementById("colfilter-projects").addEventListener("input", function (e) {
+		if (e.target && e.target.id === "rb-filter-search-input") {
+			var q = e.target.value.toLowerCase();
+			document.querySelectorAll("#rb-filter-options .filter-opt").forEach(function (opt) {
+				var text = opt.textContent.toLowerCase();
+				opt.style.display = text.includes(q) ? "" : "none";
+			})
+
+		}
+	});
+	document.getElementById("colfilter-tasks").addEventListener("input", function (e) {
+		if (e.target && e.target.id === "rb-filter-search-input") {
+			var q = e.target.value.toLowerCase();
+			document.querySelectorAll("#rb-filter-options .filter-opt").forEach(function (opt) {
+				var text = opt.textContent.toLowerCase();
+				opt.style.display = text.includes(q) ? "" : "none";
+			})
+
+		}
+	});
+	document.getElementById("colfilter-todos").addEventListener("input", function (e) {
+		if (e.target && e.target.id === "rb-filter-search-input") {
+			var q = e.target.value.toLowerCase();
+			document.querySelectorAll("#rb-filter-options .filter-opt").forEach(function (opt) {
+				var text = opt.textContent.toLowerCase();
+				opt.style.display = text.includes(q) ? "" : "none";
+			})
+
+		}
+	});
+	document.getElementById("f-person").addEventListener("input", function (e) {
+
+		// if (e.target && e.target.id === "rb-search-input") {
+		// 	runReportSearch(e.target.value)
+		// }
+		if (e.target && e.target.id === "rb-filter-search-input") {
+			var q = e.target.value.toLowerCase();
+			document.querySelectorAll("#rb-filter-options .filter-opt").forEach(function (opt) {
+				var text = opt.textContent.toLowerCase();
+				opt.style.display = text.includes(q) ? "" : "none";
+			})
+
+		}
+	});
+
 	document.getElementById("report-view").addEventListener("input", function (e) {
 
 		if (e.target && e.target.id === "rb-search-input") {
@@ -2575,12 +2820,61 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 	});
 	document.getElementById("f-name").addEventListener("input", function (e) {
 		runSearchFilter(e.target.value);
-	})
-	document.getElementById("f-urgency").addEventListener("change", function (e) {
-		state.urgencyFilter = e.target.value;
-		showFilteredTasks()
-		showToDosForSelectedTasks()
 	});
+	var sorts = [{ label: "% complete", field: "pct" }, { label: "Name", field: "name" }]
+	function renderSortFilters() {
+		var el = document.getElementById("f-sort");
+		if (!el) return;
+		el.innerHTML = `
+			<div id="f-sort-trigger" style="height:34px; width:160px; padding:0 10px; border:0.5px solid var(--border-strong); border-radius:var(--radius); background:var(--surface-2); display:flex; align-items:center; justify-content:space-between; gap:6px; cursor:pointer; white-space:nowrap; overflow:hidden;">
+				<span style="overflow:hidden; text-overflow:ellipsis;">${state.sortFilter || "Sort: default"}</span>
+				<span style="flex:none; display:inline-flex;">${frappe.utils.icon("chevron-down", "xs")}</span>
+			</div>
+			<div id="f-sort-panel" class="rb-filter-panel" style="display:none; top:38px; left:0;">
+			<div class="rb-filter-options" id="rb-filter-options">
+					${sorts.map(function (f) {
+			return `<div class="filter-opt ${state.sortFilter === f.field ? "on" : ""}" data-act="setsort" data-field="${f.field}">
+					<span>${f.label}</span>
+					</div>`;
+		}).join("")}
+			</div>
+			</div>
+
+		`
+
+	}
+	document.getElementById("f-urgency").addEventListener("click", function (e) {
+		var trigger = e.target.closest("#f-urgency-trigger");
+		if (trigger) {
+			state.urgencuFilterPanelOpen = !state.urgencuFilterPanelOpen;
+			document.getElementById("f-urgency-panel").style.display = state.urgencuFilterPanelOpen ? "block" : "none";
+			return;
+		}
+		var setUrgFilter = e.target.closest("[data-act='seturg']")
+		if (setUrgFilter) {
+			state.urgencyFilter = setUrgFilter.getAttribute("data-field");
+			state.urgencuFilterPanelOpen = false;
+			renderUrgOptions();
+			showFilteredTasks()
+			showToDosForSelectedTasks()
+			return;
+		}
+	});
+	document.getElementById("f-urgency").addEventListener("input", function (e) {
+		if (e.target && e.target.id === "rb-filter-search-input") {
+			var q = e.target.value.toLowerCase();
+			document.querySelectorAll("#rb-filter-options .filter-opt").forEach(function (opt) {
+				var text = opt.textContent.toLowerCase();
+				opt.style.display = text.includes(q) ? "" : "none";
+			})
+
+		}
+	});
+	// document.getElementById("f-urgency").addEventListener("change", function (e) {
+	// 	state.urgencyFilter = e.target.value;
+	// 	showFilteredTasks()
+	// 	showToDosForSelectedTasks()
+	// });
 	document.getElementById("f-person").addEventListener("click", function (e) {
 		var trigger = e.target.closest("#f-person-trigger");
 		if (trigger) {
@@ -2607,8 +2901,12 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
             <span style="overflow:hidden; text-overflow:ellipsis;">${state.personFilter || "Any person"}</span>
             <span style="flex:none; display:inline-flex;">${frappe.utils.icon("chevron-down", "xs")}</span>
         </div>
-        <div id="f-person-panel" class="filter-panel" style="display:none; top:38px; left:0;">
-            <div class="filter-values-wrap scrollable">
+        <div id="f-person-panel" class="rb-filter-panel" style="display:none; top:38px; left:0;">
+					<div class="rb-filter-search">
+				${frappe.utils.icon("search", "xs")}
+			<input id="rb-filter-search-input" placeholder="Search" />
+			</div>
+            <div class="rb-filter-options" id="rb-filter-options">
                 <div class="filter-opt ${state.personFilter === "" ? "on" : ""}" data-act="setpersonfilter" data-value="">Any</div>
                 ${TaskLeadOptions.map(function (u) {
 			return `<div class="filter-opt ${state.personFilter === u ? "on" : ""}" data-act="setpersonfilter" data-value="${u}">${u}</div>`;
@@ -2641,11 +2939,24 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		showToDosForSelectedTasks();
 
 	});
-	document.getElementById("f-sort").addEventListener("change", function (e) {
-		state.sortFilter = e.target.value;
-		showFilteredProjects();
-		showFilteredTasks();
-		showToDosForSelectedTasks();
+	document.getElementById("f-sort").addEventListener("click", function (e) {
+		var trigger = e.target.closest("#f-sort-trigger");
+		if (trigger) {
+			state.sortPanelOpen = !state.sortPanelOpen;
+			document.getElementById("f-sort-panel").style.display = state.sortPanelOpen ? "block" : "none";
+			return;
+		}
+		var setsort = e.target.closest("[data-act='setsort']")
+		if (setsort) {
+			sortvalue = setsort.getAttribute("data-field")
+			state.sortFilter = sortvalue;
+			state.sortPanelOpen = false;
+			renderSortFilters();
+			showFilteredProjects();
+			showFilteredTasks();
+			showToDosForSelectedTasks();
+			return;
+		}
 
 	});
 	document.getElementById("f-clear").addEventListener("click", function (e) {
@@ -2657,13 +2968,11 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		state.taskDivFilter = "";
 		state.taskLeadFilter = "";
 		state.projectStatusFilter = "";
+		// f-clear handler
 		document.getElementById("f-name").value = "";
-		document.getElementById("f-urgency").value = "";
-		document.getElementById("f-person").value = "";
-		// document.getElementById("f-min").value = "";
-		// document.getElementById("f-max").value = "";
-		document.getElementById("f-sort").value = "";
 		document.getElementById("f-mine").textContent = "My work";
+		renderUrgOptions();
+		renderSortFilters();
 		showFilteredProjects();
 		showFilteredTasks();
 		showToDosForSelectedTasks();
@@ -3152,21 +3461,67 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			}
 		}
 		return `
-			<div class="d-row lvl-project ${project.id === state.selectedProject ? 'sel' : ''}" data-project-id=${project.id}>
-		<div style="display:flex; flex-direction:column; gap:6px; flex:1">
-			<div style="font-weight:500">${project.name}</div>
-			<div class="d-meta">${project.client}</div>
-			<div>${chip(project.status)}</div>
-			<div class="d-own">PM · ${renderLeads(project.pm)}</div>
-			<div class="d-meta">${fmtDate(project.due)} · ${dueChip("Project", project.due)}</div>
-			${prog(project.percent_complete)}
-			<div style="display:flex; gap:6px">${renderReactions(project)}</div>
-		</div>
-		<button class="d-dots" data-act="dots" data-id="${project.id}">${frappe.utils.icon("dot-vertical", "sm")}</button>
-		<button class="d-info" data-act="opendrawer" data-type="Project" data-id="${project.id}">${frappe.utils.icon("info", "sm")}</button>
-		${menuHtml}
-		</div>
-			`;
+<div class="d-row lvl-project ${project.id === state.selectedProject ? 'sel' : ''}" data-project-id=${project.id}>
+    <div style="flex:1; min-width:0">
+        <div class="card-title">${project.name}</div>
+        <div class="card-subtitle">${project.client}</div>
+
+        <div style="display:flex; gap:4px; flex-wrap:wrap; margin-bottom:8px">
+            ${chip(project.status)}
+        </div>
+
+        ${prog(project.percent_complete)}
+
+        <div class="property-list">
+            ${(project.due && project.status !== "Completed") ? propertyRow("Due Date",
+			`<span style="${remDays(project.due) < 0 ? 'color:var(--text-danger)' : ''}">${dueChip("Project", project.due)}</span>`
+		) : ""}
+            ${propertyRow("PM", personValue(project.pm))}
+        </div>
+
+        <div style="display:flex; gap:6px; margin-top:8px">${renderReactions(project)}</div>
+    </div>
+	<div class="card-icon-group">
+    <button class="d-dots" data-act="dots" data-id="${project.id}">${frappe.utils.icon("dot-vertical", "sm")}</button>
+    <button class="d-info" data-act="opendrawer" data-type="Project" data-id="${project.id}">${frappe.utils.icon("info", "sm")}</button>
+	</div>
+	<button class="d-pin-hang ${project.pinned ? 'pinned' : ''}" data-act="togglepin" data-doc="Project" data-id="${project.id}">${frappe.utils.icon("bookmark", "sm")}</button>
+    ${menuHtml}
+</div>
+`;
+	}
+	function propertyRow(label, valueHtml) {
+		return `
+      <div class="property-label">${label}</div>
+      <div class="property-value">${valueHtml}</div>
+    `;
+	}
+	function personValue(name) {
+		if (!name) {
+			return `<div class="card-avatar-group"><div class="card-avatar card-avatar-empty">?</div><span class="card-avatar-label">Unassigned</span></div>`;
+		} var names = Array.isArray(name) ? name : String(name).split(",");
+		var first = names[0].trim();
+		var extra = names.length - 1;
+		var colors = getAvatarColor(first);
+		return `
+      <div class="card-avatar" style="background:${colors[0]}; color:${colors[1]}">${getInitials(first)}</div>
+      <span class="person-name" title="${first}">${first}</span>
+      ${extra > 0 ? `<span class="extra-badge">+${extra}</span>` : ""}
+    `;
+	}
+	function renderAvatarCircle(name) {
+		if (!name) {
+			return `<div class="card-avatar-group"><div class="card-avatar card-avatar-empty">?</div><span class="card-avatar-label">Unassigned</span></div>`;
+		}
+		var names = Array.isArray(name) ? name : String(name).split(",");
+		var first = names[0].trim();
+		var colors = getAvatarColor(first);
+		return `
+      <div class="card-avatar-group">
+        <div class="card-avatar" style="background:${colors[0]}; color:${colors[1]}" title="${first}">${getInitials(first)}</div>
+        <span class="card-avatar-label">${first}</span>
+      </div>
+    `;
 	}
 	var OptionalHtml = "";
 	async function loadOptions(role, id) {
@@ -3185,6 +3540,13 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 				return `<div class="d-opt" data-act="assign" data-id="${id}" data-value="${user.name}">${user.name}</div>`
 			}).join("");
 		}
+	}
+	function getInitials(name) {
+		if (!name) return "?"
+		var clean = String(name).split("@")[0];
+		var parts = clean.replace(/[._]/g, " ").trim().split(/\s+/);
+		if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+		return (parts[0][0] + parts[1][0]).toUpperCase();
 	}
 
 	function renderTaskCard(task) {
@@ -3293,62 +3655,76 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			}
 		}
 		return `
-	<div class="d-row lvl-task ${task.id === state.selectedTask ? 'sel' : ''}" data-task-id=${task.id}>
-	<div style="display:flex; flex-direction:column; gap:6px; flex:1">
-		<div style="display:flex; flex-direction:column; gap:4px">
-			<div style="font-weight:500">${task.name}</div>
-			<div class="d-meta" style="font-weight:400; margin-bottom:6px">${projectsById.get(task.project)?.name || task.project}</div>
-			<div style="display:flex; gap:4px; flex-wrap:wrap">
-				${chip(task.stage)}
-				${chip(task.status)}
-				${urg(task.urgency)}
-			</div>
-			<div style="display:flex;gap:4px;flex-wrap:wrap">
-			${renderModuleCards(task.module)}
-			</div>
-		</div>
+<div class="d-row lvl-task ${task.id === state.selectedTask ? 'sel' : ''}" data-task-id=${task.id}>
+    <div style="flex:1; min-width:0">
+        <div class="card-title" style="margin-bottom:4px">${task.name}</div>
+        <div class="card-subtitle">${projectsById.get(task.project)?.name || task.project || "No project linked"}</div>
 
-		<div class="d-own-row">
-			<span class="d-own">${task.div} Lead:</span>
-			${renderLeads(task.lead)}
-		</div>
-		<div class="d-own-row">
-			<span class="d-own">Assigned By:</span>
-			${renderLeads(task.assigned_by)}
-		</div>
+        <div style="display:flex; gap:4px; flex-wrap:wrap; margin-bottom:8px">
+            ${chip(task.stage)}
+            ${chip(task.status)}
+            ${urg(task.urgency)}
+        </div>
 
-		<div class="d-meta">
-			${task.due ? fmtDate(task.due) : "No Due date"} · ${task.status === "Completed" ? `<span style="color:var(--text-success)">Completed</span>` : dueChip("Task", task.due)}
-		</div>
+        <div style="display:flex; gap:4px; flex-wrap:wrap; margin-bottom:8px">
+            ${renderModuleCards(task.module)}
+        </div>
 
-		${task.creation ? `
-		<div class="d-meta" style="color:var(--text-accent)">
-		<span style="display:inline-flex; width:12px; height:12px">${frappe.utils.icon("clock", "xs")}</span>	
-		${task.status} since ${fmtDate(task.creation)}
-		</div>
-		` : ""}
+        <div class="property-list">
+${(task.due && task.status !== "Completed") ? propertyRow("Due Date",
+			`<span style="${remDays(task.due) < 0 ? 'color:var(--text-danger)' : ''}">${dueChip("Task", task.due)}</span>`
+		) : ""}
+            ${propertyRow("Assigned To", personValue(task.lead))}
+            ${propertyRow("Assigned By", personValue(task.assigned_by))}
+            ${propertyRow("Division", `<span>${task.div || "—"}</span>`)}
+        </div>
 
-		${task.status === "Completed" ? `
-		<div style="display:flex; gap:6px; margin-top:8px; padding-top:8px; border-top:1px solid var(--border); flex-wrap:wrap">
-			<button class="btn-completed-card" data-act="setcompletedon" data-id="${task.id}">
-				<span style="color:var(--text-success)">✓</span>
-				Completed on: ${task.completed_on ? fmtDate(task.completed_on) : "Set date"}
-			</button>
-			<button class="btn-completed-card" data-act="setcompletedby" data-id="${task.id}">
-				${frappe.utils.icon("user-check", "xs")} Completed by: ${task.completed_by ? task.completed_by : "Set person"}
-			</button>
-		</div>
-		` : ""}
+        ${task.creation ? `
+        <div class="card-meta-item" style="color:var(--text-accent); margin-top:6px">
+            ${frappe.utils.icon("clock", "xs")} ${task.status} since ${fmtDate(task.creation)}
+        </div>
+        ` : ""}
 
-		<div style="display:flex; gap:6px; margin-top:6px; padding-top:6px; border-top:1px solid var(--border)">
-			${renderReactions(task)}
-		</div>
+        ${task.status === "Completed" ? `
+        <div style="display:flex; gap:6px; margin-top:8px; padding-top:8px; border-top:1px solid var(--surface-1); flex-wrap:wrap">
+            <button class="btn-completed-card" data-act="setcompletedon" data-id="${task.id}">
+                <span style="color:var(--text-success)">✓</span>
+                Completed on: ${task.completed_on ? fmtDate(task.completed_on) : "Set date"}
+            </button>
+            <button class="btn-completed-card" data-act="setcompletedby" data-id="${task.id}">
+                ${frappe.utils.icon("user-check", "xs")} Completed by: ${task.completed_by ? task.completed_by : "Set person"}
+            </button>
+        </div>
+        ` : ""}
+
+        <div style="display:flex; gap:6px; margin-top:8px">${renderReactions(task)}</div>
+    </div>
+	<div class="card-icon-group">
+    <button class="d-dots" data-act="dots" data-id="${task.id}">${frappe.utils.icon("dot-vertical", "sm")}</button>
+    <button class="d-info" data-act="opendrawer" data-type="Task" data-id="${task.id}">${frappe.utils.icon("info", "sm")}</button>
 	</div>
-	<button class="d-dots" data-act="dots" data-id="${task.id}">${frappe.utils.icon("dot-vertical", "sm")}</button>
-	<button class="d-info" data-act="opendrawer" data-type="Task" data-id="${task.id}">${frappe.utils.icon("info", "sm")}</button>
-	${menuHtml}
-	</div>
-	`;
+		<button class="d-pin-hang ${task.pinned ? 'pinned' : ''}" data-act="togglepin" data-doc="Task" data-id="${task.id}">${frappe.utils.icon("bookmark", "sm")}</button>
+
+    ${menuHtml}
+
+</div>
+`;
+	}
+	function getAvatarColor(name) {
+		var palette = [
+			["#e8f2fd", "#2490ef"],   // blue
+			["#ddf5e5", "#29844b"],   // green
+			["#fdf0d5", "#b7860b"],   // amber
+			["#fbe2e2", "#e13636"],   // red
+			["#f0e8fd", "#7c3aed"],   // purple
+			["#fde8f3", "#db2777"],   // pink
+		];
+		var hash = 0;
+		for (var i = 0; i < name.length; i++) {
+			hash = name.charCodeAt(i) + ((hash << 5) - hash);
+		}
+		var index = Math.abs(hash) % palette.length;
+		return palette[index];
 	}
 	var todo_menu_actions = [
 		{ act: "details", icon: "info", label: "Details & activity", },
@@ -3448,37 +3824,44 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			}
 		}
 		return `
-			<div class="d-row lvl-todo ${todo.id === state.selectToDo ? 'sel' : ''}" data-todo-id=${todo.id}>
-				${icon}
-			<div style="display:flex; flex-direction:column; gap:6px; flex:1">
-			<div>
-				<div style="${textStyle}">${todo.name}</div>
-				${chip(todo.status)}
-				${urg(todo.urgency)}
-				${chip(todo.priority)}
-			</div>
-			<div style="display:flex; gap:4px; flex-wrap:wrap">
-				${renderModuleCards(todo.module)}
-			</div>
-				<div class="d-own">Assigned To · ${renderLeads(todo.who)}</div>
-				<div class="d-own-row">
-				<span class="d-own">Assigned By:</span>
-				${renderLeads(todo.assigned_by)}
-				</div>
-			<div style="margin-top:8px">
-			<div class="d-meta" >${frappe.utils.icon("calendar-days")} ${fmtDate(todo.due)} · ${dueChip("ToDo", todo.due)}</div></div>
-				<div style="display:flex; gap:6px">${renderReactions(todo)}</div>
-			</div>
-			<button class="d-dots" data-act="dots" data-id="${todo.id}">${frappe.utils.icon("dot-vertical", "sm")}</button>
-			<button class="d-info" data-act="opendrawer" data-type="ToDo" data-id="${todo.id}">${frappe.utils.icon("info", "sm")}</button>
-			${menuHtml}
-			</div>
-			`;
+<div class="d-row lvl-todo ${todo.id === state.selectToDo ? 'sel' : ''}" data-todo-id=${todo.id}>
+    <div style="flex:1; min-width:0">
+        <div class="card-title" style="${textStyle}">${icon} ${todo.name}</div>
+
+        <div style="display:flex; gap:4px; flex-wrap:wrap; margin:8px 0">
+            ${chip(todo.status)}
+            ${urg(todo.urgency)}
+            ${chip(todo.priority)}
+        </div>
+
+        <div style="display:flex; gap:4px; flex-wrap:wrap; margin-bottom:8px">
+            ${renderModuleCards(todo.module)}
+        </div>
+
+        <div class="property-list">
+            ${(todo.due && !todo.done) ? propertyRow("Due Date",
+			`<span style="${remDays(todo.due) < 0 ? 'color:var(--text-danger)' : ''}">${dueChip("ToDo", todo.due)}</span>`
+		) : ""}
+            ${propertyRow("Assigned To", personValue(todo.who))}
+            ${propertyRow("Assigned By", personValue(todo.assigned_by))}
+        </div>
+
+        <div style="display:flex; gap:6px; margin-top:8px">${renderReactions(todo)}</div>
+    </div>
+	<div class="card-icon-group">
+    <button class="d-dots" data-act="dots" data-id="${todo.id}">${frappe.utils.icon("dot-vertical", "sm")}</button>
+    <button class="d-info" data-act="opendrawer" data-type="ToDo" data-id="${todo.id}">${frappe.utils.icon("info", "sm")}</button>
+	</div>
+	<button class="d-pin-hang ${todo.pinned ? 'pinned' : ''}" data-act="togglepin" data-doc="ToDo" data-id="${todo.id}">${frappe.utils.icon("bookmark", "sm")}</button>
+
+    ${menuHtml}
+</div>
+`;
 
 	}
 	function renderModuleCards(module) {
 		if (!module) {
-			return `<div class="d-meta">No module assigned.</div>`;
+			return "";
 		}
 		// var inScope = !!module.in_scope;
 		var color = "var(--text-success)";
@@ -3514,6 +3897,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		testProjects = rows.map(function (r) {
 			return {
 				id: r.name,
+				pinned: !!r.pinned,
 				name: r.title,
 				client: r.client,
 				status: r.del_status,
@@ -3541,6 +3925,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		testTodos = rows.map(function (r) {
 			return {
 				id: r.name,
+				pinned: !!r.pinned,
 				task: r.task || taskId,
 				name: r.title,
 				who: r.assignee,
@@ -3570,6 +3955,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		testTasks = rows.map(function (r) {
 			return {
 				id: r.name,
+				pinned: !!r.pinned,
 				completed_on: r.completed_on,
 				completed_by: r.completed_by,
 				project: r.project || projectId,
@@ -3604,10 +3990,23 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		var el = document.getElementById("f-urgency")
 		if (!el) return;
 		var combined = Array.from(new Set([...(urgency_options || []), ...(todo_urg_options || [])]));
-		el.innerHTML = `<option value="">Any urgency</option>` +
-			combined.map(function (f) {
-				return `<option value="${f}">${f}</option>`;
-			}).join("")
+		el.innerHTML =
+			`
+			<div id="f-urgency-trigger" style="height:34px; width:160px; padding:0 10px; border:0.5px solid var(--border-strong); border-radius:var(--radius); background:var(--surface-2); display:flex; align-items:center; justify-content:space-between; gap:6px; cursor:pointer; white-space:nowrap; overflow:hidden;">
+				<span style="overflow:hidden; text-overflow:ellipsis;">${state.urgencyFilter || "Any urgency"}</span>
+				<span style="flex:none; display:inline-flex;">${frappe.utils.icon("chevron-down", "xs")}</span>
+			</div>
+			<div id="f-urgency-panel" class="rb-filter-panel" style="display:none; top:38px; left:0;">
+			<div class="rb-filter-options" id="rb-filter-options">
+				${combined.map(function (f) {
+				return `<div class="filter-opt ${state.urgencyFilter === f ? "on" : ""}" data-act="seturg" data-field="${f}">
+					<span>${f}</span>
+					</div>`;
+			}).join("")}
+			</div>
+			</div>
+
+		`
 	}
 	async function getOptions() {
 		var results = await Promise.all([
@@ -3627,6 +4026,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		todo_status_options = results[5];
 		prj_pms = results[6];
 		renderUrgOptions();
+		renderSortFilters();
 	}
 	function loadurg(task) {
 		return urgency_options.map(function (u) {
