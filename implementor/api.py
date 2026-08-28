@@ -287,6 +287,17 @@ def get_doc_url(doc=None,id=None):
     doc_lowerCase = doc.lower().replace(" ", "-")
     url = frappe.utils.get_url(f"/app/{doc_lowerCase}/{id}")
     return url
+@frappe.whitelist()
+def rename_doc(doctype,id,name):
+    if not doctype or not id or not name:
+        frappe.throw("doctype,id,name are requried")
+    name=name.strip()
+    if not name:
+        frappe.throw("name is required..")
+    if not frappe.has_permission(doctype, "write", id):
+        frappe.throw("Not permitted", frappe.PermissionError)
+    new_name = frappe.rename_doc(doctype,id,name,force=True)
+    return new_name
 
 @frappe.whitelist()
 def get_tasks(project=None):

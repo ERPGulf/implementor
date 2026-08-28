@@ -41,7 +41,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 	var notifications = null;
 	var currentUser = frappe.session.user;
 	var project_menu_actions = [
-		{ act: "details", icon: "info", label: "Details & activity" },
+		{ act: "editname", icon: "square-pen", label: "Change Project Name" },
 		{ act: "gotostatus", icon: "circle-dot", label: "Change status", perm: "write" },
 		{ act: "changepm", icon: "user-check", label: "Change project manager", perm: "write" },
 		{ act: "gotodue", icon: "calendar-days", label: "Change Due Date", perm: "write" },
@@ -81,6 +81,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 	page.set_title('Implementor');
 	var state = {
 		milestoneOpen: null,
+		renamePopupOpen: null,
 		sortPanelOpen: null,
 		urgencuFilterPanelOpen: null,
 		notification_doc: "",
@@ -138,6 +139,20 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		showFilteredTasks();
 		showToDosForSelectedTasks();
 	}, 200)
+	function renamePopUp() {
+		var el = document.getElementById("rename-popup-overlay");
+		if (!state.renamePopupOpen) {
+			el.style.display = "none";
+			return;
+		}
+		el.style.display = "flex";
+		document.getElementById("rename-popup-title-text").textContent = "Change " + state.renamePopupOpen.doctype + " Name";
+		document.getElementById("rename-popup-input").value = state.renamePopupOpen.currentName || "";
+		setTimeout(function () {
+			document.getElementById("rename-popup-input").focus();
+		}, 0);
+	}
+
 	// async function searchProjects(value) {
 	// 	projectsOffset = 0;
 	// 	var rows = frappe.xcall("implementor.api.get_projects", {
@@ -297,7 +312,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		var filtered = testTodos.filter(function (todo) {
 			var mineOnly = !state.mineOnly || isMine(todo.who, currentUser) || isMine(todo.assigned_by, currentUser)
 			var todo_filtered = state.selectedTask === null || todo.task == state.selectedTask;
-			var match_name = state.namedFilter === "" || project.name.toLowerCase().includes(state.namedFilter.toLowerCase());
+			var match_name = state.namedFilter === "" || todo.name.toLowerCase().includes(state.namedFilter.toLowerCase());
 			var match_person = matchesPerson(state.personFilter, todo.who, todo.assigned_by);
 			var match_urgency = state.urgencyFilter === "" || todo.urgency == state.urgencyFilter;
 			var match_filter_status = state.todoStatusFilter === "" || (todo.status || "") === state.todoStatusFilter
@@ -359,18 +374,17 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 	}
 	function renderReactions(item) {
 		var defs = [
-			["bookmark", "🔖"],
-			["star", "⭐"],
-			["love", "❤"],
-			["angry", "😠"],
-			["emergency", "⚠"]
+			["star", "star"],
+			["love", "heart"],
+			["angry", "angry"],
+			["emergency", "shield-alert"]
 		];
 		return defs.map(function (d) {
-			var key = d[0], icon = d[1];
+			var key = d[0], iconName = d[1];
 			var entry = (item.reactions && item.reactions[key]) || { count: 0, users: [], reacted_by_me: false };
 			var count = entry.count || 0;
 			var iReacted = !!entry.reacted_by_me;
-			return `<button class="rbtn ${iReacted ? 'on' : ''}" data-act="react" data-id="${item.id}" data-key="${key}">${icon} ${count > 0 ? count : ""}</button>`;
+			return `<button class="rbtn ${iReacted ? 'on' : ''}" data-act="react" data-id="${item.id}" data-key="${key}">${frappe.utils.icon(iconName, "xs")} ${count > 0 ? count : ""}</button>`;
 		}).join("");
 	}
 	function metricCard(label, value, isDanger) {
@@ -653,6 +667,19 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			<button class="btn btn-primary btn-sm" data-act="confirmsend">Send</button>
 			</div>
 		</div>
+		</div>
+		<div id="rename-popup-overlay" class="send-popup-overlay" style="display:none;">
+			<div class="send-popup">
+				<div class="send-popup-header">
+					<div class="send-popup-title" id="rename-popup-title-text">Change Name</div>
+					<button data-act="cancelrename" class="d-info">${frappe.utils.icon("close", "xs")}</button>
+				</div>
+				<input id="rename-popup-input" type="text" style="width:100%; margin-top:4px;" placeholder="Project name" />
+				<div class="send-popup-actions">
+					<button class="btn btn-default btn-sm" data-act="cancelrename">Cancel</button>
+					<button class="btn btn-primary btn-sm" data-act="confirmrename">Save</button>
+				</div>
+			</div>
 		</div>
 		<div id = "milestone-popup-overlay" class ="send-popup-overlay" style="display:none;">
 		<div class ="send-popup" style="width:800px">
@@ -1970,6 +1997,21 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			loadOptions("pm", id).then(function () { showFilteredProjects(); })
 			return;
 		}
+		var editname = e.target.closest("[data-act='editname']");
+		if (editname) {
+			state.menu.mode = "editname";
+			var id = editname.getAttribute("data-id");
+			project = projectsById.get(id)
+			if (!project) return;
+			state.menu = null;
+			showFilteredProjects();
+			state.renamePopupOpen = {
+				id: id, doctype: "Project", currentName: project.name
+			}
+			console.log(state.renamePopupOpen)
+			renamePopUp()
+			return;
+		}
 		var close = e.target.closest("[data-act='close']");
 		if (close) {
 			state.menu = null;
@@ -2012,6 +2054,22 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 
 	document.getElementById("d-tasks").addEventListener("click", function (e) {
 		if (e.target.closest("[data-disabled='true']")) {
+			return;
+		}
+		var editname = e.target.closest("[data-act='editname']");
+		if (editname) {
+			state.menu.mode = "editname";
+			var id = editname.getAttribute("data-id");
+			task = tasksById.get(id)
+			if (!task) return;
+			state.menu = null;
+			showFilteredTasks();
+			state.renamePopupOpen = {
+				id: id,
+				doctype: "Task",
+				currentName: task.name
+			}
+			renamePopUp()
 			return;
 		}
 		togglePin = e.target.closest("[data-act='togglepin'")
@@ -2403,6 +2461,22 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 	});
 	document.getElementById("d-todos").addEventListener("click", function (e) {
 		if (e.target.closest("[data-disabled='true']")) {
+			return;
+		}
+		var editname = e.target.closest("[data-act='editname']");
+		if (editname) {
+			state.menu.mode = "editname";
+			var id = editname.getAttribute("data-id");
+			todo = todosById.get(id)
+			if (!todo) return;
+			state.menu = null;
+			showToDosForSelectedTasks();
+			state.renamePopupOpen = {
+				id: id,
+				doctype: "ToDo",
+				currentName: todo.name
+			}
+			renamePopUp()
 			return;
 		}
 		togglePin = e.target.closest("[data-act='togglepin'")
@@ -3364,7 +3438,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		}).join("");
 	}
 	var task_menu_actions = [
-		{ act: "details", icon: "info", label: "Details & activity" },
+		{ act: "editname", icon: "square-pen", label: "Change Task Name" },
 		{ act: "gotostatus", icon: "circle-dot", label: "Change status", perm: "write" },
 		{ act: "gotodivision", icon: "tag", label: "Change Division", perm: "write" },
 		{ act: "changelead", icon: "user-check", label: "Change division lead", perm: "write" },
@@ -3421,6 +3495,16 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			`;
 			}
 			else if (state.menu.mode === "changepm") {
+				menuHtml = `
+			<div class="d-menu" >
+			<div class="d-hd" style="background:transparent; border:none; padding:0 0 8px">Project manager</div>
+			<div style="display:flex; flex-wrap:wrap; gap:6px">
+			${OptionalHtml}
+			</div>
+			</div>
+			`;
+			}
+			else if (state.menu.mode === "editname") {
 				menuHtml = `
 			<div class="d-menu" >
 			<div class="d-hd" style="background:transparent; border:none; padding:0 0 8px">Project manager</div>
@@ -3727,7 +3811,7 @@ ${(task.due && task.status !== "Completed") ? propertyRow("Due Date",
 		return palette[index];
 	}
 	var todo_menu_actions = [
-		{ act: "details", icon: "info", label: "Details & activity", },
+		{ act: "editname", icon: "square-pen", label: "Change ToDo Name" },
 		{ act: "gotostatus", icon: "circle-dot", label: "Change status", perm: "write" },
 		{ act: "assignto", icon: "user-plus", label: "Assign", perm: "write" },
 		{ act: "gotourgency", icon: "flame", label: "Set Urgency", perm: "write" },
@@ -4060,6 +4144,52 @@ ${(task.due && task.status !== "Completed") ? propertyRow("Due Date",
 		assignees = TaskLeadOptions
 		// persons = TaskLeadOptions
 	}
+	document.getElementById("rename-popup-overlay").addEventListener("click", function (e) {
+		if (e.target === this || e.target.closest("[data-act='cancelrename'")) {
+			state.renamePopupOpen = null;
+			renamePopUp();
+			return;
+		}
+		if (e.target.closest("[data-act='confirmrename']")) {
+			var newName = document.getElementById("rename-popup-input").value.trim();
+			if (!newName) {
+				frappe.msgprint("Please enter a name");
+				return;
+			}
+			var payload = state.renamePopupOpen;
+			var doc = payload.doctype;
+			var id = payload.id;
+			frappe.xcall("implementor.api.rename_doc", {
+				doctype: doc,
+				id: id,
+				name: newName
+			})
+			if (doc === "Project") {
+				item = projectsById.get(id)
+				if (item) {
+					item.name = newName;
+					showFilteredProjects();
+				}
+			}
+			if (doc === "Task") {
+				item = tasksById.get(id)
+				if (item) {
+					item.name = newName;
+					showFilteredTasks();
+				}
+			}
+			if (doc === "ToDo") {
+				item = todosById.get(id)
+				if (item) {
+					item.name = newName;
+					showToDosForSelectedTasks();
+				}
+			}
+			state.renamePopupOpen = null;
+			renamePopUp()
+
+		}
+	})
 	var testProjects = [];
 	var projectsById = new Map();
 	var testTasks = [];

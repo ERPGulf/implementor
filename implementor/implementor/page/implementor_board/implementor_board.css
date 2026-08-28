@@ -180,30 +180,30 @@
 
 [data-theme-mode="dark"] .impl-board-root,
 [data-theme="dark"] .impl-board-root {
-    --surface-0: #1c1c1c;
-    --surface-1: #2a2a2a;
+    --surface-0: #000000;
+    --surface-1: #0a0a0a;
+    --surface-2: #121212;
     --progress: #4ade80;
-    --surface-2: #242424;
-    --border: #3a3a3a;
-    --border-strong: #4d4d4d;
-    --text-primary: #f4f5f6;
-    --text-secondary: #b0b8bd;
-    --text-muted: #888;
-    --text-danger-light: #991b1b;
-    --text-accent: #5eb3fb;
-    --bg-accent: #173047;
-    --text-success: #6bcf8f;
-    --bg-success: #1c3826;
-    --text-danger: #f18989;
-    --bg-danger: #3a1f1f;
-    --text-warning: #e6c065;
-    --bg-warning: #3a2e14;
-    --text-info: #5eb3fb;
-    --bg-info: #173047;
-    --lvl-project: #a68cff;
-    --lvl-task: #5eb3fb;
-    --lvl-todo: #f0a67c;
-    --pin-fill: #e8eaf0;
+    --border: #232323;
+    --border-strong: #2e2e2e;
+    --text-primary: #f5f5f5;
+    --text-secondary: #a3a3a3;
+    --text-muted: #6e6e6e;
+    --text-danger-light: #d64545;
+    --text-accent: #6d9eff;
+    --bg-accent: #131c2e;
+    --text-success: #5fd58a;
+    --bg-success: #13221a;
+    --text-danger: #e26565;
+    --bg-danger: #291818;
+    --text-warning: #e0b04a;
+    --bg-warning: #2a2211;
+    --text-info: #6d9eff;
+    --bg-info: #131c2e;
+    --lvl-project: #9d85ff;
+    --lvl-task: #6d9eff;
+    --lvl-todo: #e0975c;
+    --pin-fill: #f5f5f5;
 }
 
 .d-row {
@@ -638,7 +638,7 @@
     position: relative;
     flex-basis: 100%;
     width: 100%;
-    background: var(--surface-2);
+    background: var(--surface-0);
     border: 0.5px solid var(--border);
     border-radius: var(--radius);
     margin-top: 8px;
@@ -1484,6 +1484,47 @@ button,
     }
 }
 
+.d-row.lvl-project {
+    background: color-mix(in srgb, var(--lvl-project) 3%, var(--surface-2));
+    border-left: 2px solid var(--lvl-project);
+}
+
+.d-row.lvl-task {
+    background: color-mix(in srgb, var(--lvl-task) 3%, var(--surface-2));
+    border-left: 2px solid var(--lvl-task);
+}
+
+.d-row.lvl-todo {
+    background: color-mix(in srgb, var(--lvl-todo) 3%, var(--surface-2));
+    border-left: 2px solid var(--lvl-todo);
+}
+
+/* keep hover states readable on top of the tint */
+.d-row.lvl-project:hover {
+    background: color-mix(in srgb, var(--lvl-project) 10%, var(--surface-2));
+}
+
+.d-row.lvl-task:hover {
+    background: color-mix(in srgb, var(--lvl-task) 10%, var(--surface-2));
+}
+
+.d-row.lvl-todo:hover {
+    background: color-mix(in srgb, var(--lvl-todo) 10%, var(--surface-2));
+}
+
+/* selected row should still read clearly as "selected" over the tint */
+.d-row.lvl-project.sel,
+.d-row.lvl-task.sel,
+.d-row.lvl-todo.sel {
+    background: var(--bg-accent);
+}
+
+.d-row.lvl-project.sel:hover,
+.d-row.lvl-task.sel:hover,
+.d-row.lvl-todo.sel:hover {
+    background: var(--bg-accent);
+}
+
 .add-popover {
     position: absolute;
     top: 100%;
@@ -1512,11 +1553,11 @@ button,
     border-radius: 999px;
     font-size: 12px;
     cursor: pointer;
-    background: var(--surface-2);
+    background: var(--surface-1);
 }
 
 .d-opt:hover {
-    background: var(--surface-1);
+    background: var(--surface-2);
 }
 
 .d-empty {
@@ -1752,19 +1793,23 @@ button,
     border: none;
     background: transparent;
     color: var(--text-muted);
-    height: 24px;
-    padding: 0 5px;
+    height: 26px;
+    padding: 0 6px;
     display: inline-flex;
     align-items: center;
-    gap: 3px;
+    gap: 4px;
     border-radius: var(--radius);
     cursor: pointer;
     font-size: 12px;
 }
 
+.rbtn.on {
+    color: var(--text-accent);
+    background: var(--bg-accent);
+}
+
 .rbtn:hover {
-    background: var(--surface-0);
-    color: var(--text-secondary);
+    background: var(--surface-1);
 }
 
 .rbtn i {
@@ -1863,10 +1908,10 @@ button,
     bottom: 0;
     width: 390px;
     max-width: 92vw;
-    background: var(--surface-2);
+    background: var(--surface-0);
     border-left: 0.5px solid var(--border);
     overflow-y: auto;
-    z-index: 50;
+    z-index: 99999;
     box-shadow: -2px 0 12px rgba(0, 0, 0, 0.15);
     animation: slideInDrawer 0.2s ease-out;
 }
