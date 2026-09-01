@@ -612,13 +612,12 @@ def set_division(task, division):
         frappe.throw("Not permitted", frappe.PermissionError)
 
     lead = frappe.db.get_value(
-        "User", {"imp_division": division, "imp_is_division_lead": 1}, "name"
+        "User", {"imp_division": division}, "name"
     )
     doc = frappe.get_doc("Task", task)
     doc.imp_division = division
     doc.custom_division_lead = lead
     doc.save()
-
     return {"division": division, "lead": lead}
 
 @frappe.whitelist()
@@ -867,10 +866,41 @@ def my_work():
         "doing_tasks": frappe.get_list("Task", filters={"imp_doing": user}, fields=["name", "subject"]),
         "assigned_todos": frappe.get_list("ToDo", filters={"allocated_to": user, "imp_done": 0}, fields=["name", "description"]),
     }
+@frappe.whitelist()
+def get_doc_url(doc, id):
+    if doc == "Project":
+        params = "?project=" + id
 
+    elif doc == "Task":
+        project_id = frappe.get_value("Task", id, "project")
+        params = f"?project={project_id or ''}&task={id}"
+
+    elif doc == "ToDo":
+        todo = frappe.get_doc("ToDo", id)
+        if todo.reference_type == "Task":
+            project_id = frappe.get_value("Task", todo.reference_name, "project")
+            params = f"?project={project_id or ''}&task={todo.reference_name}&todo={id}"
+        elif todo.reference_type == "Project":
+            params = f"?project={todo.reference_name}&todo={id}"
+        else:
+            params = f"?todo={id}"
+
+    else:
+        params = ""
+
+    return frappe.utils.get_url(f"/app/implementor_board{params}")
 
 @frappe.whitelist()
 def toggle_todo_done(todo):
+    doc = frappe.get_doc("ToDo",todo)
+    user = frappe.session.user
+    if(user not in [doc.assigned_by, doc.allocated_to]):
+        frappe.throw(
+            _("Only the person assigned to or the person who assigned this to-do can change its status"),
+            frappe.PermissionError,
+        )
+
+
     if not frappe.has_permission("ToDo", "write", todo):
         frappe.throw("Not permitted", frappe.PermissionError)
 

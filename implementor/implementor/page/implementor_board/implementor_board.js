@@ -46,6 +46,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		{ act: "changepm", icon: "user-check", label: "Change project manager", perm: "write" },
 		{ act: "gotodue", icon: "calendar-days", label: "Change Due Date", perm: "write" },
 		{ act: "newtask", icon: "plus", label: "Add Task", perm: "create:Task" },
+		{ act: "newtodo", icon: "plus", label: "Add Todo", perm: "create:ToDo" },
 		{ act: "copylink", icon: "copy", label: "Copy link", doc: "Project" },
 		{ act: "sendslackdm", icon: "send", label: "Send to Slack direct message", doc: "Project" },
 		{ act: "sendslackchannel", icon: "send", label: "Send to Slack Channel", doc: "Project" },
@@ -341,9 +342,18 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		showFilteredTasks();
 		loadTodos(id);
 	};
-	async function selectToDo(id) {
+	function selectToDo(id) {
+		state.selectToDo = id;
+		showToDosForSelectedTasks();
+		return;
+	}
+	async function toggleToDoDone(id) {
 		var todo = todosById.get(id);
 		if (!todo) return;
+		if (currentUser !== todo.who && currentUser !== todo.assigned_by) {
+			frappe.throw("Only the person assigned to or the person who assigned this to-do can change its status");
+			return;
+		}
 		var wasDone = todo.done;
 		var wasStatus = todo.status;
 
@@ -1329,11 +1339,9 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			renderAddMenu();
 			var slackID = ""
 			var project = projectsById.get(project_id);
-			console.log("Proje", project)
 			if (project && project.slack_channel_id) {
 				slackID = project.slack_channel_id;
 			}
-			console.log("This ", slackID)
 			frappe.new_doc("Task", {
 				project: state.selectedProject, slack_channel_id: slackID, custom_assigned_by: currentUser, custom_division_lead: currentUser,
 			}, (quick_entry) => {
@@ -1722,6 +1730,13 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			},
 		})
 	}
+	async function getDocUrl(doc, d) {
+		await frappe.xcall("implementor.api.get_doc_url", { doctype: doc, name: d }).then(function (url) {
+			return url
+		}).catch(function (err) {
+			frappe.throw("Could not get document URL: " + (err.message || "unknown error"))
+		})
+	}
 	var deadline_updated = ""
 	async function saveDueDate(doc, id, dateStr) {
 		deadline_updated = await frappe.xcall("implementor.api.saveDueDate", { doctype: doc, name: id, dateStr: dateStr })
@@ -1893,6 +1908,53 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			});
 			return
 		};
+		var newtodo = e.target.closest("[data-act='newtodo']");
+
+		if (newtodo) {
+			project_id = newtodo.getAttribute("data-id");
+			var slackId = ""
+			var project = projectsById.get(state.selectedProject);
+			if (project && project.slack_channel_id) {
+				slackId = project.slack_channel_id;
+			}
+			frappe.new_doc("ToDo", { reference_type: "Project", reference_name: project_id, slack_channel_id: slackId, assigned_by: currentUser, allocated_to: currentUser, }, (quick_entry) => {
+				if (!quick_entry || !quick_entry.dialog) {
+					return
+				}
+
+				const dialog = quick_entry.dialog;
+				dialog.set_primary_action(__('Save'), () => {
+					const values = dialog.get_values(true); // true = validate
+
+					frappe.call({
+						method: "frappe.client.insert",
+						args: {
+							doc: {
+								doctype: "ToDo",
+								reference_type: "Project",
+								reference_name: project_id,
+								slack_channel_id: slackId,
+								assigned_by: currentUser,
+								allocated_to: currentUser,
+
+								...values
+							}
+						},
+						callback(r) {
+							if (!r.exc) {
+								frappe.msgprint(__("ToDo Successfully created"));
+								// Optional: refresh your page data here
+								// e.g. load_projects_table(page);
+							}
+							// Important: just hide the dialog, no redirect
+							dialog.hide();
+						}
+					});
+				});
+
+			});
+			return
+		};
 
 		var dots = e.target.closest("[data-act='dots']")
 		if (dots) {
@@ -1933,7 +1995,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		if (copylink) {
 			var doc = copylink.getAttribute("data-doc");
 			var id = copylink.getAttribute("data-id");
-			getCopyUrl(doc, id).then(function (url) {
+			getDocUrl(doc, id).then(function (url) {
 				navigator.clipboard.writeText(url).then(function () {
 					frappe.show_alert({ message: "Link copied to clipboard", indicator: "green" }, 3);
 				})
@@ -2050,10 +2112,38 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		})
 		return response.percent_complete;
 	}
-
+	document.getElementById("d-tasks").addEventListener("input", function (e) {
+		if (e.target && e.target.id === "rb-filter-search-input") {
+			var q = e.target.value.toLowerCase();
+			document.querySelectorAll("#rb-filter-options .filter-opt").forEach(function (opt) {
+				var text = opt.textContent.toLowerCase();
+				opt.style.display = text.includes(q) ? "" : "none";
+			});
+		}
+	});
+	async function handleDeepLink() {
+		var params = new URLSearchParams(window.location.search);
+		var projectId = params.get("project");
+		var taskId = params.get("task");
+		var todoId = params.get("todo");
+		if (!projectId && !taskId && !todoId) return;
+		if (projectId) state.selectedProject = projectId;
+		if (taskId) state.selectedTask = taskId;
+		if (todoId) state.selectToDo = todoId;
+		await loadTasks(state.selectedProject);
+		await loadTodos(state.selectedTask, state.selectedProject);
+		showFilteredProjects();
+		showFilteredTasks();
+		showToDosForSelectedTasks();
+		scrollToSelected();
+		return;
+	}
 
 	document.getElementById("d-tasks").addEventListener("click", function (e) {
 		if (e.target.closest("[data-disabled='true']")) {
+			return;
+		}
+		if (e.target.id === "rb-filter-search-input" || e.target.closest(".rb-filter-search")) {
 			return;
 		}
 		var editname = e.target.closest("[data-act='editname']");
@@ -2460,6 +2550,13 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		selectTask(id)
 	});
 	document.getElementById("d-todos").addEventListener("click", function (e) {
+		var toggledone = e.target.closest("[data-act='toggledone']");
+		if (toggledone) {
+			var id = toggledone.getAttribute("data-id");
+			toggleToDoDone(id)
+			return;
+
+		}
 		if (e.target.closest("[data-disabled='true']")) {
 			return;
 		}
@@ -2740,7 +2837,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		selectToDo(id)
 	});
 	document.addEventListener("click", function (e) {
-		if (state.menu != null && !e.target.closest(".d-menu") && !e.target.closest("[data-act='setcompletedby']") && !e.target.closest("[data-act='setcompletedon']") && !e.target.closest("[data-act='gotodue']") && !e.target.closest("[data-act='dots']")) {
+		if (state.menu != null && !e.target.closest(".d-menu") && !e.target.closest("#rb-filter-search-input") && !e.target.closest("#rb-filter-panel") && !e.target.closest("[data-act='setcompletedby']") && !e.target.closest("[data-act='setcompletedon']") && !e.target.closest("[data-act='gotodue']") && !e.target.closest("[data-act='dots']")) {
 			state.menu = null;
 			showFilteredProjects();
 			showFilteredTasks();
@@ -2840,7 +2937,6 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 				var text = opt.textContent.toLowerCase();
 				opt.style.display = text.includes(q) ? "" : "none";
 			})
-
 		}
 	});
 	document.getElementById("colfilter-tasks").addEventListener("input", function (e) {
@@ -3718,16 +3814,19 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			}
 			else if (state.menu.mode === "changecompletedby") {
 				menuHtml = `
-	<div class="d-menu">
-		<div class="d-hd" style="background:transparent; border:none; padding:0 0 8px">Completed by</div>
-		<div class="filter-values-wrap scrollable">
-			<div class="filter-opt ${!task.completed_by ? "on" : ""}" data-act="savecompletedby" data-id="${task.id}" data-value="">Unassigned</div>
-			${TaskLeadOptions.map(function (u) {
+<div class="d-menu">
+    <div class="rb-filter-search">
+            ${frappe.utils.icon("search", "xs")}
+        <input id="rb-filter-search-input" placeholder="Search" />
+    </div>
+    <div class="rb-filter-options filter-values-wrap scrollable" id="rb-filter-options">
+        <div class="filter-opt ${!task.completed_by ? "on" : ""}" data-act="savecompletedby" data-id="${task.id}" data-value="">Unassigned</div>
+        ${TaskLeadOptions.map(function (u) {
 					return `<div class="filter-opt ${task.completed_by === u ? "on" : ""}" data-act="savecompletedby" data-id="${task.id}" data-value="${u}">${u}</div>`;
 				}).join("")}
-		</div>
-	</div>
-	`;
+    </div>
+</div>
+`;
 			}
 			else {
 				menuHtml = `
@@ -3910,7 +4009,10 @@ ${(task.due && task.status !== "Completed") ? propertyRow("Due Date",
 		return `
 <div class="d-row lvl-todo ${todo.id === state.selectToDo ? 'sel' : ''}" data-todo-id=${todo.id}>
     <div style="flex:1; min-width:0">
-        <div class="card-title" style="${textStyle}">${icon} ${todo.name}</div>
+        <div class="card-title" style="${textStyle}">
+		<span data-act="toggledone" data-id="${todo.id}" style="cursor:pointer">${icon}</span>
+		${todo.name}
+		</div>
 
         <div style="display:flex; gap:4px; flex-wrap:wrap; margin:8px 0">
             ${chip(todo.status)}
@@ -4211,6 +4313,7 @@ ${(task.due && task.status !== "Completed") ? propertyRow("Due Date",
 			renderEmergencyPanel();
 			loadFlatpickr();
 			renderPersonFilter();
+			await handleDeepLink();
 		} catch (err) {
 			console.error("Board init failed:", err);
 			frappe.msgprint("Something went wrong loading the board. Please refresh the page.");
