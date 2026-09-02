@@ -4167,7 +4167,6 @@ ${(task.due && task.status !== "Completed") ? propertyRow("Due Date",
 				module: r.imp_module
 			};
 		});
-		console.log(testTasks)
 		tasksById = new Map(testTasks.map(t => [t.id, t]));
 		showFilteredTasks();
 
@@ -4261,10 +4260,10 @@ ${(task.due && task.status !== "Completed") ? propertyRow("Due Date",
 			var payload = state.renamePopupOpen;
 			var doc = payload.doctype;
 			var id = payload.id;
-			frappe.xcall("implementor.api.rename_doc", {
+			frappe.xcall("implementor.api.update_display_name", {
 				doctype: doc,
-				id: id,
-				name: newName
+				name: id,
+				new_name: newName
 			})
 			if (doc === "Project") {
 				item = projectsById.get(id)

@@ -288,16 +288,28 @@ def get_doc_url(doc=None,id=None):
     url = frappe.utils.get_url(f"/app/{doc_lowerCase}/{id}")
     return url
 @frappe.whitelist()
-def rename_doc(doctype,id,name):
-    if not doctype or not id or not name:
-        frappe.throw("doctype,id,name are requried")
-    name=name.strip()
-    if not name:
-        frappe.throw("name is required..")
-    if not frappe.has_permission(doctype, "write", id):
-        frappe.throw("Not permitted", frappe.PermissionError)
-    new_name = frappe.rename_doc(doctype,id,name,force=True)
-    return new_name
+def update_display_name(doctype, name, new_name):
+	if doctype not in ("Project", "Task", "ToDo"):
+		frappe.throw(f"Renaming is only supported on Project, Task, or ToDo, not {doctype}")
+
+	if not new_name or not new_name.strip():
+		frappe.throw("Name cannot be empty")
+	new_name = new_name.strip()
+
+	if not frappe.db.exists(doctype, name):
+		frappe.throw(f"{doctype} {name} does not exist")
+
+	if not frappe.has_permission(doctype, "write", name):
+		frappe.throw("Not permitted", frappe.PermissionError)
+
+	fieldname = {
+		"Project": "project_name",
+		"Task": "subject",
+		"ToDo": "description",
+	}[doctype]
+
+	frappe.db.set_value(doctype, name, fieldname, new_name)
+	return {"doctype": doctype, "name": name, "new_name": new_name}
 
 @frappe.whitelist()
 def get_tasks(project=None):
