@@ -11,7 +11,8 @@ fixtures = [
     "Role Profile",
     {"dt": "Custom Field", "filters": [["dt", "in", ["Project", "Task", "ToDo", "User", "Customer", "Employee","Notification Log"]]]},
     {"dt": "Report", "filters": [["module", "=", "Implementor"]]},
-	    {"dt": "Workflow", "filters": [["document_type", "in", ["Project", "Task", "ToDo"]]]},
+	{"dt": "Workflow", "filters": [["document_type", "in", ["Project", "Task", "ToDo"]]]},
+	{"dt": "Server Script", "filters": [["module", "=", "Implementor"]]},
 
 ]
 # Apps

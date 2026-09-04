@@ -623,14 +623,14 @@ def set_division(task, division):
     if not frappe.has_permission("Task", "write", task):
         frappe.throw("Not permitted", frappe.PermissionError)
 
-    lead = frappe.db.get_value(
-        "User", {"imp_division": division}, "name"
-    )
+    # lead = frappe.db.get_value(
+    #     "User", {"imp_division": division}, "name"
+    # )
     doc = frappe.get_doc("Task", task)
     doc.imp_division = division
-    doc.custom_division_lead = lead
+    # doc.custom_division_lead = lead
     doc.save()
-    return {"division": division, "lead": lead}
+    return {"division": division}
 
 @frappe.whitelist()
 def assign_todo(todo, user):
