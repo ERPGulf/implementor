@@ -173,14 +173,14 @@ has_permission = {
 # }
 
 doc_events = {
-	"ToDo": {
-		"after_insert": "implementor.rollup.on_todo",
-		"on_update": "implementor.rollup.on_todo",
-		"on_trash": "implementor.rollup.on_todo",
-	},
-	"Task": {
-		"on_update": "implementor.rollup.on_task",
-	},
+	# "ToDo": {
+	# 	"after_insert": "implementor.rollup.on_todo",
+	# 	"on_update": "implementor.rollup.on_todo",
+	# 	"on_trash": "implementor.rollup.on_todo",
+	# },
+	# "Task": {
+	# 	"on_update": "implementor.rollup.on_task",
+	# },
 	"Employee": {
         "on_update": "implementor.implementor.auth.create_qr_code",
         "on_trash": "implementor.implementor.auth.delete_qr_code_file"
