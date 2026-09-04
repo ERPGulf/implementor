@@ -9,10 +9,108 @@ import requests
 from frappe import _
 from pyqrcode import create as qr_create
 from werkzeug.wrappers import Response
+import frappe
+
+
+def is_admin(user=None):
+    user = user or frappe.session.user
+    return user == "Administrator" or "System Manager" in frappe.get_roles(user)
+def get_task_permission_query_conditions(user=None):
+    user = user or frappe.session.user
+    if is_admin(user):
+        return ""
+    u = frappe.db.escape(user)
+    return f"""(
+        `tabTask`.`owner` = {u}
+        OR `tabTask`.`custom_assigned_by` = {u}
+        OR `tabTask`.`custom_division_lead` = {u}
+        OR `tabTask`.`completed_by` = {u}
+    )"""
+def has_task_permission(doc, user=None, permission_type=None):
+    user = user or frappe.session.user
+    if is_admin(user):
+        return True
+    return user in {doc.owner, doc.custom_assigned_by, doc.custom_division_lead}
+
+# ---------------- PROJECT (read-only, derived from Task + ToDo) ----------------
+
+def get_project_permission_query_conditions(user=None):
+    user = user or frappe.session.user
+    if is_admin(user):
+        return ""
+    u = frappe.db.escape(user)
+    return f"""(
+        `tabProject`.`name` in (
+            select distinct `project` from `tabTask`
+            where `tabTask`.`project` is not null
+            and (
+                `tabTask`.`owner` = {u}
+                or `tabTask`.`custom_assigned_by` = {u}
+                or `tabTask`.`custom_division_lead` = {u}
+                OR `tabTask`.`completed_by` = {u}
+            )
+        )
+        or `tabProject`.`name` in (
+            select distinct `reference_name` from `tabToDo`
+            where `tabToDo`.`reference_type` = 'Project'
+            and (
+                `tabToDo`.`allocated_to` = {u}
+                or `tabToDo`.`assigned_by` = {u}
+            )
+        )
+    )"""
+
+def has_project_permission(doc, user=None, permission_type=None):
+    user = user or frappe.session.user
+    if is_admin(user):
+        return True
+
+    if permission_type and permission_type != "read":
+        return False  # non-admins never get write/create/delete on Project
+
+    via_task = frappe.get_all(
+        "Task",
+        filters={"project": doc.name},
+        or_filters=[
+            ["owner", "=", user],
+            ["custom_assigned_by", "=", user],
+            ["custom_division_lead", "=", user],
+            ["completed_by", "=", user],
+        ],
+        limit=1,
+    )
+    if via_task:
+        return True
+
+    via_todo = frappe.get_all(
+        "ToDo",
+        filters={"reference_type": "Project", "reference_name": doc.name},
+        or_filters=[
+            ["allocated_to", "=", user],
+            ["assigned_by", "=", user],
+        ],
+        limit=1,
+    )
+    return bool(via_todo)
+def get_todo_permission_query_conditions(user=None):
+    user = user or frappe.session.user
+    if is_admin(user):
+        return ""
+    u = frappe.db.escape(user)
+    return f"""(
+        `tabToDo`.`owner` = {u}
+        OR `tabToDo`.`assigned_by` = {u}
+        OR `tabToDo`.`allocated_to` = {u}
+    )"""
+def has_todo_permission(doc, user=None, permission_type=None):
+    user = user or frappe.session.user
+    if is_admin(user):
+        return True
+    return user in {doc.allocated_to, doc.assigned_by}
+
+
 
 AUTH_ERROR = _("Authentication failed")
-
-
 def log_activity(subject, status, user=None):
     """Write a debug entry to Activity Log, swallowing any insert errors."""
     try:
