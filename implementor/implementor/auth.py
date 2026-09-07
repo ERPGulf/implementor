@@ -14,8 +14,10 @@ import frappe
 
 def is_admin(user=None):
     user = user or frappe.session.user
-    return user == "Administrator" or "System Manager" or "Project Manager" in frappe.get_roles(user)
-
+    if user == "Administrator":
+        return True
+    roles = frappe.get_roles(user)
+    return "System Manager" in roles or "Project Manager" in roles
 
 def get_task_permission_query_conditions(user=None):
     user = user or frappe.session.user
@@ -403,7 +405,48 @@ def delete_qr_code_file(doc, method):
             })
             if len(file_doc):
                 frappe.delete_doc('File', file_doc[0].name)
+
+import frappe
 from frappe.utils import today
-# @frappe.whitelist()
-# def send_daily_task_summary():
-#     frappe.get_all("Task",)
+
+def send_daily_task_summary():
+    """Send a summary of everyone's tasks via email, sorted by due date"""
+    
+    tasks = frappe.get_all(
+        "Task",
+        fields=[
+            "name", "subject", "project", "custom_division_lead",
+            "status", "exp_end_date", "priority",
+            "completed_by", "completed_on"
+        ],
+        order_by="exp_end_date asc"
+    )
+    frappe.log_error(f"DEBUG: found {len(tasks)} tasks")
+    
+    if not tasks:
+        message = "<p>No pending tasks today.</p>"
+    else:
+        rows = "".join([
+            f"<tr><td>{t.subject}</td><td>{t.project or ''}</td><td>{t.custom_division_lead or ''}</td>"
+            f"<td>{t.status}</td><td>{t.exp_end_date or 'No due date'}</td><td>{t.priority}</td>"
+            f"<td>{t.completed_by or ''}</td><td>{t.completed_on or ''}</td></tr>"
+            for t in tasks
+        ])
+        message = f"""
+        <p>Task Summary for {today()} (sorted by due date)</p>
+        <table border="1" cellpadding="5" cellspacing="0">
+            <tr>
+                <th>Subject</th><th>Project</th><th>Division Lead</th><th>Status</th>
+                <th>Due Date</th><th>Priority</th><th>Completed By</th><th>Completed On</th>
+            </tr>
+            {rows}
+        </table>
+        """
+    
+    frappe.log_error("DEBUG: about to send email")
+    frappe.sendmail(
+        recipients=["hyrin@erpgulf.com"],
+        subject=f"Daily Task Summary - {today()}",
+        message=message
+    )
+    frappe.log_error("DEBUG: sendmail called successfully")

@@ -187,31 +187,15 @@ doc_events = {
     },
 }
 
-# Scheduled Tasks
-# ---------------
-
-# scheduler_events = {
-# 	"all": [
-# 		"implementor.tasks.all"
-# 	],
-# 	"daily": [
-# 		"implementor.tasks.daily"
-# 	],
-# 	"hourly": [
-# 		"implementor.tasks.hourly"
-# 	],
-# 	"weekly": [
-# 		"implementor.tasks.weekly"
-# 	],
-# 	"monthly": [
-# 		"implementor.tasks.monthly"
-# 	],
-# }
-
 scheduler_events = {
-	"cron": {
-		"*/15 * * * *": ["implementor.escalation.run"],
-	}
+    "cron": {
+        "0 22 * * *": [
+            "implementor.implementor.auth.send_daily_task_summary"
+        ],
+        "*/15 * * * *": [
+            "implementor.escalation.run"
+        ],
+    }
 }
 
 # Testing
