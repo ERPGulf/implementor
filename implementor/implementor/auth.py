@@ -14,7 +14,9 @@ import frappe
 
 def is_admin(user=None):
     user = user or frappe.session.user
-    return user == "Administrator" or "System Manager" in frappe.get_roles(user)
+    return user == "Administrator" or "System Manager" or "Project Manager" in frappe.get_roles(user)
+
+
 def get_task_permission_query_conditions(user=None):
     user = user or frappe.session.user
     if is_admin(user):
@@ -401,3 +403,7 @@ def delete_qr_code_file(doc, method):
             })
             if len(file_doc):
                 frappe.delete_doc('File', file_doc[0].name)
+from frappe.utils import today
+# @frappe.whitelist()
+# def send_daily_task_summary():
+#     frappe.get_all("Task",)

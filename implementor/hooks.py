@@ -18,13 +18,12 @@ fixtures = [
 permission_query_conditions = {
 	    "Task": "implementor.implementor.auth.get_task_permission_query_conditions",
 		"ToDo": "implementor.implementor.auth.get_todo_permission_query_conditions",
-		"Project": "implementor.implementor.auth.get_project_permission_query_conditions",
 
 }
 has_permission = {
     "Task": "implementor.implementor.auth.has_task_permission",
     "ToDo": "implementor.implementor.auth.has_todo_permission",
-    "Project": "implementor.implementor.auth.has_project_permission"
+    # "Project": "implementor.implementor.auth.has_project_permission"
 }
 # Apps
 # ------------------
