@@ -17,7 +17,7 @@ def is_admin(user=None):
     if user == "Administrator":
         return True
     roles = frappe.get_roles(user)
-    return "System Manager" in roles or "Project Manager" in roles
+    return "System Manager" in roles or "Project Overseer" in roles
 
 def get_task_permission_query_conditions(user=None):
     user = user or frappe.session.user
@@ -445,7 +445,7 @@ def send_daily_task_summary():
     
     frappe.log_error("DEBUG: about to send email")
     frappe.sendmail(
-        recipients=["hyrin@erpgulf.com"],
+        recipients=["farook@erpgulf.com"],
         subject=f"Daily Task Summary - {today()}",
         message=message
     )
