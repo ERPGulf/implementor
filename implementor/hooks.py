@@ -5,16 +5,16 @@ app_description = "Implementor"
 app_email = "support@erpgulf.com"
 app_license = "mit"
 
+fixtures = []
+# fixtures = [
+#     "Role",
+#     "Role Profile",
+#     {"dt": "Custom Field", "filters": [["dt", "in", ["Project", "Task", "ToDo", "User", "Customer", "Employee","Notification Log"]]]},
+#     {"dt": "Report", "filters": [["module", "=", "Implementor"]]},
+# 	{"dt": "Workflow", "filters": [["document_type", "in", ["Project", "Task", "ToDo"]]]},
+# 	{"dt": "Server Script", "filters": [["module", "=", "Implementor"]]},
 
-fixtures = [
-    "Role",
-    "Role Profile",
-    {"dt": "Custom Field", "filters": [["dt", "in", ["Project", "Task", "ToDo", "User", "Customer", "Employee","Notification Log"]]]},
-    {"dt": "Report", "filters": [["module", "=", "Implementor"]]},
-	{"dt": "Workflow", "filters": [["document_type", "in", ["Project", "Task", "ToDo"]]]},
-	{"dt": "Server Script", "filters": [["module", "=", "Implementor"]]},
-
-]
+# ]
 permission_query_conditions = {
 	    "Task": "implementor.implementor.auth.get_task_permission_query_conditions",
 		"ToDo": "implementor.implementor.auth.get_todo_permission_query_conditions",
@@ -171,33 +171,45 @@ has_permission = {
 # 	# }
 # }
 
-doc_events = {
-	# "ToDo": {
-	# 	"after_insert": "implementor.rollup.on_todo",
-	# 	"on_update": "implementor.rollup.on_todo",
-	# 	"on_trash": "implementor.rollup.on_todo",
-	# },
-	# "Task": {
-	# 	"on_update": "implementor.rollup.on_task",
-	# },
-	"Employee": {
-        "on_update": "implementor.implementor.auth.create_qr_code",
-        "on_trash": "implementor.implementor.auth.delete_qr_code_file"
+# doc_events = {
+# 	# "ToDo": {
+# 	# 	"after_insert": "implementor.rollup.on_todo",
+# 	# 	"on_update": "implementor.rollup.on_todo",
+# 	# 	"on_trash": "implementor.rollup.on_todo",
+# 	# },
+# 	# "Task": {
+# 	# 	"on_update": "implementor.rollup.on_task",
+# 	# },
+# 	"Employee": {
+#         "on_update": "implementor.implementor.auth.create_qr_code",
+#         "on_trash": "implementor.implementor.auth.delete_qr_code_file"
 
-    },
-}
-
+#     },
+# }
 scheduler_events = {
     "cron": {
-        "0 22 * * *": [
-            "implementor.implementor.auth.send_daily_task_summary"
+        "*/2 * * * *": [
+            "implementor.implementor.auth.send_daily_task_summary",
+            "implementor.implementor.auth.send_weekly_task_summary"
         ],
-        "*/15 * * * *": [
-            "implementor.escalation.run"
-        ],
+        # "*/15 * * * *": [
+        #     "implementor.escalation.run"
+        # ],
     }
 }
-
+# scheduler_events = {
+#     "cron": {
+#         "0 22 * * *": [
+#             "implementor.implementor.auth.send_daily_task_summary"
+#         ],
+#         "0 22 * * 0": [
+#             "implementor.implementor.auth.send_weekly_task_summary"
+#         ],
+#         "*/15 * * * *": [
+#             "implementor.escalation.run"
+#         ],
+#     }
+# }
 # Testing
 # -------
 

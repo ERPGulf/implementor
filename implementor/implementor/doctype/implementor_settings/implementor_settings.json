@@ -7,7 +7,11 @@
  "engine": "InnoDB",
  "field_order": [
   "last_technical_assignee",
-  "slack_b_token"
+  "slack_b_token",
+  "recipient_for_daily_task_summary",
+  "recipient_for_weeklytask_summary",
+  "daily_summary_template",
+  "weekly_summary_template"
  ],
  "fields": [
   {
@@ -19,13 +23,37 @@
    "fieldname": "slack_b_token",
    "fieldtype": "Data",
    "label": "Slack - Bearer Token"
+  },
+  {
+   "fieldname": "recipient_for_daily_task_summary",
+   "fieldtype": "Table MultiSelect",
+   "label": "Recipient for Daily Task Summary",
+   "options": "Task Summary Recipient"
+  },
+  {
+   "fieldname": "recipient_for_weeklytask_summary",
+   "fieldtype": "Table MultiSelect",
+   "label": "Recipient for WeeklyTask Summary",
+   "options": "Task Summary Recipient"
+  },
+  {
+   "fieldname": "daily_summary_template",
+   "fieldtype": "Link",
+   "label": "Daily summary Template",
+   "options": "Email Template"
+  },
+  {
+   "fieldname": "weekly_summary_template",
+   "fieldtype": "Link",
+   "label": "Weekly summary Template",
+   "options": "Email Template"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "issingle": 1,
  "links": [],
- "modified": "2026-08-05 06:39:52.972966",
+ "modified": "2026-09-08 09:47:18.063922",
  "modified_by": "Administrator",
  "module": "Implementor",
  "name": "Implementor Settings",

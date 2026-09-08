@@ -3,6 +3,10 @@ import io
 import json
 import os
 from base64 import b64encode
+import frappe
+from frappe.utils import today, get_url
+from frappe.email.doctype.email_template.email_template import get_email_template
+from frappe.utils.pdf import get_pdf
 
 import frappe
 import requests
@@ -406,13 +410,20 @@ def delete_qr_code_file(doc, method):
             if len(file_doc):
                 frappe.delete_doc('File', file_doc[0].name)
 
-import frappe
-from frappe.utils import today
 
-def send_daily_task_summary():
-    """Send a summary of everyone's tasks via email, sorted by due date"""
-    
-    tasks = frappe.get_all(
+def _get_recipients(user_list):
+    """Convert a list of User names into a list of valid emails"""
+    if not user_list:
+        return []
+    return frappe.get_all(
+        "User",
+        filters={"name": ["in", user_list]},
+        pluck="email"
+    )
+
+
+def _get_tasks():
+    return frappe.get_all(
         "Task",
         fields=[
             "name", "subject", "project", "custom_division_lead",
@@ -421,32 +432,56 @@ def send_daily_task_summary():
         ],
         order_by="exp_end_date asc"
     )
-    frappe.log_error(f"DEBUG: found {len(tasks)} tasks")
-    
-    if not tasks:
-        message = "<p>No pending tasks today.</p>"
+
+
+def _send_summary(period_label, recipients_field, template_field):
+    """Shared logic for daily/weekly task summary, sent as PDF attachment"""
+
+    settings = frappe.get_single("Implementor Settings")
+
+    recipient_users = [row.user for row in settings.get(recipients_field) or []]
+    if not recipient_users:
+        frappe.log_error(f"DEBUG: No recipients configured for {period_label} task summary")
+        return
+
+    recipients = _get_recipients(recipient_users)
+    if not recipients:
+        frappe.log_error(f"DEBUG: No valid emails found for {period_label} recipients")
+        return
+
+    tasks = _get_tasks()
+    frappe.log_error(f"DEBUG: found {len(tasks)} tasks for {period_label} summary")
+
+    template_name = settings.get(template_field)
+    if template_name:
+        rendered = get_email_template(template_name, {"tasks": tasks})
+        subject = rendered.get("subject")
+        html_body = rendered.get("message")
     else:
-        rows = "".join([
-            f"<tr><td>{t.subject}</td><td>{t.project or ''}</td><td>{t.custom_division_lead or ''}</td>"
-            f"<td>{t.status}</td><td>{t.exp_end_date or 'No due date'}</td><td>{t.priority}</td>"
-            f"<td>{t.completed_by or ''}</td><td>{t.completed_on or ''}</td></tr>"
-            for t in tasks
-        ])
-        message = f"""
-        <p>Task Summary for {today()} (sorted by due date)</p>
-        <table border="1" cellpadding="5" cellspacing="0">
-            <tr>
-                <th>Subject</th><th>Project</th><th>Division Lead</th><th>Status</th>
-                <th>Due Date</th><th>Priority</th><th>Completed By</th><th>Completed On</th>
-            </tr>
-            {rows}
-        </table>
-        """
-    
-    frappe.log_error("DEBUG: about to send email")
+        subject = f"{period_label.capitalize()} Task Summary - {today()}"
+        html_body = "<p>No template configured.</p>"
+
+    # Generate PDF from the rendered HTML
+    pdf_content = get_pdf(html_body)
+
+    # Send a short email with the PDF attached
     frappe.sendmail(
-        recipients=["farook@erpgulf.com"],
-        subject=f"Daily Task Summary - {today()}",
-        message=message
+        recipients=recipients,
+        subject=subject,
+        message=f"<p>Please find attached the {period_label} task summary.</p>",
+        attachments=[{
+            "fname": f"{period_label}_task_summary_{today()}.pdf",
+            "fcontent": pdf_content
+        }]
     )
-    frappe.log_error("DEBUG: sendmail called successfully")
+    frappe.log_error(f"DEBUG: {period_label} summary PDF sent successfully")
+
+
+def send_daily_task_summary():
+    """Send daily task summary as a PDF attachment"""
+    _send_summary("daily", "recipient_for_daily_task_summary", "daily_summary_template")
+
+
+def send_weekly_task_summary():
+    """Send weekly task summary as a PDF attachment"""
+    _send_summary("weekly", "recipient_for_weeklytask_summary", "weekly_summary_template")
