@@ -293,7 +293,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			var mineOnly = !state.mineOnly || isMine(task.lead, currentUser) || isMine(task.assigned_by, currentUser) || isMine(task.completed, currentUser)
 			var match_project = state.selectedProject === null || task.project == state.selectedProject;
 			var match_pct = pct(task) >= state.minPct && pct(task) <= state.maxPct;
-			var match_name = state.selectedProject ? true : (state.namedFilter === "" || (task.name || "").toLowerCase().includes(state.namedFilter.toLowerCase()));
+			var match_name = state.namedFilter === "" || (task.name || "").toLowerCase().includes(state.namedFilter.toLowerCase());  // ✅ fixed
 			var match_urgency = state.urgencyFilter === "" || task.urgency == state.urgencyFilter;
 			var match_person = matchesPerson(state.personFilter, task.lead, task.assigned_by, task.completed_by);
 			var match_div = state.taskDivFilter === "" || state.taskDivFilter === (task.div || "");
@@ -343,23 +343,37 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		document.getElementById("d-todos").innerHTML = renderToDosColumn(sorted);
 	}
 
-	function selectProject(id) {
+	async function selectProject(id) {
 		state.selectedProject = id;
 		state.selectedTask = null;
 		state.selectToDo = null;
-		loadTasks(id);
-		loadTodos(undefined, id);
-		showFilteredProjects();
+		state.namedFilter = "";
+		document.getElementById("f-name").value = "";
+
+		showFilteredProjects();   // safe — projects list is already loaded, just re-filtering/highlighting selection
+
+		await Promise.all([
+			loadTasks(id),                 // will render tasks itself once data arrives
+			loadTodos(undefined, id)       // will render todos itself once data arrives
+		]);
 	};
-	function selectTask(id) {
+
+	async function selectTask(id) {
 		state.selectedTask = id;
 		state.selectToDo = null;
-		showFilteredTasks();
-		loadTodos(id);
+		state.namedFilter = "";
+		document.getElementById("f-name").value = "";
+
+		showFilteredTasks();   // safe — tasks list is already loaded for this project, just re-filtering/highlighting selection
+
+		await loadTodos(id);   // will render todos itself once data arrives
 	};
+
 	function selectToDo(id) {
 		state.selectToDo = id;
-		showToDosForSelectedTasks();
+		state.namedFilter = "";
+		document.getElementById("f-name").value = "";
+		showToDosForSelectedTasks();   // safe — todos already loaded, just re-filtering/highlighting selection
 		return;
 	}
 	async function toggleToDoDone(id) {
@@ -2194,11 +2208,11 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			if (!task) return;
 
 			var wasClosed = task.closed;
-			var wasStage = task.status;
+			var wasStage = task.custom_delivery_status;
 
 			var willClose = !task.closed;
 			task.closed = willClose;
-			task.status = willClose ? "Closed" : "Open";
+			task.custom_delivery_status = willClose ? "Closed" : "Open";
 
 			state.menu = null;
 			showFilteredTasks();
@@ -2209,7 +2223,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 				closed: willClose ? 1 : 0
 			}).catch(function (err) {
 				task.closed = wasClosed;
-				task.status = wasStage;
+				task.custom_delivery_status = wasStage;
 				showFilteredTasks();
 				frappe.msgprint("Could not update task: " + (err.message || "unknown error"));
 			});
@@ -3625,8 +3639,8 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			{ act: "deletedoc", color: "var(--text-danger)", icon: "trash", label: "Delete Task", doc: "Task", perm: "delete" },
 			{
 				act: "closetask",
-				icon: task.status === "Closed" ? "unlock" : "lock",
-				label: task.status === "Closed" ? "Reopen Task" : "Close Task",
+				icon: task.custom_delivery_status === "Closed" ? "unlock" : "lock",
+				label: task.custom_delivery_status === "Closed" ? "Reopen Task" : "Close Task",
 				perm: "write"
 			}
 		];
@@ -3732,6 +3746,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 
         <div style="display:flex; gap:4px; flex-wrap:wrap; margin-bottom:8px">
             ${chip(project.status)}
+			${chip(project.stage)}
         </div>
 
         ${prog(project.percent_complete)}
@@ -3927,9 +3942,8 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
         <div class="card-subtitle">${projectsById.get(task.project)?.name || task.project || "No project linked"}</div>
 
         <div style="display:flex; gap:4px; flex-wrap:wrap; margin-bottom:8px">
-            ${chip(task.stage)}
             ${chip(task.status)}
-            ${urg(task.urgency)}
+			${chip(task.custom_delivery_status)}
         </div>
 
         <div style="display:flex; gap:4px; flex-wrap:wrap; margin-bottom:8px">
@@ -3944,12 +3958,6 @@ ${(task.due && task.status !== "Completed") ? propertyRow("Due Date",
             ${propertyRow("Assigned By", personValue(task.assigned_by))}
             ${propertyRow("Division", `<span>${task.div || "—"}</span>`)}
         </div>
-
-        ${task.creation ? `
-        <div class="card-meta-item" style="color:var(--text-accent); margin-top:6px">
-            ${frappe.utils.icon("clock", "xs")} ${task.status} since ${fmtDate(task.creation)}
-        </div>
-        ` : ""}
 
         ${task.status === "Completed" ? `
         <div style="display:flex; gap:6px; margin-top:8px; padding-top:8px; border-top:1px solid var(--surface-1); flex-wrap:wrap">
@@ -4169,6 +4177,7 @@ ${(task.due && task.status !== "Completed") ? propertyRow("Due Date",
 				name: r.title,
 				client: r.client,
 				status: r.del_status,
+				stage: r.imp_current_stage,
 				pm: r.pm,
 				percent: r.percent,
 				description: r.description,
@@ -4269,6 +4278,7 @@ ${(task.due && task.status !== "Completed") ? propertyRow("Due Date",
 				completed_by: r.completed_by,
 				project: r.project || projectId,
 				name: r.title,
+				custom_delivery_status: r.custom_delivery_status,
 				assigned_by: r.assigned_by,
 				description: r.description,
 				stage: r.stage,

@@ -191,7 +191,7 @@ def get_projects(limit=20, offset=0,filters=None,search=None):
         "Project",
         filters=filters,
         fields=[
-            "name","custom_pinned as pinned","custom_close_project as close_project", "project_name as title", "customer as client",
+            "name","imp_current_stage","custom_pinned as pinned","custom_close_project as close_project", "project_name as title", "customer as client",
             "imp_status as del_status", "imp_project_manager as pm",
             "imp_percent as percent", "imp_deadline as deadline",
             "notes as description","slack_channel_id", "whatsapp_channel_id", "percent_complete" 
@@ -359,7 +359,7 @@ def get_tasks(project=None,limit=30, offset=0):
         fields=[
             "name","custom_pinned as pinned","custom_close_task as close_task",  "subject as title", "project", "imp_stage as stage",
             "imp_division as division","custom_assigned_by as assigned_by",
-            "custom_delivery_status as status", "imp_urgency as urgency", "progress as percent",
+            "status","custom_delivery_status", "imp_urgency as urgency", "progress as percent",
             "imp_deadline as deadline", "custom_division_lead as lead","imp_started_on as started_on",
             "imp_doing as doing", "imp_escalated as escalated",
             "description", "_assign", "slack_channel_id", "whatsapp_channel_id", "completed_on", "completed_by","custom_module","imp_module"
@@ -603,8 +603,10 @@ def set_status(doctype, name, status):
     doc.status = status if doctype != "Project" else doc.status
     if doctype == "Project":
         doc.imp_status = status
-    else:
+    elif doctype == "Task":
         doc.status = status
+    else:
+        doc.status=status
     doc.save()
     return doc.as_dict()
 
