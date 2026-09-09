@@ -8,6 +8,13 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 	var PROJECTS_PAGE_SIZE = 50;
 	var projectsOffsets = 0;
 	var projectsHasMore = true;
+	var TASKS_PAGE_SIZE = 30;
+	var tasksOffset = 0;
+	var tasksHasMore = true;
+
+	var TODOS_PAGE_SIZE = 30;
+	var todosOffset = 0;
+	var todosHasMore = true;
 	var assignees = [];
 	var urgency_options = [];
 	var todo_status_options = [];
@@ -40,20 +47,28 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 	var dashboardData = null;
 	var notifications = null;
 	var currentUser = frappe.session.user;
-	var project_menu_actions = [
-		{ act: "editname", icon: "square-pen", label: "Change Project Name" },
-		{ act: "gotostatus", icon: "circle-dot", label: "Change status", perm: "write" },
-		{ act: "changepm", icon: "user-check", label: "Change project manager", perm: "write" },
-		{ act: "gotodue", icon: "calendar-days", label: "Change Due Date", perm: "write" },
-		{ act: "newtask", icon: "plus", label: "Add Task", perm: "create:Task" },
-		{ act: "newtodo", icon: "plus", label: "Add Todo", perm: "create:ToDo" },
-		{ act: "copylink", icon: "copy", label: "Copy link", doc: "Project" },
-		{ act: "sendslackdm", icon: "send", label: "Send to Slack direct message", doc: "Project" },
-		{ act: "sendslackchannel", icon: "send", label: "Send to Slack Channel", doc: "Project" },
-		{ act: "addpaymentmilestone", icon: "wallet", label: "Add Payment Milestone", doc: "Project", perm: "write" },
-		{ act: "sendwhatsapp", icon: "send", label: "Send to WhatsApp", doc: "Project" },
-		{ act: "deletedoc", color: "var(--text-danger)", icon: "trash", label: "Delete Project", doc: "Project", perm: "delete" },
-	];
+	function getProjectMenuActions(project) {
+		return [
+			{ act: "editname", icon: "square-pen", label: "Change Project Name" },
+			{ act: "gotostatus", icon: "circle-dot", label: "Change status", perm: "write" },
+			{ act: "changepm", icon: "user-check", label: "Change project manager", perm: "write" },
+			{ act: "gotodue", icon: "calendar-days", label: "Change Due Date", perm: "write" },
+			{ act: "newtask", icon: "plus", label: "Add Task", perm: "create:Task" },
+			{ act: "newtodo", icon: "plus", label: "Add Todo", perm: "create:ToDo" },
+			{ act: "copylink", icon: "copy", label: "Copy link", doc: "Project" },
+			{ act: "sendslackdm", icon: "send", label: "Send to Slack direct message", doc: "Project" },
+			{ act: "sendslackchannel", icon: "send", label: "Send to Slack Channel", doc: "Project" },
+			{ act: "addpaymentmilestone", icon: "wallet", label: "Add Payment Milestone", doc: "Project", perm: "write" },
+			{ act: "sendwhatsapp", icon: "send", label: "Send to WhatsApp", doc: "Project" },
+			{ act: "deletedoc", color: "var(--text-danger)", icon: "trash", label: "Delete Project", doc: "Project", perm: "delete" },
+			{
+				act: "closeproject",
+				icon: project.status === "Closed" ? "unlock" : "lock",
+				label: project.status === "Closed" ? "Reopen Project" : "Close Project",
+				perm: "write"
+			}
+		];
+	}
 
 	var project_filters_fields = [{
 		"field": "status", "label": "Delivery Status", "icon": "circle-dot"
@@ -650,6 +665,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 				<div id="colfilter-tasks" class="rb-filter-panel" style="display:none;"></div>
 				</div>
 				<div id="d-tasks"></div>
+				<button id="btn-load-more-tasks" class="d-info" style="width:100%; margin-top:8px;">Load more</button>
 			</div>
 			<div>
 				<div id="h-todos" class="d-hd">
@@ -661,6 +677,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 				<div id="colfilter-todos" class="rb-filter-panel" style="display:none;"></div>
 				</div>
 				<div id="d-todos"></div>
+				<button id="btn-load-more-todos" class="d-info" style="width:100%; margin-top:8px;">Load more</button>
 			</div>
 		</div>
 		<div id="drawer" style="display:none;"></div>
@@ -809,7 +826,8 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 				attachments: r.attachments,
 				slack_channel_id: r.slack_channel_id,
 				percent_complete: r.percent_complete,
-				whatsapp_channel_id: r.whatsapp_channel_id
+				whatsapp_channel_id: r.whatsapp_channel_id,
+				closed: !!r.close_project,
 			};
 		});
 
@@ -1279,8 +1297,10 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			return;
 		}
 		var canCreateProject = frappe.model.can_create("Project");
-		var canCreateTask = frappe.model.can_create("Task");
-		var canCreateToDo = frappe.model.can_create("ToDo");
+		var selectedProjectClosed = state.selectedProject && projectsById.get(state.selectedProject)?.closed;
+		var selectedTaskClosed = state.selectedTask && tasksById.get(state.selectedTask)?.closed;
+		var canCreateTask = frappe.model.can_create("Task") && !selectedProjectClosed;
+		var canCreateToDo = frappe.model.can_create("ToDo") && !selectedTaskClosed;
 		el.style.display = "block";
 		el.innerHTML = `
     <div class="d-act ${canCreateProject ? '' : 'd-act-disabled'}" data-act="newproject" ${canCreateProject ? '' : 'data-disabled="true"'}><div>${frappe.utils.icon("folder-plus", "sm")} </div> New project</div>
@@ -1753,6 +1773,30 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 	document.getElementById("d-projects").addEventListener("click", function (e) {
 		if (e.target.closest("[data-disabled='true']")) {
 			return;
+
+		}
+		var closeproject = e.target.closest("[data-act='closeproject']");
+		if (closeproject) {
+			var id = closeproject.getAttribute("data-id");
+			var project = projectsById.get(id);
+			if (!project) return;
+			var willClose = !project.closed;
+			project.closed = willClose;
+			project.status = willClose ? "Closed" : "Open";
+			var wasClosed = project.closed;
+			var wasStatus = project.status;
+			project.closed = true;
+			project.status = "Closed";
+			state.menu = null;
+			showFilteredProjects();
+			frappe.xcall("implementor.api.set_closed", { doctype: "Project", name: id, closed: 1 })
+				.catch(function (err) {
+					project.closed = wasClosed;
+					project.status = wasStatus;   // revert status too, not just closed
+					showFilteredProjects();
+					frappe.msgprint("Could not close project: " + (err.message || "unknown error"));
+				});
+			return;
 		}
 		togglePin = e.target.closest("[data-act='togglepin'")
 		if (togglePin) {
@@ -2140,6 +2184,26 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 	}
 
 	document.getElementById("d-tasks").addEventListener("click", function (e) {
+		var closetask = e.target.closest("[data-act='closetask']");
+		if (closetask) {
+			var id = closetask.getAttribute("data-id");
+			var task = tasksById.get(id);
+			if (!task) return;
+			var wasClosed = task.closed;
+			var wasStatus = task.status;
+			task.closed = true;
+			task.stage = "Closed";
+			state.menu = null;
+			showFilteredTasks();
+			frappe.xcall("implementor.api.set_closed", { doctype: "Task", name: id, closed: 1 })
+				.catch(function (err) {
+					task.closed = wasClosed;
+					task.stage = wasStatus;
+					showFilteredTasks();
+					frappe.msgprint("Could not close task: " + (err.message || "unknown error"));
+				});
+			return;
+		}
 		if (e.target.closest("[data-disabled='true']")) {
 			return;
 		}
@@ -3515,9 +3579,10 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		return `<span class="d-chip" style = "color:${pair[0]}; background:${pair[1]}; border:0.5px solid ${pair[0]}" > ${status}</span>`;
 	}
 	function renderProjectMenuCards(project) {
-		return project_menu_actions.map(function (p) {
+		return getProjectMenuActions(project).map(function (p) {
 			var docAttr = p.doc ? ` data-doc="${p.doc}"` : "";
-			var allowed = isAllowedTo(p.perm, "Project");
+			var blockedByClose = (p.act === "newtask" || p.act === "newtodo") && project.closed;
+			var allowed = isAllowedTo(p.perm, "Project") && !blockedByClose;
 			console.log("Allowed?", allowed)
 			var disabledAttr = allowed ? "" : ` data-disabled='true'`;
 			var disabledClass = allowed ? "" : ` d-act-disabled`;
@@ -3533,24 +3598,33 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			`
 		}).join("");
 	}
-	var task_menu_actions = [
-		{ act: "editname", icon: "square-pen", label: "Change Task Name" },
-		{ act: "gotostatus", icon: "circle-dot", label: "Change status", perm: "write" },
-		{ act: "gotodivision", icon: "tag", label: "Change Division", perm: "write" },
-		{ act: "changelead", icon: "user-check", label: "Change division lead", perm: "write" },
-		{ act: "gotourgency", icon: "flame", label: "Set Urgency", perm: "write" },
-		{ act: "gotodue", icon: "calendar-days", label: "Change Due date", perm: "write" },
-		{ act: "newtodo", icon: "plus", label: "Add ToDo", perm: "create:ToDo" },
-		{ act: "copylink", icon: "copy", label: "Copy link", doc: "Task" },
-		{ act: "sendslackdm", icon: "send", label: "Send to Slack direct message", doc: "Task" },
-		{ act: "sendslackchannel", icon: "send", label: "Send to Slack Channel", doc: "Task" },
-		{ act: "sendwhatsapp", icon: "send", label: "Send to WhatsApp", doc: "Task" },
-		{ act: "deletedoc", color: "var(--text-danger)", icon: "trash", label: "Delete Task", doc: "Task", perm: "delete" }
-	];
+	function getTaskMenuActions(task) {
+		return [
+			{ act: "editname", icon: "square-pen", label: "Change Task Name" },
+			{ act: "gotostatus", icon: "circle-dot", label: "Change status", perm: "write" },
+			{ act: "gotodivision", icon: "tag", label: "Change Division", perm: "write" },
+			{ act: "changelead", icon: "user-check", label: "Change division lead", perm: "write" },
+			{ act: "gotourgency", icon: "flame", label: "Set Urgency", perm: "write" },
+			{ act: "gotodue", icon: "calendar-days", label: "Change Due date", perm: "write" },
+			{ act: "newtodo", icon: "plus", label: "Add ToDo", perm: "create:ToDo" },
+			{ act: "copylink", icon: "copy", label: "Copy link", doc: "Task" },
+			{ act: "sendslackdm", icon: "send", label: "Send to Slack direct message", doc: "Task" },
+			{ act: "sendslackchannel", icon: "send", label: "Send to Slack Channel", doc: "Task" },
+			{ act: "sendwhatsapp", icon: "send", label: "Send to WhatsApp", doc: "Task" },
+			{ act: "deletedoc", color: "var(--text-danger)", icon: "trash", label: "Delete Task", doc: "Task", perm: "delete" },
+			{
+				act: "closetask",
+				icon: task.stage === "Closed" ? "unlock" : "lock",
+				label: task.stage === "Closed" ? "Reopen Task" : "Close Task",
+				perm: "write"
+			}
+		];
+	}
 	function renderTaskMenuCards(task) {
-		return task_menu_actions.map(function (p) {
+		return getTaskMenuActions(task).map(function (p) {
 			var docAttr = p.doc ? ` data-doc="${p.doc}"` : "";
-			var isAllowed = isAllowedTo(p.perm, "Task");
+			var blockedByClose = (p.act === "newtodo") && task.closed;
+			var isAllowed = isAllowedTo(p.perm, "Task") && !blockedByClose;
 			var disabledAttr = (isAllowed) ? "" : ` data-disabled="true"`;
 			var disabledClass = (isAllowed) ? "" : ` d-act-disabled`;
 			return `
@@ -3635,7 +3709,6 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 				menuHtml = `
 			<div class="d-menu" >
 			${renderProjectMenuCards(project)}
-    <div class="d-act" data-act="close"><div>${frappe.utils.icon("close", "sm")}</div> Close</div>
   </div>
 			`;
 			}
@@ -3832,7 +3905,6 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 				menuHtml = `
 			<div class="d-menu" >
 			${renderTaskMenuCards(task)}
-    <div class="d-act" data-act="close"><div>${frappe.utils.icon("close", "sm")}</div> Close</div>
   </div>
 			`;
 			}
@@ -4001,7 +4073,6 @@ ${(task.due && task.status !== "Completed") ? propertyRow("Due Date",
 				menuHtml = `
 			<div class="d-menu" >
 			${(renderToDoMenuOptions(todo))}
-    <div class="d-act" data-act="close"><div style="display:inline-flex">${frappe.utils.icon("close", "sm")}</div> Close</div>
   </div>
 			`;
 			}
@@ -4097,7 +4168,8 @@ ${(task.due && task.status !== "Completed") ? propertyRow("Due Date",
 				attachments: r.attachments,
 				slack_channel_id: r.slack_channel_id,
 				percent_complete: r.percent_complete,
-				whatsapp_channel_id: r.whatsapp_channel_id
+				whatsapp_channel_id: r.whatsapp_channel_id,
+				closed: !!r.close_project,
 			}
 		});
 		projectsById = new Map(testProjects.map(function (p) { return [p.id, p]; }));
@@ -4106,9 +4178,20 @@ ${(task.due && task.status !== "Completed") ? propertyRow("Due Date",
 		return;
 
 	}
-	async function loadTodos(taskId, projectId) {
-		var rows = await frappe.xcall("implementor.api.get_todos", { task: taskId, project: projectId });
-		testTodos = rows.map(function (r) {
+	async function loadTodos(taskId, projectId, reset) {
+		if (reset !== false) {
+			todosOffset = 0;
+			testTodos = [];
+		}
+		var rows = await frappe.xcall("implementor.api.get_todos", {
+			task: taskId,
+			project: projectId,
+			limit: TODOS_PAGE_SIZE,
+			offset: todosOffset
+		});
+		todosHasMore = rows.length >= TODOS_PAGE_SIZE;
+
+		var mapped = rows.map(function (r) {
 			return {
 				id: r.name,
 				pinned: !!r.pinned,
@@ -4131,14 +4214,43 @@ ${(task.due && task.status !== "Completed") ? propertyRow("Due Date",
 				module: r.imp_module
 			};
 		});
-		console.log(testTodos)
+
+		testTodos = reset === false ? testTodos.concat(mapped) : mapped;
 		todosById = new Map(testTodos.map(t => [t.id, t]));
 		showToDosForSelectedTasks();
+		updateLoadMoreTodosButton();
 		return testTodos;
 	}
-	async function loadTasks(projectId) {
-		var rows = await frappe.xcall("implementor.api.get_tasks", { project: projectId })
-		testTasks = rows.map(function (r) {
+
+	async function loadMoreTodos() {
+		todosOffset += TODOS_PAGE_SIZE;
+		await loadTodos(state.selectedTask, state.selectedProject, false);
+	}
+
+	function updateLoadMoreTodosButton() {
+		var btn = document.getElementById("btn-load-more-todos");
+		if (!btn) return;
+		btn.style.display = todosHasMore ? "block" : "none";
+	}
+	document.getElementById("btn-load-more-tasks").addEventListener("click", function () {
+		loadMoreTasks();
+	});
+	document.getElementById("btn-load-more-todos").addEventListener("click", function () {
+		loadMoreTodos();
+	});
+	async function loadTasks(projectId, reset) {
+		if (reset !== false) {
+			tasksOffset = 0;
+			testTasks = [];
+		}
+		var rows = await frappe.xcall("implementor.api.get_tasks", {
+			project: projectId,
+			limit: TASKS_PAGE_SIZE,
+			offset: tasksOffset
+		});
+		tasksHasMore = rows.length >= TASKS_PAGE_SIZE;
+
+		var mapped = rows.map(function (r) {
 			return {
 				id: r.name,
 				pinned: !!r.pinned,
@@ -4156,7 +4268,6 @@ ${(task.due && task.status !== "Completed") ? propertyRow("Due Date",
 				urgency: r.urgency,
 				percent: r.percent,
 				due: r.deadline,
-				div: r.division,
 				activity: r.activity,
 				comments: r.comments,
 				creation: r.started_on,
@@ -4164,12 +4275,26 @@ ${(task.due && task.status !== "Completed") ? propertyRow("Due Date",
 				reactions: r.reaction_counts || {},
 				slack_channel_id: r.slack_channel_id,
 				whatsapp_channel_id: r.whatsapp_channel_id,
+				closed: !!r.close_task,
 				module: r.imp_module
 			};
 		});
+
+		testTasks = reset === false ? testTasks.concat(mapped) : mapped;
 		tasksById = new Map(testTasks.map(t => [t.id, t]));
 		showFilteredTasks();
+		updateLoadMoreTasksButton();
+	}
 
+	async function loadMoreTasks() {
+		tasksOffset += TASKS_PAGE_SIZE;
+		await loadTasks(state.selectedProject, false);
+	}
+
+	function updateLoadMoreTasksButton() {
+		var btn = document.getElementById("btn-load-more-tasks");
+		if (!btn) return;
+		btn.style.display = tasksHasMore ? "block" : "none";
 	}
 	function renderUrgOptions() {
 		var el = document.getElementById("f-urgency")

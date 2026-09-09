@@ -23,7 +23,6 @@ permission_query_conditions = {
 has_permission = {
     "Task": "implementor.implementor.auth.has_task_permission",
     "ToDo": "implementor.implementor.auth.has_todo_permission",
-    # "Project": "implementor.implementor.auth.has_project_permission"
 }
 # Apps
 # ------------------
@@ -157,7 +156,14 @@ has_permission = {
 # Document Events
 # ---------------
 # Hook on document methods and events
-
+doc_events = {
+    "Task": {
+        "validate": "implementor.implementor.api.validate"
+    },
+    "ToDo": {
+        "validate": "implementor.implementor.api.validate"
+    }
+}
 # doc_events = {
 # 	"Employee": {
 #         "on_update": "implementor.implementor.auth.pycreate_qr_code",
@@ -188,13 +194,12 @@ has_permission = {
 # }
 scheduler_events = {
     "cron": {
-        "*/2 * * * *": [
-            "implementor.implementor.auth.send_daily_task_summary",
+        "0 22 * * *": [
+            "implementor.implementor.auth.send_daily_task_summary"
+        ],
+        "0 22 * * 0": [
             "implementor.implementor.auth.send_weekly_task_summary"
         ],
-        # "*/15 * * * *": [
-        #     "implementor.escalation.run"
-        # ],
     }
 }
 # scheduler_events = {

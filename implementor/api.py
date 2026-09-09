@@ -97,7 +97,26 @@ def parsed_recipients(raw_value):
     except (ValueError, TypeError):
         users = str(raw_value).split(",")
     return [u.strip() for u in users if u and str(u).strip()]
- 
+
+import frappe
+
+@frappe.whitelist()
+def set_closed(doctype, name, closed):
+    if doctype not in ("Project", "Task"):
+        frappe.throw("Invalid doctype")
+
+    closed = int(closed)
+    fieldname = "custom_close_project" if doctype == "Project" else "custom_close_task"
+    status_field = "imp_status" if doctype == "Project" else "imp_stage"
+
+    frappe.db.set_value(doctype, name, fieldname, closed)
+
+    if closed:
+        frappe.db.set_value(doctype, name, status_field, "Closed")
+
+    frappe.db.commit()
+
+    return {"closed": closed}
 
 
 @frappe.whitelist(allow_guest=False)
@@ -145,6 +164,25 @@ def send_slack_message(doctype, name, mode, message):
             json={"channel": target, "text": message}
         )
         return [resp.json()]
+import frappe
+
+def validate(doc, method=None):
+    if doc.doctype == "Task":
+        if doc.project:
+            is_closed = frappe.db.get_value("Project", doc.project, "custom_project_closed")
+            if is_closed:
+                frappe.throw("Cannot create a Task under a closed Project.")
+    else:
+        if doc.doctype == "ToDo" and doc.reference_type == "Task":
+            if doc.reference_name:
+                is_closed = frappe.db.get_value("Task", doc.reference_name, "custom_close_task")
+                if is_closed:
+                    frappe.throw("Cannot create a ToDo under a closed Task.")
+        if doc.doctype == "ToDo" and doc.reference_type == "Project":
+            if doc.reference_name:
+                is_closed = frappe.db.get_value("Project", doc.reference_name, "custom_project_closed")
+                if is_closed:
+                    frappe.throw("Cannot create a ToDo under a closed Project.")
 @frappe.whitelist()
 def get_projects(limit=50, offset=0,filters=None,search=None):
     filters = frappe.parse_json(filters) if isinstance(filters, str) else (filters or {})
@@ -155,7 +193,7 @@ def get_projects(limit=50, offset=0,filters=None,search=None):
         "Project",
         filters=filters,
         fields=[
-            "name","custom_pinned as pinned", "project_name as title", "customer as client",
+            "name","custom_pinned as pinned","custom_close_project as close_project", "project_name as title", "customer as client",
             "imp_status as del_status", "imp_project_manager as pm",
             "imp_percent as percent", "imp_deadline as deadline",
             "notes as description","slack_channel_id", "whatsapp_channel_id", "percent_complete" 
@@ -312,7 +350,7 @@ def update_display_name(doctype, name, new_name):
 	return {"doctype": doctype, "name": name, "new_name": new_name}
 
 @frappe.whitelist()
-def get_tasks(project=None):
+def get_tasks(project=None,limit=30, offset=0):
     if project and not frappe.has_permission("Project", "read", project):
         frappe.throw("Not permitted", frappe.PermissionError)
     filters = {"project": project} if project else {}
@@ -321,13 +359,16 @@ def get_tasks(project=None):
         "Task",
         filters=filters,
         fields=[
-            "name","custom_pinned as pinned", "subject as title", "project", "imp_stage as stage",
+            "name","custom_pinned as pinned","custom_close_task as close_task",  "subject as title", "project", "imp_stage as stage",
             "imp_division as division","custom_assigned_by as assigned_by",
             "status", "imp_urgency as urgency", "progress as percent",
             "imp_deadline as deadline", "custom_division_lead as lead","imp_started_on as started_on",
             "imp_doing as doing", "imp_escalated as escalated",
             "description", "_assign", "slack_channel_id", "whatsapp_channel_id", "completed_on", "completed_by","custom_module","imp_module"
         ],
+                limit_page_length=int(limit),
+        limit_start=int(offset),
+        order_by="modified desc",
     )
 
     names = [r["name"] for r in rows]                              # NEW: collect all task names
@@ -358,7 +399,7 @@ def toggle_pin(doctype,id):
 
 
 @frappe.whitelist()
-def get_todos(task=None, project=None):
+def get_todos(task=None, project=None,limit=30, offset=0):
     filters = {}
 
     if task:
@@ -387,6 +428,9 @@ def get_todos(task=None, project=None):
             "imp_urgency as urgency", "date as deadline", "imp_escalated as escalated",
             "slack_channel_id", "whatsapp_channel_id", "imp_module", "assigned_by as assigned_by"
         ],
+                limit_page_length=int(limit),
+        limit_start=int(offset),
+        order_by="modified desc",
     )
 
     task_ids = list({r["task"] for r in rows if r.get("task")})
