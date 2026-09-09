@@ -1750,8 +1750,8 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			},
 		})
 	}
-	async function getDocUrl(doc, d) {
-		await frappe.xcall("implementor.api.get_doc_url", { doctype: doc, name: d }).then(function (url) {
+	async function getDocUrl(doc, id) {
+		await frappe.xcall("implementor.api.get_doc_url", { doc: doc, id: id }).then(function (url) {
 			return url
 		}).catch(function (err) {
 			frappe.throw("Could not get document URL: " + (err.message || "unknown error"))
@@ -1780,22 +1780,25 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			var id = closeproject.getAttribute("data-id");
 			var project = projectsById.get(id);
 			if (!project) return;
-			var willClose = !project.closed;
-			project.closed = willClose;
-			project.status = willClose ? "Closed" : "Open";
 			var wasClosed = project.closed;
 			var wasStatus = project.status;
-			project.closed = true;
-			project.status = "Closed";
+			var willClose = !project.closed;
+
+			project.closed = willClose;
+			project.status = willClose ? "Closed" : "Open";
 			state.menu = null;
 			showFilteredProjects();
-			frappe.xcall("implementor.api.set_closed", { doctype: "Project", name: id, closed: 1 })
-				.catch(function (err) {
-					project.closed = wasClosed;
-					project.status = wasStatus;   // revert status too, not just closed
-					showFilteredProjects();
-					frappe.msgprint("Could not close project: " + (err.message || "unknown error"));
-				});
+
+			frappe.xcall("implementor.api.set_closed", {
+				doctype: "Project",
+				name: id,
+				closed: willClose ? 1 : 0
+			}).catch(function (err) {
+				project.closed = wasClosed;
+				project.status = wasStatus;
+				showFilteredProjects();
+				frappe.msgprint("Could not update project: " + (err.message || "unknown error"));
+			});
 			return;
 		}
 		togglePin = e.target.closest("[data-act='togglepin'")
@@ -2189,19 +2192,27 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			var id = closetask.getAttribute("data-id");
 			var task = tasksById.get(id);
 			if (!task) return;
+
 			var wasClosed = task.closed;
-			var wasStatus = task.status;
-			task.closed = true;
-			task.stage = "Closed";
+			var wasStage = task.status;
+
+			var willClose = !task.closed;
+			task.closed = willClose;
+			task.status = willClose ? "Closed" : "Open";
+
 			state.menu = null;
 			showFilteredTasks();
-			frappe.xcall("implementor.api.set_closed", { doctype: "Task", name: id, closed: 1 })
-				.catch(function (err) {
-					task.closed = wasClosed;
-					task.stage = wasStatus;
-					showFilteredTasks();
-					frappe.msgprint("Could not close task: " + (err.message || "unknown error"));
-				});
+
+			frappe.xcall("implementor.api.set_closed", {
+				doctype: "Task",
+				name: id,
+				closed: willClose ? 1 : 0
+			}).catch(function (err) {
+				task.closed = wasClosed;
+				task.status = wasStage;
+				showFilteredTasks();
+				frappe.msgprint("Could not update task: " + (err.message || "unknown error"));
+			});
 			return;
 		}
 		if (e.target.closest("[data-disabled='true']")) {
@@ -3614,8 +3625,8 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			{ act: "deletedoc", color: "var(--text-danger)", icon: "trash", label: "Delete Task", doc: "Task", perm: "delete" },
 			{
 				act: "closetask",
-				icon: task.stage === "Closed" ? "unlock" : "lock",
-				label: task.stage === "Closed" ? "Reopen Task" : "Close Task",
+				icon: task.status === "Closed" ? "unlock" : "lock",
+				label: task.status === "Closed" ? "Reopen Task" : "Close Task",
 				perm: "write"
 			}
 		];

@@ -107,12 +107,10 @@ def set_closed(doctype, name, closed):
 
     closed = int(closed)
     fieldname = "custom_close_project" if doctype == "Project" else "custom_close_task"
-    status_field = "imp_status" if doctype == "Project" else "imp_stage"
+    status_field = "imp_status" if doctype == "Project" else "custom_delivery_status"
 
     frappe.db.set_value(doctype, name, fieldname, closed)
-
-    if closed:
-        frappe.db.set_value(doctype, name, status_field, "Closed")
+    frappe.db.set_value(doctype, name, status_field, "Closed" if closed else "Open")
 
     frappe.db.commit()
 
@@ -169,7 +167,7 @@ import frappe
 def validate(doc, method=None):
     if doc.doctype == "Task":
         if doc.project:
-            is_closed = frappe.db.get_value("Project", doc.project, "custom_project_closed")
+            is_closed = frappe.db.get_value("Project", doc.project, "custom_close_project")
             if is_closed:
                 frappe.throw("Cannot create a Task under a closed Project.")
     else:
@@ -180,11 +178,11 @@ def validate(doc, method=None):
                     frappe.throw("Cannot create a ToDo under a closed Task.")
         if doc.doctype == "ToDo" and doc.reference_type == "Project":
             if doc.reference_name:
-                is_closed = frappe.db.get_value("Project", doc.reference_name, "custom_project_closed")
+                is_closed = frappe.db.get_value("Project", doc.reference_name, "custom_close_project")
                 if is_closed:
                     frappe.throw("Cannot create a ToDo under a closed Project.")
 @frappe.whitelist()
-def get_projects(limit=50, offset=0,filters=None,search=None):
+def get_projects(limit=20, offset=0,filters=None,search=None):
     filters = frappe.parse_json(filters) if isinstance(filters, str) else (filters or {})
     if search:
         filters["project_name"] = ["like", f"%{search}%"]
@@ -361,7 +359,7 @@ def get_tasks(project=None,limit=30, offset=0):
         fields=[
             "name","custom_pinned as pinned","custom_close_task as close_task",  "subject as title", "project", "imp_stage as stage",
             "imp_division as division","custom_assigned_by as assigned_by",
-            "status", "imp_urgency as urgency", "progress as percent",
+            "custom_delivery_status as status", "imp_urgency as urgency", "progress as percent",
             "imp_deadline as deadline", "custom_division_lead as lead","imp_started_on as started_on",
             "imp_doing as doing", "imp_escalated as escalated",
             "description", "_assign", "slack_channel_id", "whatsapp_channel_id", "completed_on", "completed_by","custom_module","imp_module"

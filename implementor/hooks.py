@@ -5,16 +5,13 @@ app_description = "Implementor"
 app_email = "support@erpgulf.com"
 app_license = "mit"
 
-fixtures = []
-# fixtures = [
-#     "Role",
-#     "Role Profile",
-#     {"dt": "Custom Field", "filters": [["dt", "in", ["Project", "Task", "ToDo", "User", "Customer", "Employee","Notification Log"]]]},
-#     {"dt": "Report", "filters": [["module", "=", "Implementor"]]},
-# 	{"dt": "Workflow", "filters": [["document_type", "in", ["Project", "Task", "ToDo"]]]},
-# 	{"dt": "Server Script", "filters": [["module", "=", "Implementor"]]},
+# fixtures = []
+fixtures = [
+    "Role",
+    {"dt": "Custom Field", "filters": [["dt", "in", ["Project", "Task", "ToDo", "User", "Customer", "Employee","Notification Log"]]]},
+    {"dt": "Report", "filters": [["module", "=", "Implementor"]]},
 
-# ]
+]
 permission_query_conditions = {
 	    "Task": "implementor.implementor.auth.get_task_permission_query_conditions",
 		"ToDo": "implementor.implementor.auth.get_todo_permission_query_conditions",
@@ -158,10 +155,10 @@ has_permission = {
 # Hook on document methods and events
 doc_events = {
     "Task": {
-        "validate": "implementor.implementor.api.validate"
+        "validate": "implementor.api.validate"
     },
     "ToDo": {
-        "validate": "implementor.implementor.api.validate"
+        "validate": "implementor.api.validate"
     }
 }
 # doc_events = {
