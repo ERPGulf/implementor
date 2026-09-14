@@ -428,11 +428,10 @@ def _get_tasks():
         fields=[
             "name", "subject", "project", "custom_division_lead",
             "status", "exp_end_date", "priority",
-            "completed_by", "completed_on"
+            "completed_by", "completed_on","imp_deadline"
         ],
         order_by="exp_end_date asc"
     )
-
 
 def _send_summary(period_label, recipients_field, template_field):
     """Shared logic for daily/weekly task summary, sent as PDF attachment"""
@@ -450,33 +449,43 @@ def _send_summary(period_label, recipients_field, template_field):
         return
 
     tasks = _get_tasks()
+    for t in tasks:
+        t["project"] = t.get("project") or "No Project"
+
     frappe.log_error(f"DEBUG: found {len(tasks)} tasks for {period_label} summary")
 
     template_name = settings.get(template_field)
-    if template_name:
-        rendered = get_email_template(template_name, {"tasks": tasks})
-        subject = rendered.get("subject")
-        html_body = rendered.get("message")
-    else:
-        subject = f"{period_label.capitalize()} Task Summary - {today()}"
-        html_body = "<p>No template configured.</p>"
 
-    # Generate PDF from the rendered HTML
-    pdf_content = get_pdf(html_body)
+    try:
+        if template_name:
+            rendered = get_email_template(template_name, {"tasks": tasks})
+            subject = rendered.get("subject")
+            html_body = rendered.get("message")
+        else:
+            subject = f"{period_label.capitalize()} Task Summary - {today()}"
+            html_body = "<p>No template configured.</p>"
 
-    # Send a short email with the PDF attached
-    frappe.sendmail(
-        recipients=recipients,
-        subject=subject,
-        message=f"<p>Please find attached the {period_label} task summary.</p>",
-        attachments=[{
-            "fname": f"{period_label}_task_summary_{today()}.pdf",
-            "fcontent": pdf_content
-        }]
-    )
+        pdf_content = get_pdf(html_body)
+    except Exception:
+        frappe.log_error(frappe.get_traceback(), f"{period_label} summary render/PDF failed")
+        return
+
+    try:
+        frappe.sendmail(
+            recipients=recipients,
+            subject=subject,
+            message=f"<p>Please find attached the {period_label} task summary.</p>",
+            attachments=[{
+                "fname": f"{period_label}_task_summary_{today()}.pdf",
+                "fcontent": pdf_content
+            }]
+        )
+    except Exception:
+        frappe.log_error(frappe.get_traceback(), f"{period_label} summary sendmail failed")
+        return
+
     frappe.log_error(f"DEBUG: {period_label} summary PDF sent successfully")
-
-
+    frappe.log_error(f"DEBUG: {period_label} summary PDF sent successfully")
 def send_daily_task_summary():
     """Send daily task summary as a PDF attachment"""
     _send_summary("daily", "recipient_for_daily_task_summary", "daily_summary_template")
