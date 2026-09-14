@@ -357,7 +357,7 @@ def get_tasks(project=None,limit=30, offset=0):
         "Task",
         filters=filters,
         fields=[
-            "name","custom_pinned as pinned","custom_close_task as close_task",  "subject as title", "project", "imp_stage as stage",
+            "name","type","custom_pinned as pinned","custom_close_task as close_task",  "subject as title", "project", "imp_stage as stage",
             "imp_division as division","custom_assigned_by as assigned_by",
             "status","custom_delivery_status", "imp_urgency as urgency", "progress as percent",
             "imp_deadline as deadline", "custom_division_lead as lead","imp_started_on as started_on",
@@ -589,12 +589,22 @@ def get_status_optns(doc):
     return [opt for opt in field.options.split("\n") if opt]
 
 @frappe.whitelist()
-def get_options(doc,field):
-    field = frappe.get_meta(doc).get_field(field)
-    if not field or not field.options:
-        return []
-    return [opt for opt in field.options.split("\n") if opt]
+def get_options(doc, field):
+    field_def = frappe.get_meta(doc).get_field(field)
 
+    if not field_def or not field_def.options:
+        return []
+    if field_def.fieldtype == "Link":
+        return frappe.get_all(
+            field_def.options,
+            fields=["name"],
+            pluck="name"
+        )
+
+    elif field_def.fieldtype == "Select":
+        return [opt for opt in field_def.options.split("\n") if opt]
+
+    return []
 @frappe.whitelist()
 def set_status(doctype, name, status):
     if not frappe.has_permission(doctype, "write", name):

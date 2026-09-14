@@ -1139,7 +1139,8 @@ button.on {
 
 #f-person,
 #f-sort,
-#f-urgency {
+#f-urgency,
+#f-division {
     position: relative;
     z-index: 1000;
 }
@@ -1362,6 +1363,7 @@ button.on {
 }
 
 .toolbar-card #f-urgency-trigger,
+.toolbar-card #f-division-trigger,
 .toolbar-card #f-person-trigger,
 .toolbar-card #f-sort-trigger,
 .toolbar-card #f-mine,
@@ -1396,6 +1398,7 @@ button.on {
 }
 
 .toolbar-card #f-urgency-trigger:hover,
+.toolbar-card #f-division-trigger:hover,
 .toolbar-card #f-person-trigger:hover,
 .toolbar-card #f-sort-trigger:hover,
 .toolbar-card #f-mine:hover,

@@ -79,7 +79,6 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 	var task_filters_fields = [
 		{ field: "assignedto", label: "Assign To", icon: "user" },
 		{ field: "assignedby", label: "Assign By", icon: "user" },
-		{ field: "div", label: "Division", icon: "tag" },
 		{ field: "completedby", label: "Completed by", icon: "user" }
 
 	];
@@ -100,6 +99,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		renamePopupOpen: null,
 		sortPanelOpen: null,
 		urgencuFilterPanelOpen: null,
+		divisionPanelOpen: null,
 		notification_doc: "",
 		notification_id: "",
 		projectpmfilter: "",
@@ -288,22 +288,23 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		document.getElementById("d-projects").innerHTML = renderProjectsColumn(sorted);
 
 	}
-	function showFilteredTasks() {
-		var filtered = testTasks.filter(function (task) {
-			var mineOnly = !state.mineOnly || isMine(task.lead, currentUser) || isMine(task.assigned_by, currentUser) || isMine(task.completed, currentUser)
-			var match_project = state.selectedProject === null || task.project == state.selectedProject;
-			var match_pct = pct(task) >= state.minPct && pct(task) <= state.maxPct;
-			var match_name = state.namedFilter === "" || (task.name || "").toLowerCase().includes(state.namedFilter.toLowerCase());  // ✅ fixed
-			var match_urgency = state.urgencyFilter === "" || task.urgency == state.urgencyFilter;
-			var match_person = matchesPerson(state.personFilter, task.lead, task.assigned_by, task.completed_by);
-			var match_div = state.taskDivFilter === "" || state.taskDivFilter === (task.div || "");
-			var match_assignto_person = state.personFilter === "" || task.assigned_by && String(task.assigned_by).toLowerCase().includes(state.personFilter.toLowerCase());
-			var match_completedBy = state.completedByFilter === "" || state.completedByFilter === (task.completed_by || "");
-			var match_lead_filter = state.taskLeadFilter === "" || state.taskLeadFilter === (task.lead || "");
-			var match_assign_by = state.taskassignbyfilter === "" || state.taskassignbyfilter === (task.assigned_by || "");
+	function taskMatchesFilters(task) {
+		var mineOnly = !state.mineOnly || isMine(task.lead, currentUser) || isMine(task.assigned_by, currentUser) || isMine(task.completed, currentUser)
+		var match_project = state.selectedProject === null || task.project == state.selectedProject;
+		var match_pct = pct(task) >= state.minPct && pct(task) <= state.maxPct;
+		var match_name = state.namedFilter === "" || (task.name || "").toLowerCase().includes(state.namedFilter.toLowerCase());
+		var match_urgency = state.urgencyFilter === "" || task.urgency == state.urgencyFilter;
+		var match_person = matchesPerson(state.personFilter, task.lead, task.assigned_by, task.completed_by);
+		var match_div = state.taskDivFilter === "" || state.taskDivFilter === (task.div || "");
+		var match_assignto_person = state.personFilter === "" || task.assigned_by && String(task.assigned_by).toLowerCase().includes(state.personFilter.toLowerCase());
+		var match_completedBy = state.completedByFilter === "" || state.completedByFilter === (task.completed_by || "");
+		var match_lead_filter = state.taskLeadFilter === "" || state.taskLeadFilter === (task.lead || "");
+		var match_assign_by = state.taskassignbyfilter === "" || state.taskassignbyfilter === (task.assigned_by || "");
 
-			return match_assignto_person && match_assign_by && match_completedBy && match_lead_filter && match_div && match_pct && mineOnly && match_project && match_name && match_urgency && match_person;
-		});
+		return match_assignto_person && match_assign_by && match_completedBy && match_lead_filter && match_div && match_pct && mineOnly && match_project && match_name && match_urgency && match_person;
+	}
+	function showFilteredTasks() {
+		var filtered = testTasks.filter(taskMatchesFilters);
 		var sorted = sortedBy(filtered);
 		if (state.selectedTask) {
 			var selectedIndex = sorted.findIndex(function (t) { return t.id === state.selectedTask; });
@@ -325,9 +326,18 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		});
 	}
 	function showToDosForSelectedTasks() {
+		var visibleTaskIds = new Set();
+		if (state.selectedTask) {
+			visibleTaskIds.add(state.selectedTask);
+		} else {
+			testTasks.filter(taskMatchesFilters).forEach(function (task) {
+				visibleTaskIds.add(task.id);
+			});
+		}
+
 		var filtered = testTodos.filter(function (todo) {
 			var mineOnly = !state.mineOnly || isMine(todo.who, currentUser) || isMine(todo.assigned_by, currentUser)
-			var todo_filtered = state.selectedTask === null || todo.task == state.selectedTask;
+			var todo_filtered = visibleTaskIds.size === 0 || visibleTaskIds.has(todo.task);
 			var match_name = state.namedFilter === "" || todo.name.toLowerCase().includes(state.namedFilter.toLowerCase());
 			var match_person = matchesPerson(state.personFilter, todo.who, todo.assigned_by);
 			var match_urgency = state.urgencyFilter === "" || todo.urgency == state.urgencyFilter;
@@ -649,6 +659,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 	</div>
 	<div class="toolbar-right">
 		<div id="f-urgency"></div>
+		<div id="f-division"></div>
 		<div id="f-person"></div>
 		<div id="f-sort"></div>
 		<button id="f-mine">My work</button>
@@ -1038,6 +1049,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		state.mineOnly = false;
 		state.sortFilter = "";
 		state.urgencyFilter = "";
+		state.divisionPanelOpen = null;
 
 		state.taskDivFilter = "";
 		state.taskLeadFilter = "";
@@ -2974,6 +2986,13 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 				return;
 			}
 		}
+		if (!e.target.closest("[id ='f-division-trigger']") && !e.target.closest("[id='f-division-panel']")) {
+			if (state.divisionPanelOpen) {
+				state.divisionPanelOpen = false;
+				document.getElementById("f-division-panel").style.display = "none"
+				return;
+			}
+		}
 		var filterPanel = document.getElementById("rb-filter-panel");
 		if (filterPanel && filterPanel.style.display === "block" && !e.target.closest("#rb-filter-panel") && !e.target.closest("#rb-filter-btn")) {
 			filterPanel.style.display = "none";
@@ -3134,6 +3153,32 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 	// 	showFilteredTasks()
 	// 	showToDosForSelectedTasks()
 	// });
+	document.getElementById("f-division").addEventListener("click", function (e) {
+		var trigger = e.target.closest("#f-division-trigger");
+		if (trigger) {
+			state.divisionPanelOpen = !state.divisionPanelOpen;
+			document.getElementById("f-division-panel").style.display = state.divisionPanelOpen ? "block" : "none";
+			return;
+		}
+		var setDivisionFilter = e.target.closest("[data-act='setdivisionfilter']");
+		if (setDivisionFilter) {
+			state.taskDivFilter = setDivisionFilter.getAttribute("data-value");
+			state.divisionPanelOpen = false;
+			renderDivisionFilter();
+			showFilteredTasks();
+			showToDosForSelectedTasks();
+			return;
+		}
+	});
+	document.getElementById("f-division").addEventListener("input", function (e) {
+		if (e.target && e.target.id === "rb-filter-search-input") {
+			var q = e.target.value.toLowerCase();
+			document.querySelectorAll("#rb-filter-options .filter-opt").forEach(function (opt) {
+				var text = opt.textContent.toLowerCase();
+				opt.style.display = text.includes(q) ? "" : "none";
+			})
+		}
+	});
 	document.getElementById("f-person").addEventListener("click", function (e) {
 		var trigger = e.target.closest("#f-person-trigger");
 		if (trigger) {
@@ -3169,6 +3214,28 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
                 <div class="filter-opt ${state.personFilter === "" ? "on" : ""}" data-act="setpersonfilter" data-value="">Any</div>
                 ${TaskLeadOptions.map(function (u) {
 			return `<div class="filter-opt ${state.personFilter === u ? "on" : ""}" data-act="setpersonfilter" data-value="${u}">${u}</div>`;
+		}).join("")}
+            </div>
+        </div>
+    `;
+	}
+	function renderDivisionFilter() {
+		var el = document.getElementById("f-division");
+		if (!el) return;
+		el.innerHTML = `
+        <div id="f-division-trigger" style="height:34px; width:160px; padding:0 10px; border:0.5px solid var(--border-strong); border-radius:var(--radius); background:var(--surface-2); display:flex; align-items:center; justify-content:space-between; gap:6px; cursor:pointer; white-space:nowrap; overflow:hidden;">
+            <span style="overflow:hidden; text-overflow:ellipsis;">${state.taskDivFilter || "Any division"}</span>
+            <span style="flex:none; display:inline-flex;">${frappe.utils.icon("chevron-down", "xs")}</span>
+        </div>
+        <div id="f-division-panel" class="rb-filter-panel" style="display:none; top:38px; left:0;">
+					<div class="rb-filter-search">
+				${frappe.utils.icon("search", "xs")}
+			<input id="rb-filter-search-input" placeholder="Search" />
+			</div>
+            <div class="rb-filter-options" id="rb-filter-options">
+                <div class="filter-opt ${state.taskDivFilter === "" ? "on" : ""}" data-act="setdivisionfilter" data-value="">Any</div>
+                ${(divisions || []).map(function (d) {
+			return `<div class="filter-opt ${state.taskDivFilter === d ? "on" : ""}" data-act="setdivisionfilter" data-value="${d}">${d}</div>`;
 		}).join("")}
             </div>
         </div>
@@ -3231,6 +3298,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		document.getElementById("f-name").value = "";
 		document.getElementById("f-mine").textContent = "My work";
 		renderUrgOptions();
+		renderDivisionFilter();
 		renderSortFilters();
 		showFilteredProjects();
 		showFilteredTasks();
@@ -3943,7 +4011,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 
         <div style="display:flex; gap:4px; flex-wrap:wrap; margin-bottom:8px">
             ${chip(task.status)}
-			${chip(task.custom_delivery_status)}
+			${(task.closed && task.custom_delivery_status) ? chip(task.custom_delivery_status) : ""}
         </div>
 
         <div style="display:flex; gap:4px; flex-wrap:wrap; margin-bottom:8px">
@@ -4282,7 +4350,7 @@ ${(task.due && task.status !== "Completed") ? propertyRow("Due Date",
 				assigned_by: r.assigned_by,
 				description: r.description,
 				stage: r.stage,
-				div: r.division,
+				div: r.type,
 				assigned_to: r.assigned_to,
 				status: r.status,
 				lead: r.lead,
@@ -4343,7 +4411,7 @@ ${(task.due && task.status !== "Completed") ? propertyRow("Due Date",
 		var results = await Promise.all([
 			frappe.xcall("implementor.api.get_options", { doc: "Task", field: "imp_urgency" }),
 			frappe.xcall("implementor.api.get_options", { doc: "Project", field: "imp_status" }),
-			frappe.xcall("implementor.api.get_options", { doc: "Task", field: "imp_division" }),
+			frappe.xcall("implementor.api.get_options", { doc: "Task", field: "type" }),
 			frappe.xcall("implementor.api.get_options", { doc: "Task", field: "status" }),
 			frappe.xcall("implementor.api.get_options", { doc: "ToDo", field: "imp_urgency" }),
 			frappe.xcall("implementor.api.get_options", { doc: "ToDo", field: "status" }),
@@ -4357,6 +4425,7 @@ ${(task.due && task.status !== "Completed") ? propertyRow("Due Date",
 		todo_status_options = results[5];
 		prj_pms = results[6];
 		renderUrgOptions();
+		renderDivisionFilter();
 		renderSortFilters();
 	}
 	function loadurg(task) {
