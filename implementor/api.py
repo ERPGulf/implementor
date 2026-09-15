@@ -681,7 +681,7 @@ def set_division(task, division):
     #     "User", {"imp_division": division}, "name"
     # )
     doc = frappe.get_doc("Task", task)
-    doc.imp_division = division
+    doc.type = division
     # doc.custom_division_lead = lead
     doc.save()
     return {"division": division}
