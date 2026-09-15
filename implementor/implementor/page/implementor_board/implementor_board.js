@@ -5,14 +5,14 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		title: 'None',
 		single_column: true
 	});
-	var PROJECTS_PAGE_SIZE = 50;
+	var PROJECTS_PAGE_SIZE = 10;
 	var projectsOffsets = 0;
 	var projectsHasMore = true;
-	var TASKS_PAGE_SIZE = 30;
+	var TASKS_PAGE_SIZE = 15;
 	var tasksOffset = 0;
 	var tasksHasMore = true;
 
-	var TODOS_PAGE_SIZE = 30;
+	var TODOS_PAGE_SIZE = 10;
 	var todosOffset = 0;
 	var todosHasMore = true;
 	var assignees = [];
