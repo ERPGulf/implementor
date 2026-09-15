@@ -3810,11 +3810,11 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 <div class="d-row lvl-project ${project.id === state.selectedProject ? 'sel' : ''}" data-project-id=${project.id}>
     <div style="flex:1; min-width:0">
         <div class="card-title">${project.name}</div>
-        <div class="card-subtitle">${project.client}</div>
+	${project.client ? `<div class="card-subtitle">${project.client}</div>` : ""}
 
         <div style="display:flex; gap:4px; flex-wrap:wrap; margin-bottom:8px">
-            ${chip(project.status)}
-			${chip(project.stage)}
+			${project.status && (project.status !== "Closed" || project.closed) ? chip(project.status) : ""}
+			${project.stage ? chip(project.stage) : ""}
         </div>
 
         ${prog(project.percent_complete)}
