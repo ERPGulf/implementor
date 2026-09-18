@@ -483,6 +483,19 @@
     margin-bottom: 3px;
 }
 
+.rb-filter-search {
+    display: flex;
+    align-items: center;
+    height: 42px;
+    background: transparent;
+    border: none;
+    border-radius: 16px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 12px;
+    padding: 14px 16px;
+    margin-bottom: 3px;
+}
+
 .rb-filter-search svg {
     color: var(--text-muted);
     flex: none;
@@ -1337,6 +1350,7 @@ button.on {
     align-items: center;
     gap: 10px;
     flex-wrap: wrap;
+    min-width: 0;
 }
 
 /* Search — floating pill */
@@ -1771,6 +1785,10 @@ button,
 }
 
 #btn-emergency {
+    position: relative;
+    z-index: 1000;
+}
+#btn-load {
     position: relative;
     z-index: 1000;
 }

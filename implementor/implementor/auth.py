@@ -412,26 +412,26 @@ def delete_qr_code_file(doc, method):
 
 
 def _get_recipients(user_list):
-    """Convert a list of User names into a list of valid emails"""
     if not user_list:
         return []
-    return frappe.get_all(
+    emails = frappe.get_all(
         "User",
         filters={"name": ["in", user_list]},
         pluck="email"
     )
-
+    return [e for e in emails if e]   # drop blanks/None
 
 def _get_tasks():
     return frappe.get_all(
         "Task",
         fields=[
-            "name", "subject", "project", "custom_division_lead",
-            "status", "exp_end_date", "priority",
-            "completed_by", "completed_on","imp_deadline"
+            "name", "subject","project.project_name as project_name","project",
+            "custom_division_lead", "status", "priority",
+            "completed_by", "completed_on", "imp_deadline"
         ],
-        order_by="exp_end_date asc"
+        order_by="imp_deadline asc"
     )
+
 
 def _send_summary(period_label, recipients_field, template_field):
     """Shared logic for daily/weekly task summary, sent as PDF attachment"""
@@ -442,8 +442,9 @@ def _send_summary(period_label, recipients_field, template_field):
     if not recipient_users:
         frappe.log_error(f"DEBUG: No recipients configured for {period_label} task summary")
         return
-
+    frappe.log_error(f"DEBUG:{recipient_users}")
     recipients = _get_recipients(recipient_users)
+    frappe.log_error(f"DEBUG:{recipients}")
     if not recipients:
         frappe.log_error(f"DEBUG: No valid emails found for {period_label} recipients")
         return
@@ -451,6 +452,8 @@ def _send_summary(period_label, recipients_field, template_field):
     tasks = _get_tasks()
     for t in tasks:
         t["project"] = t.get("project") or "No Project"
+        t["project_name"] = t.get("project_name") or ""
+        t["custom_division_lead"] = t.get("custom_division_lead") or "Unassigned"
 
     frappe.log_error(f"DEBUG: found {len(tasks)} tasks for {period_label} summary")
 
@@ -485,7 +488,8 @@ def _send_summary(period_label, recipients_field, template_field):
         return
 
     frappe.log_error(f"DEBUG: {period_label} summary PDF sent successfully")
-    frappe.log_error(f"DEBUG: {period_label} summary PDF sent successfully")
+
+
 def send_daily_task_summary():
     """Send daily task summary as a PDF attachment"""
     _send_summary("daily", "recipient_for_daily_task_summary", "daily_summary_template")

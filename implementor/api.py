@@ -182,10 +182,15 @@ def validate(doc, method=None):
                 if is_closed:
                     frappe.throw("Cannot create a ToDo under a closed Project.")
 @frappe.whitelist()
-def get_projects(limit=20, offset=0,filters=None,search=None):
+def get_projects(limit=20, offset=0, filters=None, search=None, person=None):
     filters = frappe.parse_json(filters) if isinstance(filters, str) else (filters or {})
+    search = (search or "").strip()
+    or_filters = None
     if search:
-        filters["project_name"] = ["like", f"%{search}%"]
+        pattern = f"%{search}%"
+        or_filters = {"project_name": ["like", pattern], "name": ["like", pattern]}
+    if person:
+        filters["imp_project_manager"] = person
 
     rows = frappe.get_list(
         "Project",
@@ -200,6 +205,7 @@ def get_projects(limit=20, offset=0,filters=None,search=None):
         limit_page_length=limit,
         limit_start=offset,
         ignore_permissions=False,
+        or_filters=or_filters,
     )
 
     names = [r["name"] for r in rows]                                  # NEW: collect all project names
@@ -348,10 +354,21 @@ def update_display_name(doctype, name, new_name):
 	return {"doctype": doctype, "name": name, "new_name": new_name}
 
 @frappe.whitelist()
-def get_tasks(project=None,limit=30, offset=0):
+def get_tasks(project=None,name=None, limit=30, offset=0, search=None, person=None,urgency=None):
     if project and not frappe.has_permission("Project", "read", project):
         frappe.throw("Not permitted", frappe.PermissionError)
     filters = {"project": project} if project else {}
+    if name:
+        filters["name"] = name
+    search = (search or "").strip()
+    or_filters = None
+    if search:
+        pattern = f"%{search}%"
+        or_filters = {"subject": ["like", pattern], "name": ["like", pattern]}
+    if person:
+        filters["custom_division_lead"] = person
+    if urgency:
+        filters["imp_urgency"] = urgency
 
     rows = frappe.get_list(
         "Task",
@@ -364,9 +381,10 @@ def get_tasks(project=None,limit=30, offset=0):
             "imp_doing as doing", "imp_escalated as escalated",
             "description", "_assign", "slack_channel_id", "whatsapp_channel_id", "completed_on", "completed_by","custom_module","imp_module"
         ],
-                limit_page_length=int(limit),
+        limit_page_length=int(limit),
         limit_start=int(offset),
         order_by="modified desc",
+        or_filters=or_filters,
     )
 
     names = [r["name"] for r in rows]                              # NEW: collect all task names
@@ -397,9 +415,17 @@ def toggle_pin(doctype,id):
 
 
 @frappe.whitelist()
-def get_todos(task=None, project=None,limit=30, offset=0):
+def get_todos(task=None, project=None, limit=30, offset=0, search=None, person=None,urgency=None):
     filters = {}
-
+    search = (search or "").strip()
+    or_filters = None
+    if search:
+        pattern = f"%{search}%"
+        or_filters = {"description": ["like", pattern], "name": ["like", pattern]}
+    if person:
+        filters["allocated_to"] = person
+    if urgency:
+        filters["imp_urgency"] = urgency
     if task:
         if not frappe.has_permission("Task", "read", task):
             frappe.throw("Not permitted", frappe.PermissionError)
@@ -429,6 +455,7 @@ def get_todos(task=None, project=None,limit=30, offset=0):
                 limit_page_length=int(limit),
         limit_start=int(offset),
         order_by="modified desc",
+        or_filters=or_filters,
     )
 
     task_ids = list({r["task"] for r in rows if r.get("task")})
@@ -656,7 +683,7 @@ def set_project_manager(project, project_manager):
     return {"project": project, "project_manager": project_manager}
 
 @frappe.whitelist()
-def set_lead(task, lead):
+def set_lead(task, lead,act):
     if not frappe.db.exists("Task",task):
         frappe.throw(_("Task {0} does not exist").format(task))
     if not frappe.db.exists("User", lead):
@@ -665,7 +692,10 @@ def set_lead(task, lead):
         frappe.throw("Not permitted", frappe.PermissionError)
 
     doc = frappe.get_doc("Task", task)
-    doc.custom_division_lead = lead
+    if act == "assignto":
+        doc.custom_division_lead = lead
+    else:
+        doc.custom_assigned_by = lead
     doc.save()
 
     return {"task": task, "lead": lead}
@@ -687,17 +717,19 @@ def set_division(task, division):
     return {"division": division}
 
 @frappe.whitelist()
-def assign_todo(todo, user):
+def assign_todo(todo, user,act):
     if not frappe.db.exists("ToDo", todo):
         frappe.throw(_("ToDo {0} does not exist").format(todo))
     if not frappe.db.exists("User", user):
         frappe.throw(_("User {0} does not exist").format(user))
     if not frappe.has_permission("ToDo", "write", todo):
         frappe.throw("Not permitted", frappe.PermissionError)
-
-    old_user = frappe.db.get_value("ToDo", todo, "allocated_to")
-    frappe.db.set_value("ToDo", todo, "allocated_to", user)
-
+    if act == "assignto":
+        old_user = frappe.db.get_value("ToDo", todo, "allocated_to")
+        frappe.db.set_value("ToDo", todo, "allocated_to", user)
+    else:
+        old_user = frappe.db.get_value("ToDo", todo, "assigned_by")
+        frappe.db.set_value("ToDo", todo, "assigned_by", user)
     return {"ok": True, "todo": todo, "reassigned_from": old_user, "reassigned_to": user}
 @frappe.whitelist()
 def saveDueDate(doctype=None, name=None, dateStr=None):
