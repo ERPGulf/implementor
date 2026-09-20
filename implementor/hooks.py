@@ -189,32 +189,25 @@ doc_events = {
 
 #     },
 # }
+# 
 # scheduler_events = {
 #     "cron": {
 #         "*/15 * * * *": [
 #             "implementor.implementor.auth.send_daily_task_summary",
-#             "implementor.implementor.auth.send_weekly_task_summary"
+#             "implementor.implementor.auth.send_weekly_task_summary",
 #         ],
 #     }
 # }
 scheduler_events = {
     "cron": {
-        "*/15 * * * *": [
-            "implementor.implementor.auth.send_daily_task_summary",
-            "implementor.implementor.auth.send_weekly_task_summary",
+        "0 22 * * *": [
+            "implementor.implementor.auth.send_daily_task_summary"
+        ],
+        "0 22 * * 0": [
+            "implementor.implementor.auth.send_weekly_task_summary"
         ],
     }
 }
-# scheduler_events = {
-#     "cron": {
-#         "0 22 * * *": [
-#             "implementor.implementor.auth.send_daily_task_summary"
-#         ],
-#         "0 22 * * 0": [
-#             "implementor.implementor.auth.send_weekly_task_summary"
-#         ],
-#     }
-# }
 
 # Testing
 # -------
