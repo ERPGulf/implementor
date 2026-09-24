@@ -669,6 +669,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 	<div class="view-tabs">
 		<div class="view-tabs-slider" id="view-tabs-slider"></div>
 		<button id="btn-board" class="on">${frappe.utils.icon("layout-list", "xs")} Overview</button>
+		<button id="btn-milestones">${frappe.utils.icon("flag", "xs")} Milestones </button>
 		<button id="btn-dashboard">${frappe.utils.icon("chart-bar", "xs")} Dashboard</button>
 		<button id="btn-report">${frappe.utils.icon("file-chart-column-increasing", "xs")} Reports</button>
 	</div>
@@ -854,6 +855,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 
 		<div id="dashboard-view" style="display:none; padding:16px;"></div>
 		<div id="report-view" style="display:none; padding:16px;"></div>
+		<div id="milestones-view" style="display:none; padding:16px;"></div>
 		</div>
 	  `);
 	positionViewTabsSlider();
@@ -922,6 +924,8 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		document.getElementById("btn-board").classList.toggle("on", state.view === "board");
 		document.getElementById("btn-dashboard").classList.toggle("on", state.view === "dashboard");
 		document.getElementById("btn-report").classList.toggle("on", state.view === "report");
+		document.getElementById("btn-milestones").classList.toggle("on", state.view === "milestones");
+
 		requestAnimationFrame(function () {
 			positionViewTabsSlider();
 			setTimeout(positionViewTabsSlider, 50);   // re-measure once more after everything's settled
@@ -930,7 +934,8 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		var panels = {
 			board: [document.querySelector(".topbar"), document.querySelector(".grid")],
 			dashboard: [document.getElementById("dashboard-view")],
-			report: [document.getElementById("report-view")]
+			report: [document.getElementById("report-view")],
+			milestones: [document.getElementById("milestones-view")]
 		};
 
 		Object.keys(panels).forEach(function (viewName) {
@@ -947,6 +952,504 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 	async function deleteMilestone(name) {
 		var rows = await frappe.xcall("implementor.api.delete_milestone", { name: name, project: state.selectedProject })
 		return rows
+	}
+	async function loadMilestoneDashboard() {
+		var data = await frappe.xcall("implementor.milestone_apis.get_milestone_dashboard", {});
+		renderMilestoneDashboard(data);
+	}
+	function parseLocalDate(str) {
+		if (!str) return null;
+		var parts = str.split("-");
+		if (parts.length !== 3) return null;
+		// builds the date at local midnight directly, sidestepping the UTC-parsing issue entirely
+		return new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+	}
+
+	function isOverdue(p) {
+		var d = parseLocalDate(p.delivery_date);
+		if (!d) return false;
+
+		var today = new Date();
+		today.setHours(0, 0, 0, 0);
+		d.setHours(0, 0, 0, 0);
+
+		var completed = p.overall_percent === 100 || p.project_status === "Closed" || p.current_phase === "Closed";
+		return d < today && !completed;   // strictly before today — delivery day itself is not overdue yet
+	}
+	function milestoneIsPastDue(m) {
+		if (!m || !m.end_date) return false;
+		var today = new Date(); today.setHours(0, 0, 0, 0);
+		var endDate = parseLocalDate(m.end_date);
+		endDate.setHours(0, 0, 0, 0);
+		return endDate < today;
+	}
+	function milestoneColor(m, isNextPending) {
+		var work = deriveWorkStatus(m, isNextPending);
+		var pay = derivePaymentStatus(m, isNextPending);
+		var order = { danger: 3, warning: 2, muted: 1, success: 0 };
+		var worstKind = order[work.kind] >= order[pay.kind] ? work.kind : pay.kind;
+
+		if (worstKind !== "danger") {
+			return statusColor(worstKind);
+		}
+
+		var workDanger = work.kind === "danger";
+		var payDanger = pay.kind === "danger";
+		if (workDanger && payDanger) return "#450A0A";   // both overdue — near-black
+		if (workDanger) return "#DC2626";                 // work overdue only — bright red
+		return "#92400E";                                  // payment overdue only — dark amber-brown
+	}
+	function deriveWorkStatus(m, isNextPending) {
+		if (!m) return { label: "—", kind: "muted" };
+		if (m.completion_status === "Completed") return { label: "Work done", kind: "success" };
+		if (milestoneIsPastDue(m)) return { label: "Work overdue", kind: "danger" };
+		if (m.completion_status === "In Progress") return { label: "Work in progress", kind: "warning" };
+		return isNextPending ? { label: "Work pending", kind: "warning" } : { label: "Work upcoming", kind: "muted" };
+	}
+
+	function derivePaymentStatus(m, isNextPending) {
+		if (!m) return { label: "—", kind: "muted" };
+		if (m.payment_status === "Paid") return { label: "Payment done", kind: "success" };
+		if (milestoneIsPastDue(m)) return { label: "Payment due", kind: "danger" };
+		return isNextPending ? { label: "Payment pending", kind: "warning" } : { label: "Payment upcoming", kind: "muted" };
+	}
+
+	function combinedSeverity(m, isNextPending) {
+		var work = deriveWorkStatus(m, isNextPending);
+		var pay = derivePaymentStatus(m, isNextPending);
+		if (work.kind === "success" && pay.kind === "success") return "success";
+		var order = { danger: 3, warning: 2, muted: 1, success: 0 };
+		return order[work.kind] >= order[pay.kind] ? work.kind : pay.kind;
+	}
+
+
+	function milestonePillStyleByKind(kind) {
+		if (kind === "success") return "padding:3px 10px;border-radius:999px;font-size:11px;font-weight:600;background:var(--bg-success);color:var(--text-success);white-space:nowrap;";
+		if (kind === "danger") return "padding:3px 10px;border-radius:999px;font-size:11px;font-weight:600;background:var(--bg-danger);color:var(--text-danger);white-space:nowrap;";
+		if (kind === "warning") return "padding:3px 10px;border-radius:999px;font-size:11px;font-weight:600;background:var(--bg-warning);color:var(--text-warning);white-space:nowrap;";
+		return "padding:3px 10px;border-radius:999px;font-size:11px;font-weight:500;background:var(--surface-1);color:var(--text-muted);white-space:nowrap;border:1px dashed var(--border);";
+	}
+	function workPillStyle(kind) {
+		if (kind === "danger") return "padding:3px 10px;border-radius:999px;font-size:11px;font-weight:600;background:#FEE2E2;color:#DC2626;white-space:nowrap;";
+		return milestonePillStyleByKind(kind);
+	}
+
+	function paymentPillStyle(kind) {
+		if (kind === "danger") return "padding:3px 10px;border-radius:999px;font-size:11px;font-weight:600;background:#FDECD1;color:#92400E;white-space:nowrap;";
+		return milestonePillStyleByKind(kind);
+	}
+	function milestoneDotStyleByKind(kind) {
+		var color = kind === "success" ? "var(--text-success)" : kind === "danger" ? "var(--text-danger)" : kind === "warning" ? "var(--text-warning)" : "var(--border-strong)";
+		return "width:10px;height:10px;border-radius:50%;background:" + color + ";flex-shrink:0;display:inline-block;";
+	}
+	function moduleChipStyle(status) {
+		if (status === "Completed") return "padding:3px 10px; border-radius:999px; font-size:11px; background:var(--bg-success); color:var(--text-success);";
+		if (status === "In Progress") return "padding:3px 10px; border-radius:999px; font-size:11px; background:var(--bg-accent); color:var(--text-accent);";
+		return "padding:3px 10px; border-radius:999px; font-size:11px; background:var(--surface-1); color:var(--text-muted);";
+	}
+	(function () {
+		if (window.__chartTooltipInit) return;
+		window.__chartTooltipInit = true;
+
+		var tip = document.createElement("div");
+		tip.id = "chart-tooltip";
+		tip.style.cssText = "position:fixed; display:none; z-index:9999; pointer-events:none; font-size:11px; padding:6px 10px; border-radius:4px; max-width:260px; white-space:pre-line; line-height:1.4;";
+		document.body.appendChild(tip);
+
+		document.addEventListener("mousemove", function (e) {
+			var target = e.target.closest && e.target.closest("[data-tip]");
+			if (!target) {
+				tip.style.display = "none";
+				return;
+			}
+
+			var isDark = document.documentElement.getAttribute("data-theme") === "dark";
+			tip.style.backgroundColor = isDark ? "#1c2530" : "#ffffff";
+			tip.style.color = isDark ? "#ffffff" : "#1c2530";
+			tip.style.border = isDark ? "1px solid #3a4250" : "1px solid #d7dbe1";
+			tip.style.boxShadow = "0 2px 8px rgba(0,0,0,0.25)";
+
+			tip.textContent = target.getAttribute("data-tip");
+			tip.style.display = "block";
+			tip.style.left = (e.clientX + 14) + "px";
+			tip.style.top = (e.clientY + 14) + "px";
+		});
+	})();
+
+
+	function buildTimelineChart(allProjects) {
+		var valid = allProjects.filter(function (p) {
+			var s = p.start_date ? new Date(p.start_date) : null;
+			var d = p.delivery_date ? new Date(p.delivery_date) : null;
+			return s && d && !isNaN(s) && !isNaN(d);
+		});
+		if (!valid.length) {
+			return '<div class="d-meta" style="padding:16px;">No projects have both a start and delivery date set yet.</div>';
+		}
+
+		var minTime = Math.min.apply(null, valid.map(function (p) { return new Date(p.start_date).getTime(); }));
+		var maxTime = Math.max.apply(null, valid.map(function (p) { return new Date(p.delivery_date).getTime(); }));
+
+		var axisStart = new Date(minTime);
+		axisStart.setDate(1);
+		var axisEndRaw = new Date(maxTime);
+		var axisEnd = new Date(axisEndRaw.getFullYear(), axisEndRaw.getMonth() + 1, 1);
+
+		var months = [];
+		var cursor = new Date(axisStart);
+		while (cursor <= axisEnd || months.length < 6) {
+			months.push(new Date(cursor));
+			cursor.setMonth(cursor.getMonth() + 1);
+			if (months.length > 36) break;
+		}
+		axisEnd = months[months.length - 1];
+		var totalMs = axisEnd - axisStart;
+
+		var plotLeft = 160, plotTop = 42, rowHeight = 36, monthWidth = 72, barHeight = 9;
+		var plotRight = Math.max(plotLeft + (months.length - 1) * monthWidth, plotLeft + 400);
+		var plotBottom = plotTop + valid.length * rowHeight;
+
+		function xForDate(d) {
+			return plotLeft + ((d.getTime() - axisStart.getTime()) / totalMs) * (plotRight - plotLeft);
+		}
+
+		var monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+		var monthTicks = months.map(function (m) {
+			var x = xForDate(m);
+			return '<line x1="' + x + '" y1="' + plotTop + '" x2="' + x + '" y2="' + plotBottom + '" stroke="var(--border)" stroke-width="0.5"></line>'
+				+ '<text x="' + x + '" y="' + (plotTop - 20) + '" font-size="13" fill="var(--text-muted)" text-anchor="middle">' + monthNames[m.getMonth()] + " '" + String(m.getFullYear()).slice(2) + '</text>';
+		}).join("");
+
+		var now = new Date();
+		var todayHtml = "";
+		if (now >= axisStart && now <= axisEnd) {
+			var todayX = xForDate(now);
+			todayHtml = '<line x1="' + todayX + '" y1="' + (plotTop - 6) + '" x2="' + todayX + '" y2="' + plotBottom + '" stroke="var(--text-danger)" stroke-width="1.25"></line>'
+				+ '<text x="' + todayX + '" y="' + (plotTop - 8) + '" font-size="13" font-weight="600" fill="var(--text-danger)" text-anchor="middle">Today</text>';
+		}
+
+		var rows = valid.map(function (p, i) {
+			var rowY = plotTop + i * rowHeight + (rowHeight - barHeight) / 2 - 2;
+			var barX = xForDate(new Date(p.start_date));
+			var barW = Math.max(xForDate(new Date(p.delivery_date)) - barX, 2);
+			var overdue = isOverdue(p);
+			var barFill = overdue ? "var(--bg-danger)" : "var(--surface-1)";
+			var barStroke = overdue ? "var(--text-danger)" : "var(--border)";
+
+			var cum = 0;
+			var firstPendingIndex = p.milestones.findIndex(function (m) { return m.completion_status !== "Completed"; });
+			var markers = p.milestones.map(function (m, mi) {
+				cum += (m.weight || 0);
+				var cx = barX + (cum / 100) * barW;
+				var kind = combinedSeverity(m, mi === firstPendingIndex);
+				var work = deriveWorkStatus(m, mi === firstPendingIndex);
+				var pay = derivePaymentStatus(m, mi === firstPendingIndex);
+				var tooltip = "M" + (mi + 1) + ": " + (m.title || "Untitled") + "\n" + work.label + " · " + pay.label;
+				return '<circle cx="' + cx + '" cy="' + (rowY + barHeight / 2) + '" r="4.5" fill="' + milestoneColor(m, mi === firstPendingIndex) + '" stroke="var(--surface-2)" stroke-width="1.25" data-tip="' + escapeHtml(tooltip) + '" opacity="0">'
+					+ '<animate attributeName="opacity" from="0" to="1" dur="0.3s" begin="' + (i * 0.07 + mi * 0.04 + 0.3) + 's" fill="freeze"/>'
+					+ '</circle>';
+			}).join("");
+
+			return '<rect x="' + barX + '" y="' + rowY + '" width="' + barW + '" height="' + barHeight + '" rx="3" fill="' + barFill + '" stroke="' + barStroke + '" stroke-width="0.75" data-tip="' + escapeHtml((p.client || p.product) + ": " + fmtDate(p.start_date) + " → " + fmtDate(p.delivery_date)) + '">'
+				+ '<animate attributeName="width" from="0" to="' + barW + '" dur="0.6s" begin="' + (i * 0.07) + 's" fill="freeze"/>'
+				+ '</rect>'
+				+ markers
+				+ '<text x="' + (plotLeft - 10) + '" y="' + (rowY + barHeight + 3) + '" font-size="13" fill="var(--text-primary)" text-anchor="end" font-weight="600" data-tip="' + escapeHtml(p.client || p.product || p.name) + '">' + chartLabel(p) + '</text>';
+		}).join("");
+
+		return '<div style="overflow-x:auto; padding-bottom:6px;">'
+			+ '<svg viewBox="0 0 ' + (plotRight + 30) + ' ' + (plotBottom + 10) + '" style="width:auto; min-width:' + (plotRight + 30) + 'px; height:auto; display:block;">'
+			+ monthTicks + todayHtml + rows
+			+ '</svg></div>';
+	}
+	function buildProgressChart(projects) {
+		var plotLeft = 130, plotRight = 420, plotTop = 16, rowHeight = 26;
+		var plotBottom = plotTop + projects.length * rowHeight;
+		var barHeight = 6;
+
+		var gridLines = [0, 25, 50, 75, 100].map(function (pct) {
+			var x = plotLeft + (pct / 100) * (plotRight - plotLeft);
+			return '<line x1="' + x + '" y1="' + plotTop + '" x2="' + x + '" y2="' + plotBottom + '" stroke="var(--border)" stroke-width="0.5"></line>'
+				+ '<text x="' + x + '" y="' + (plotTop - 5) + '" font-size="10" fill="var(--text-muted)" text-anchor="middle">' + pct + '%</text>';
+		}).join("");
+
+		var rows = projects.map(function (p, i) {
+			var rowY = plotTop + i * rowHeight + (rowHeight - barHeight) / 2;
+			var pct = p.overall_percent;
+			var hasValue = pct !== null && pct !== undefined;
+			var barW = hasValue ? (pct / 100) * (plotRight - plotLeft) : 0;
+			var color = hasValue ? (pct >= 70 ? "var(--text-success)" : pct >= 30 ? "var(--text-accent)" : "var(--text-warning)") : "var(--border-strong)";
+			var valueText = hasValue ? pct + "%" : "—";
+			var fullName = escapeHtml((p.client || p.product || p.name) + (p.quote_no ? " — " + p.quote_no : ""));
+			var tooltip = escapeHtml((p.client || p.product || p.name) + ": " + (hasValue ? pct + "% overall progress" : "Overall progress not measured yet"));
+			var barHtml = hasValue
+				? '<rect x="' + plotLeft + '" y="' + rowY + '" width="' + barW + '" height="' + barHeight + '" rx="2" fill="' + color + '" data-tip="' + tooltip + '">'
+				+ '<animate attributeName="width" from="0" to="' + barW + '" dur="0.6s" begin="' + (i * 0.04) + 's" fill="freeze"/>'
+				+ '</rect>'
+				: '<rect x="' + plotLeft + '" y="' + rowY + '" width="2" height="' + barHeight + '" fill="' + color + '" data-tip="' + tooltip + '"></rect>';
+			return barHtml
+				+ '<text x="' + (plotLeft - 8) + '" y="' + (rowY + barHeight) + '" font-size="10" fill="var(--text-primary)" text-anchor="end" font-weight="600" data-tip="' + fullName + '">' + chartLabel(p) + '</text>'
+				+ '<text x="' + (plotLeft + barW + 8) + '" y="' + (rowY + barHeight) + '" font-size="10" font-weight="600" fill="var(--text-primary)" text-anchor="start" font-family="var(--font-mono)">' + valueText + '</text>';
+		}).join("");
+
+		return '<svg viewBox="0 0 ' + (plotRight + 50) + ' ' + (plotBottom + 10) + '" style="width:100%; min-width:420px; height:auto; display:block;">'
+			+ gridLines + rows + '</svg>';
+	}
+
+	function buildMilestoneChart(projects) {
+		var plotLeft = 150, plotRight = 460, plotTop = 18, rowHeight = 26, barHeight = 6, radius = 2;
+		var plotBottom = plotTop + projects.length * rowHeight;
+
+		var gridLines = [0, 25, 50, 75, 100].map(function (pct) {
+			var x = plotLeft + (pct / 100) * (plotRight - plotLeft);
+			return '<line x1="' + x + '" y1="' + plotTop + '" x2="' + x + '" y2="' + plotBottom + '" stroke="var(--border)" stroke-width="0.5"></line>'
+				+ '<text x="' + x + '" y="' + (plotTop - 5) + '" font-size="10" fill="var(--text-muted)" text-anchor="middle">' + pct + '%</text>';
+		}).join("");
+
+		var defsHtml = "";
+		var zebraHtml = "";
+		var rows = projects.map(function (p, i) {
+			var rowY = plotTop + i * rowHeight + (rowHeight - barHeight) / 2;
+			var clipId = "msClip" + i;
+
+			if (i % 2 === 1) {
+				zebraHtml += '<rect x="0" y="' + (plotTop + i * rowHeight) + '" width="' + (plotRight + 50) + '" height="' + rowHeight + '" fill="var(--surface-1)" opacity="0.5"></rect>';
+			}
+
+			defsHtml += '<clipPath id="' + clipId + '"><rect x="' + plotLeft + '" y="' + rowY + '" width="' + (plotRight - plotLeft) + '" height="' + barHeight + '" rx="' + radius + '"></rect></clipPath>';
+
+			var firstPendingIndex = p.milestones.findIndex(function (m) { return m.completion_status !== "Completed"; });
+			var segHtml, dividers = "";
+
+			if (!p.milestones.length) {
+				segHtml = '<rect x="' + plotLeft + '" y="' + rowY + '" width="' + (plotRight - plotLeft) + '" height="' + barHeight + '" fill="var(--surface-1)" data-tip="No milestones defined yet"></rect>';
+			} else {
+				var cumX = plotLeft;
+				segHtml = p.milestones.map(function (m, mi) {
+					var w = ((m.weight || 0) / 100) * (plotRight - plotLeft);
+					var kind = combinedSeverity(m, mi === firstPendingIndex);
+					var work = deriveWorkStatus(m, mi === firstPendingIndex);
+					var pay = derivePaymentStatus(m, mi === firstPendingIndex);
+					var tooltip = "M" + (mi + 1) + ": " + (m.title || "Untitled") + " (" + (m.weight || 0) + "%)\n" + work.label + " · " + pay.label;
+					var rect = '<rect x="' + cumX + '" y="' + rowY + '" width="' + w + '" height="' + barHeight + '" fill="' + milestoneColor(m, mi === firstPendingIndex) + '" data-tip="' + escapeHtml(tooltip) + '">'
+						+ '<animate attributeName="width" from="0" to="' + w + '" dur="0.5s" begin="' + (i * 0.05 + mi * 0.03) + 's" fill="freeze"/>'
+						+ '</rect>';
+					cumX += w;
+					if (mi < p.milestones.length - 1) {
+						dividers += '<line x1="' + cumX + '" y1="' + rowY + '" x2="' + cumX + '" y2="' + (rowY + barHeight) + '" stroke="var(--surface-2)" stroke-width="0.75"></line>';
+					}
+					return rect;
+				}).join("") + dividers;
+			}
+
+			var track = '<rect x="' + plotLeft + '" y="' + rowY + '" width="' + (plotRight - plotLeft) + '" height="' + barHeight + '" rx="' + radius + '" fill="var(--surface-1)"></rect>';
+			var overallLabel = p.overall_percent != null ? p.overall_percent + "%" : "—";
+			var fullName = escapeHtml((p.client || p.product || p.name) + (p.quote_no ? " — " + p.quote_no : ""));
+
+			return track
+				+ '<g clip-path="url(#' + clipId + ')">' + segHtml + '</g>'
+				+ '<text x="' + (plotLeft - 8) + '" y="' + (rowY + barHeight) + '" font-size="10" fill="var(--text-primary)" text-anchor="end" font-weight="600" data-tip="' + fullName + '">' + chartLabel(p) + '</text>'
+				+ '<text x="' + (plotRight + 8) + '" y="' + (rowY + barHeight) + '" font-size="10" font-weight="600" fill="var(--text-primary)" text-anchor="start" font-family="var(--font-mono)">' + overallLabel + '</text>';
+		}).join("");
+
+		return '<svg viewBox="0 0 ' + (plotRight + 50) + ' ' + (plotBottom + 10) + '" style="width:100%; min-width:480px; height:auto; display:block;">'
+			+ '<defs>' + defsHtml + '</defs>'
+			+ zebraHtml + gridLines + rows + '</svg>';
+	}
+
+	function escapeHtml(str) {
+		return String(str == null ? "" : str)
+			.replace(/&/g, "&amp;")
+			.replace(/</g, "&lt;")
+			.replace(/>/g, "&gt;")
+			.replace(/"/g, "&quot;");
+	}
+	function legendItem(color, label) {
+		return '<span style="display:inline-flex; align-items:center; gap:4px; font-size:10px; color:var(--text-secondary);">'
+			+ '<span style="width:8px; height:8px; border-radius:2px; background:' + color + '; display:inline-block; flex-shrink:0;"></span>'
+			+ label + '</span>';
+	}
+	function legendDot(color, label) {
+		return '<span style="display:inline-flex; align-items:center; gap:4px; font-size:10px; color:var(--text-secondary);">'
+			+ '<span style="width:8px; height:8px; border-radius:50%; background:' + color + '; display:inline-block; flex-shrink:0;"></span>'
+			+ label + '</span>';
+	}
+	function statusColor(kind) {
+		return kind === "success" ? "var(--text-success)" : kind === "danger" ? "var(--text-danger)" : kind === "warning" ? "var(--text-warning)" : "var(--border-strong)";
+	}
+	var CHART_LIMIT = 10;   // dev data has a lot of unlabeled test projects — cap what the charts show so they stay readable
+	function shortName(name) {
+		if (!name) return "—";
+		return name.length > 14 ? name.slice(0, 13) + "…" : name;
+	}
+	function chartLabel(p) {
+		return shortName(p.client || p.product || p.name);
+	}
+	function renderMilestoneDashboard(projects) {
+		var el = document.getElementById("milestones-view");
+		if (!projects || !projects.length) {
+			el.innerHTML = "<div class='d-meta'>No active projects to show.</div>";
+			return;
+		}
+
+		var cardStyle = "background:var(--surface-2); border-radius:12px; box-shadow:0 1px 2px rgba(0,0,0,0.04), 0 2px 12px rgba(0,0,0,0.05); padding:18px 22px;";
+		var dividerStyle = "height:1px; background:var(--border); margin:12px 0 14px;";
+
+		var chartsHtml = `
+<div style="display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-bottom:20px;">
+
+	<div style="${cardStyle}">
+		<div style="display:flex; justify-content:space-between; align-items:baseline; flex-wrap:wrap; gap:8px;">
+			<div style="font-size:14px; font-weight:600;">Overall progress by project</div>
+			<div style="display:flex; gap:14px; flex-wrap:wrap;">
+				${legendItem("var(--text-success)", "70%+")}
+				${legendItem("var(--text-accent)", "30–69%")}
+				${legendItem("var(--text-warning)", "Under 30%")}
+				${legendItem("var(--border-strong)", "Not measured")}
+			</div>
+		</div>
+		<div style="${dividerStyle}"></div>
+		<div style="max-height:220px; overflow:auto;">
+			${buildProgressChart(projects)}
+		</div>
+	</div>
+
+	<div style="${cardStyle}">
+		<div style="display:flex; justify-content:space-between; align-items:baseline; flex-wrap:wrap; gap:8px;">
+			<div style="font-size:14px; font-weight:600;">Milestone status by project</div>
+			<div style="display:flex; gap:14px; flex-wrap:wrap;">
+${legendItem("var(--text-success)", "Done")}
+${legendItem("var(--text-warning)", "On track")}
+${legendItem("#DC2626", "Work overdue")}
+${legendItem("#92400E", "Payment overdue")}
+${legendItem("#450A0A", "Both overdue")}
+${legendItem("var(--border-strong)", "Not defined")}
+			</div>
+		</div>
+		<div style="${dividerStyle}"></div>
+		<div style="max-height:220px; overflow:auto;">
+			${buildMilestoneChart(projects)}
+		</div>
+	</div>
+
+</div>
+
+<div style="${cardStyle} margin-bottom:20px;">
+	<div style="display:flex; justify-content:space-between; align-items:baseline; flex-wrap:wrap; gap:8px;">
+		<div style="font-size:14px; font-weight:600;">Delivery timeline — milestones marked</div>
+		<div style="display:flex; gap:14px; flex-wrap:wrap;">
+${legendDot("var(--text-success)", "Done")}
+${legendDot("var(--text-warning)", "On track")}
+${legendDot("#DC2626", "Work overdue")}
+${legendDot("#92400E", "Payment overdue")}
+${legendDot("#450A0A", "Both overdue")}
+		</div>
+	</div>
+	<div style="${dividerStyle}"></div>
+	<div style="max-height:220px; overflow:auto;">
+		${buildTimelineChart(projects)}
+	</div>
+</div>`;
+		var cardsHtml = projects.map(function (p) {
+			var firstPendingIndex = p.milestones.findIndex(function (m) { return m.completion_status !== "Completed"; });
+
+			var slots = [];
+			for (var i = 0; i < 6; i++) {
+				var m = p.milestones[i];
+				var isNext = i === firstPendingIndex;
+				slots.push({
+					index: "M" + (i + 1),
+					description: m ? m.title : "—",
+					weightLabel: (m && m.weight) ? m.weight + "%" : "—",
+					work: deriveWorkStatus(m, isNext),
+					payment: derivePaymentStatus(m, isNext),
+					muted: !m
+				});
+			}
+
+			var milestonesHtml = slots.map(function (m) {
+				return `
+			<div style="display:flex; align-items:center; gap:14px; padding:10px 0; border-bottom:1px solid var(--surface-1);">
+				<span class="d-meta" style="width:34px; flex-shrink:0;">${m.index}</span>
+				<span style="flex-grow:1; font-size:13px; color:${m.muted ? "var(--text-muted)" : "var(--text-primary)"};">${m.description}</span>
+				<span class="d-meta" style="width:44px; text-align:right; flex-shrink:0;">${m.weightLabel}</span>
+				<span style="${workPillStyle(m.work.kind)}">${m.work.label}</span>
+				<span style="${paymentPillStyle(m.payment.kind)}">${m.payment.label}</span>
+			</div>`;
+			}).join("");
+
+			return `
+		<div class="d-card" style="padding:0; margin-bottom:16px; overflow:hidden;">
+			<div style="display:flex; justify-content:space-between; align-items:flex-start; gap:16px; padding:18px 22px; border-bottom:1px solid var(--surface-1);">
+				<div style="display:flex; flex-direction:column; gap:6px;">
+					<div style="display:flex; flex-direction:column; gap:2px;">
+	<div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+		<span style="font-weight:600; font-size:15px; ${isOverdue(p) ? 'color:var(--text-danger);' : ''}">${p.client || "—"}</span>
+		<span class="d-meta">${p.product}</span>
+		${isOverdue(p) ? '<span style="' + milestonePillStyleByKind("danger") + '">Overdue</span>' : ''}
+	</div>
+	<div class="d-meta">${p.quote_no}</div>
+</div>
+					<div style="display:flex; gap:6px; flex-wrap:wrap;">
+						${p.modules.map(function (m) {
+				return `<span style="${moduleChipStyle(m.module_status)}">${m.module_name}</span>`;
+			}).join("")}
+					</div>
+				</div>
+				<div style="display:flex; gap:8px;">
+					${chip(p.project_status)}
+					${chip(p.current_phase)}
+				</div>
+			</div>
+
+			<div style="display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:1px; background:var(--surface-1);">
+				<div style="background:var(--surface-2); padding:14px 20px;">
+					<div style="font-weight:600; font-size:13px;">${p.timeline}</div>
+					<div class="d-meta">Duration</div>
+				</div>
+				<div style="background:var(--surface-2); padding:14px 20px;">
+					<div style="font-weight:600; font-size:13px;">${fmtDate(p.start_date)} → ${fmtDate(p.delivery_date)}</div>
+					<div class="d-meta">Start → Delivery</div>
+				</div>
+				<div style="background:var(--surface-2); padding:14px 20px;">
+					<div style="font-weight:600; font-size:13px;">${p.overall_percent != null ? p.overall_percent + "%" : "—"}</div>
+					<div class="d-meta">Overall progress</div>
+				</div>
+				<div style="background:var(--surface-2); padding:14px 20px;">
+					<div style="font-weight:600; font-size:13px;">${p.modules_completed} of ${p.modules_total}</div>
+					<div class="d-meta">Modules completed</div>
+				</div>
+				<div style="background:var(--surface-2); padding:14px 20px;">
+					<div style="font-weight:600; font-size:13px; color:var(--text-accent);">${p.current_module}</div>
+					<div class="d-meta">Current module</div>
+				</div>
+			</div>
+
+			<div style="padding:18px 22px; border-bottom:1px solid var(--surface-1);">
+				<div class="d-meta" style="margin-bottom:8px;">Milestones</div>
+				${milestonesHtml}
+			</div>
+
+			<div style="display:grid; grid-template-columns:1.3fr 1fr; gap:1px; background:var(--surface-1);">
+				<div style="background:var(--surface-2); padding:18px 22px;">
+					<div class="d-meta" style="margin-bottom:8px;">Payment</div>
+					<div style="display:flex; height:24px; border-radius:3px; overflow:hidden;">
+						<div style="flex:${p.payment_received_pct} 0 auto; background:var(--text-success); color:#fff; font-size:11px; font-weight:600; display:flex; align-items:center; justify-content:center;">${p.payment_received_pct}% received</div>
+						<div style="flex:${p.payment_pending_pct} 0 auto; background:var(--text-warning); color:#fff; font-size:11px; font-weight:600; display:flex; align-items:center; justify-content:center;">${p.payment_pending_pct}% pending</div>
+					</div>
+					<div class="d-meta" style="margin-top:8px;">Next payment milestone: <strong>${p.next_payment_milestone}</strong></div>
+				</div>
+				<div style="background:var(--surface-2); padding:18px 22px;">
+					<div class="d-meta">Next activity</div>
+					<div style="font-size:13px; margin-bottom:8px;">${p.next_activity}</div>
+					<div class="d-meta">Remarks</div>
+					<div style="font-size:13px;">${p.remarks}</div>
+				</div>
+			</div>
+		</div>`;
+		}).join("");
+
+		el.innerHTML = chartsHtml + cardsHtml;
 	}
 	document.getElementById("milestone-popup-overlay").addEventListener("click", function (e) {
 		if (e.target === this) {
@@ -1072,6 +1575,12 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		state.view = "board";
 		updateView();
 	});
+	document.getElementById("btn-milestones").addEventListener("click", function (e) {
+		state.view = "milestones";
+		loadMilestoneDashboard().then(function () {
+			updateView()
+		})
+	})
 	document.getElementById("btn-dashboard").addEventListener("click", function (e) {
 		state.view = "dashboard";
 		loadDashboard().then(function () { updateView(); });
