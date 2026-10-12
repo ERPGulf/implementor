@@ -669,7 +669,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 	<div class="view-tabs">
 		<div class="view-tabs-slider" id="view-tabs-slider"></div>
 		<button id="btn-board" class="on">${frappe.utils.icon("layout-list", "xs")} Overview</button>
-		<button id="btn-milestones">${frappe.utils.icon("flag", "xs")} Milestones </button>
+		<button id="btn-milestones">${frappe.utils.icon("flag", "xs")} Management Dashboard </button>
 		<button id="btn-dashboard">${frappe.utils.icon("chart-bar", "xs")} Dashboard</button>
 		<button id="btn-report">${frappe.utils.icon("file-chart-column-increasing", "xs")} Reports</button>
 	</div>
@@ -954,8 +954,11 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		return rows
 	}
 	async function loadMilestoneDashboard() {
-		var data = await frappe.xcall("implementor.milestone_apis.get_milestone_dashboard", {});
-		renderMilestoneDashboard(data);
+		var [data, summary] = await Promise.all([
+			frappe.xcall("implementor.milestone_apis.get_milestone_dashboard", {}),
+			frappe.xcall("implementor.api.dashboard_summary", {})   // no project_id → org-wide totals
+		]);
+		renderMilestoneDashboard(data, summary);
 	}
 	function parseLocalDate(str) {
 		if (!str) return null;
@@ -1285,7 +1288,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 	function chartLabel(p) {
 		return shortName(p.client || p.product || p.name);
 	}
-	function renderMilestoneDashboard(projects) {
+	function renderMilestoneDashboard(projects, summary) {
 		var el = document.getElementById("milestones-view");
 		if (!projects || !projects.length) {
 			el.innerHTML = "<div class='d-meta'>No active projects to show.</div>";
@@ -1333,7 +1336,7 @@ ${legendItem("var(--border-strong)", "Not defined")}
 	</div>
 
 </div>
-
+${"" /*
 <div style="${cardStyle} margin-bottom:20px;">
 	<div style="display:flex; justify-content:space-between; align-items:baseline; flex-wrap:wrap; gap:8px;">
 		<div style="font-size:14px; font-weight:600;">Delivery timeline — milestones marked</div>
@@ -1349,6 +1352,8 @@ ${legendDot("#450A0A", "Both overdue")}
 	<div style="max-height:220px; overflow:auto;">
 		${buildTimelineChart(projects)}
 	</div>
+*/}
+
 </div>`;
 		var cardsHtml = projects.map(function (p) {
 			var firstPendingIndex = p.milestones.findIndex(function (m) { return m.completion_status !== "Completed"; });
@@ -1397,8 +1402,8 @@ ${legendDot("#450A0A", "Both overdue")}
 					</div>
 				</div>
 				<div style="display:flex; gap:8px;">
-					${chip(p.project_status)}
-					${chip(p.current_phase)}
+					Project Status: ${chip(p.project_status)}
+					Current Phase: ${chip(p.current_phase)}
 				</div>
 			</div>
 
@@ -1408,7 +1413,7 @@ ${legendDot("#450A0A", "Both overdue")}
 					<div class="d-meta">Duration</div>
 				</div>
 				<div style="background:var(--surface-2); padding:14px 20px;">
-					<div style="font-weight:600; font-size:13px;">${fmtDate(p.start_date)} → ${fmtDate(p.delivery_date)}</div>
+					<div style="font-weight:600; font-size:13px;">${fmtDate(p.start_date, true)} → ${fmtDate(p.delivery_date, true)}</div>
 					<div class="d-meta">Start → Delivery</div>
 				</div>
 				<div style="background:var(--surface-2); padding:14px 20px;">
@@ -1426,7 +1431,7 @@ ${legendDot("#450A0A", "Both overdue")}
 			</div>
 
 			<div style="padding:18px 22px; border-bottom:1px solid var(--surface-1);">
-				<div class="d-meta" style="margin-bottom:8px;">Milestones</div>
+				<div class="d-meta" style="margin-bottom:8px;">Management Dashboard</div>
 				${milestonesHtml}
 			</div>
 
@@ -1448,8 +1453,14 @@ ${legendDot("#450A0A", "Both overdue")}
 			</div>
 		</div>`;
 		}).join("");
+		var kpiHtml = summary ? `
+    <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:20px;">
+        ${metricCard("Total Projects", summary.projects)}
+        ${metricCard("Overdue", summary.overdue, true)}
+        ${metricCard("Overall Completed %", summary.avg_progress + "%")}
+    </div>` : "";
 
-		el.innerHTML = chartsHtml + cardsHtml;
+		el.innerHTML = kpiHtml + chartsHtml + cardsHtml;
 	}
 	document.getElementById("milestone-popup-overlay").addEventListener("click", function (e) {
 		if (e.target === this) {
@@ -4230,13 +4241,13 @@ ${legendDot("#450A0A", "Both overdue")}
 		}
 	}, true);
 
-
-	function fmtDate(dueDateSting) {
+	function fmtDate(dueDateSting, withYear) {
 		if (!dueDateSting) return "null";
 		var months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 		var d = new Date(dueDateSting);
-		return d.getDate() + " " + months[d.getMonth()];
+		return d.getDate() + " " + months[d.getMonth()] + (withYear ? " " + d.getFullYear() : "");
 	}
+
 	function renderLeads(lead) {
 		var names = Array.isArray(lead) ? lead : (lead ? String(lead).split(",") : []);
 		names = names.map(function (n) { return n.trim(); });

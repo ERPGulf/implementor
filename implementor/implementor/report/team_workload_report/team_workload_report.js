@@ -21,4 +21,5 @@ frappe.query_reports["Team Workload Report"] = {
 			window.open(url);
 		});
 	}
+
 };
