@@ -34,7 +34,7 @@
   },
   {
    "fieldname": "payment_",
-   "fieldtype": "Data",
+   "fieldtype": "Float",
    "label": "Payment %"
   },
   {
@@ -45,7 +45,7 @@
   },
   {
    "fieldname": "milestone_completion_perc",
-   "fieldtype": "Data",
+   "fieldtype": "Float",
    "label": "Milestone Completion (%)"
   },
   {
@@ -60,7 +60,7 @@
   },
   {
    "fieldname": "no_of_modules",
-   "fieldtype": "Data",
+   "fieldtype": "Int",
    "label": "No of Modules"
   },
   {
@@ -77,7 +77,7 @@
  "index_web_pages_for_search": 1,
  "istable": 1,
  "links": [],
- "modified": "2026-08-18 12:32:33.132967",
+ "modified": "2026-10-14 14:20:30.491272",
  "modified_by": "Administrator",
  "module": "Implementor",
  "name": "Payment Milestone",
