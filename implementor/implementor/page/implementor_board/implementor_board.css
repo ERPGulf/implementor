@@ -6,6 +6,7 @@
     --border: #d1d8dd;
     --text-danger-light: #ef4444;
     --border-strong: #b7c1c8;
+    --tile-bg: #eef1f4;
     --radius: 8px;
     --text-primary: #192734;
     --text-search: :#6b7280;
@@ -186,6 +187,7 @@
     --progress: #4ade80;
     --border: #232323;
     --border-strong: #2e2e2e;
+    --tile-bg: #16181b;
     --text-primary: #f5f5f5;
     --text-secondary: #a3a3a3;
     --text-muted: #6e6e6e;

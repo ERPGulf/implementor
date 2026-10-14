@@ -38,13 +38,18 @@ def _project_milestones(project_name):
 
 
 @frappe.whitelist()
-def get_milestone_dashboard():
+def get_milestone_dashboard(project_type="ongoing"):
     if not frappe.has_permission("Project", "read"):
         frappe.throw("Not permitted", frappe.PermissionError)
+    filters = {"status": ["!=", "Cancelled"]}
+    if project_type == "amc":
+        filters["imp_status"] = "AMC"
+    else:
+        filters["imp_status"] = ["!=", "AMC"]
 
     projects = frappe.get_list(
         "Project",
-        filters={"status": ["!=", "Cancelled"]},
+        filters=filters,
         fields=[
             "name", "custom_quote_no as quote_no", "customer as client", "project_name as product",
             "expected_start_date as start_date", "imp_deadline as delivery_date",

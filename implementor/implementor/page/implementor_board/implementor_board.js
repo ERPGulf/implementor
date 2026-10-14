@@ -97,6 +97,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 	page.set_title('Implementor');
 	var state = {
 		milestoneOpen: null,
+		msType: "ongoing",
 		renamePopupOpen: null,
 		sortPanelOpen: null,
 		urgencuFilterPanelOpen: null,
@@ -549,45 +550,45 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			return oneStatusBar(progressState, name, by_status[name], max)
 		}).join("")
 	}
-	function renderDashBoard() {
-		if (!dashboardData) return;
-		var d = dashboardData;
-		var cardsHtml = [];
-		if (!d.project_id) {
-			cardsHtml.push(metricCard("Projects", d.projects));
-		}
-		cardsHtml.push(
-			metricCard("Tasks", d.tasks),
-			metricCard(d.project_id ? "Project Completed %" : "Overall Completed %", d.avg_progress + "%"),
-			metricCard("Due ≤ 7 days ", d.due_7d),
-			metricCard("Overdue", d.overdue, true),
-			metricCard("Escalated", d.escalated, true)
-		);
-		cardsHtml = cardsHtml.join("");
+	// function renderDashBoard() {
+	// 	if (!dashboardData) return;
+	// 	var d = dashboardData;
+	// 	var cardsHtml = [];
+	// 	if (!d.project_id) {
+	// 		cardsHtml.push(metricCard("Projects", d.projects));
+	// 	}
+	// 	cardsHtml.push(
+	// 		metricCard("Tasks", d.tasks),
+	// 		metricCard(d.project_id ? "Project Completed %" : "Overall Completed %", d.avg_progress + "%"),
+	// 		metricCard("Due ≤ 7 days ", d.due_7d),
+	// 		metricCard("Overdue", d.overdue, true),
+	// 		metricCard("Escalated", d.escalated, true)
+	// 	);
+	// 	cardsHtml = cardsHtml.join("");
 
-		document.getElementById("dashboard-view").innerHTML = `
-    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(140px,1fr)); gap:10px;">
-    ${cardsHtml}
-    </div>
-    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(280px,1fr)); gap:16px; margin-top:20px;">
-        <div class="dw-sec"><div class="dw-lbl">Deadlines — soonest first</div>${dashList(d.deadlines_soon, false, "No deadlines set.")}</div>
-        <div class="dw-sec"><div class="dw-lbl">Emergencies</div>${dashList(d.emergencies, true, "None right now.")}</div>
-    </div>
-        <div class="dw-sec"><div class="dw-lbl">TASKS BY STATUS</div>
-        ${statusBarSection(false, d.by_status)}</div>
-        <div class="dw-sec"><div class="dw-lbl">TASKS BY URGENCY</div>
-        ${statusBarSection(false, d.by_urgency)}</div>
-        <div class="dw-sec"><div class="dw-lbl">% COMPLETED BY STAGE</div>
-        ${statusBarSection(true, d.stage_avg_progress)}</div>
-        <div class="dw-sec"><div class="dw-lbl">OPEN TASKS BY DIVISION</div>
-        ${statusBarSection(false, d.by_division)}</div>
-    `;
-	}
+	// 	document.getElementById("dashboard-view").innerHTML = `
+	// <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(140px,1fr)); gap:10px;">
+	// ${cardsHtml}
+	// </div>
+	// <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(280px,1fr)); gap:16px; margin-top:20px;">
+	//     <div class="dw-sec"><div class="dw-lbl">Deadlines — soonest first</div>${dashList(d.deadlines_soon, false, "No deadlines set.")}</div>
+	//     <div class="dw-sec"><div class="dw-lbl">Emergencies</div>${dashList(d.emergencies, true, "None right now.")}</div>
+	// </div>
+	//     <div class="dw-sec"><div class="dw-lbl">TASKS BY STATUS</div>
+	//     ${statusBarSection(false, d.by_status)}</div>
+	//     <div class="dw-sec"><div class="dw-lbl">TASKS BY URGENCY</div>
+	//     ${statusBarSection(false, d.by_urgency)}</div>
+	//     <div class="dw-sec"><div class="dw-lbl">% COMPLETED BY STAGE</div>
+	//     ${statusBarSection(true, d.stage_avg_progress)}</div>
+	//     <div class="dw-sec"><div class="dw-lbl">OPEN TASKS BY DIVISION</div>
+	//     ${statusBarSection(false, d.by_division)}</div>
+	// `;
+	// }
 
 	async function loadDashboard() {
 		dashboardData = await frappe.xcall("implementor.api.dashboard_summary", { project_id: state.selectedProject });
 		updateEmergencyBadge(dashboardData);
-		renderDashBoard();
+		// renderDashBoard();
 	}
 	var allReports = [];
 	var reportSearchTerm = "";
@@ -669,13 +670,17 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 	<div class="view-tabs">
 		<div class="view-tabs-slider" id="view-tabs-slider"></div>
 		<button id="btn-board" class="on">${frappe.utils.icon("layout-list", "xs")} Overview</button>
-		<button id="btn-milestones">${frappe.utils.icon("flag", "xs")} Management Dashboard </button>
-		<button id="btn-dashboard">${frappe.utils.icon("chart-bar", "xs")} Dashboard</button>
+		<button id="btn-milestones">${frappe.utils.icon("chart-bar", "xs")} Dashboard </button>
+<!-- <button id="btn-dashboard">${frappe.utils.icon("chart-bar", "xs")} Dashboard</button> -->
 		<button id="btn-report">${frappe.utils.icon("file-chart-column-increasing", "xs")} Reports</button>
 	</div>
 	</div>
 	</div>
 	<div style="display:flex; align-items:center; gap:10px">
+	<select id="ms-type-filter" style="display:none;">
+		<option value="ongoing" selected>Ongoing projects</option>
+		<option value="amc">AMC projects</option>
+	</select>
 	<div style="position:relative">
 	<button id="btn-notif" class="icon-btn-lg">
 		${frappe.utils.icon("bell")}
@@ -853,7 +858,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		</div>
 		</div>
 
-		<div id="dashboard-view" style="display:none; padding:16px;"></div>
+<!-- <div id="dashboard-view" style="display:none; padding:16px;"></div> -->
 		<div id="report-view" style="display:none; padding:16px;"></div>
 		<div id="milestones-view" style="display:none; padding:16px;"></div>
 		</div>
@@ -922,9 +927,11 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 
 	function updateView() {
 		document.getElementById("btn-board").classList.toggle("on", state.view === "board");
-		document.getElementById("btn-dashboard").classList.toggle("on", state.view === "dashboard");
+		// document.getElementById("btn-dashboard").classList.toggle("on", state.view === "dashboard");
 		document.getElementById("btn-report").classList.toggle("on", state.view === "report");
 		document.getElementById("btn-milestones").classList.toggle("on", state.view === "milestones");
+		document.getElementById("ms-type-filter").style.display = state.view === "milestones" ? "" : "none";
+
 
 		requestAnimationFrame(function () {
 			positionViewTabsSlider();
@@ -933,7 +940,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 
 		var panels = {
 			board: [document.querySelector(".topbar"), document.querySelector(".grid")],
-			dashboard: [document.getElementById("dashboard-view")],
+			// dashboard: [document.getElementById("dashboard-view")],
 			report: [document.getElementById("report-view")],
 			milestones: [document.getElementById("milestones-view")]
 		};
@@ -955,7 +962,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 	}
 	async function loadMilestoneDashboard() {
 		var [data, summary] = await Promise.all([
-			frappe.xcall("implementor.milestone_apis.get_milestone_dashboard", {}),
+			frappe.xcall("implementor.milestone_apis.get_milestone_dashboard", { project_type: state.msType }),
 			frappe.xcall("implementor.api.dashboard_summary", {})   // no project_id → org-wide totals
 		]);
 		renderMilestoneDashboard(data, summary);
@@ -979,6 +986,45 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		var completed = p.overall_percent === 100 || p.project_status === "Closed" || p.current_phase === "Closed";
 		return d < today && !completed;   // strictly before today — delivery day itself is not overdue yet
 	}
+	function infoBox(label, value, bg, fg, isEmpty) {
+		return `
+		<div style="background:${isEmpty ? "var(--surface-1)" : bg}; border-radius:10px; padding:10px 14px; ${isEmpty ? "border:1px dashed var(--border);" : ""}">
+			<div style="font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.6px; color:${isEmpty ? "var(--text-muted)" : fg}; margin-bottom:4px;">${label}</div>
+			<div style="font-size:13px; font-weight:500; color:${isEmpty ? "var(--text-muted)" : "var(--text-primary)"};">${value}</div>
+		</div>`;
+	}
+	// small coloured tile for the project card's key facts row
+	function statTile(label, valueHtml) {
+		return `
+		<div style="background:var(--tile-bg); border-radius:10px; padding:12px 14px; min-width:0;">
+			<div style="font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.6px; color:var(--text-secondary); margin-bottom:6px;">${label}</div>
+			<div style="font-size:14px; font-weight:600; color:var(--text-primary); line-height:1.4;">${valueHtml}</div>
+		</div>`;
+	}
+	// segs: [[value, colour, label], ...] — drawn as shares of their own total, so bad weights still render correctly
+	function stackedBar(title, headline, headlineColor, segs) {
+		var total = segs.reduce(function (sum, s) { return sum + s[0]; }, 0);
+		var bar = total
+			? segs.filter(function (s) { return s[0] > 0; }).map(function (s) {
+				return `<div style="width:${s[0] / total * 100}%; background:${s[1]};" data-tip="${s[2]}: ${Math.round(s[0] / total * 100)}%"></div>`;
+			}).join("")
+			: "";
+		var legend = total
+			? segs.filter(function (s) { return s[0] > 0; }).map(function (s) {
+				return legendItem(s[1], s[2] + " " + Math.round(s[0] / total * 100) + "%");
+			}).join("")
+			: `<span class="d-meta" style="font-size:11px;">No milestones defined</span>`;
+		return `
+		<div>
+			<div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:6px;">
+				<div style="font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.6px; color:var(--text-secondary);">${title}</div>
+				<div style="font-size:13px; font-weight:600; color:${headlineColor};">${headline}</div>
+			</div>
+			<div style="display:flex; height:6px; border-radius:999px; overflow:hidden; background:var(--border);">${bar}</div>
+			<div style="display:flex; gap:14px; flex-wrap:wrap; margin-top:8px;">${legend}</div>
+		</div>`;
+	}
+
 	function milestoneIsPastDue(m) {
 		if (!m || !m.end_date) return false;
 		var today = new Date(); today.setHours(0, 0, 0, 0);
@@ -1290,8 +1336,15 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 	}
 	function renderMilestoneDashboard(projects, summary) {
 		var el = document.getElementById("milestones-view");
+		// 	var toolbarHtml = `
+		// <div style="display:flex; justify-content:flex-end; margin-bottom:12px;">
+		//     <select id="ms-type-filter">
+		//         <option value="ongoing" ${state.msType === "ongoing" ? "selected" : ""}>Ongoing projects</option>
+		//         <option value="amc" ${state.msType === "amc" ? "selected" : ""}>AMC projects</option>
+		//     </select>
+		// </div>`;
 		if (!projects || !projects.length) {
-			el.innerHTML = "<div class='d-meta'>No active projects to show.</div>";
+			el.innerHTML = "<div class='d-meta'>No projects to show.</div>";
 			return;
 		}
 
@@ -1336,6 +1389,7 @@ ${legendItem("var(--border-strong)", "Not defined")}
 	</div>
 
 </div>
+
 ${"" /*
 <div style="${cardStyle} margin-bottom:20px;">
 	<div style="display:flex; justify-content:space-between; align-items:baseline; flex-wrap:wrap; gap:8px;">
@@ -1357,108 +1411,160 @@ ${legendDot("#450A0A", "Both overdue")}
 </div>`;
 		var cardsHtml = projects.map(function (p) {
 			var firstPendingIndex = p.milestones.findIndex(function (m) { return m.completion_status !== "Completed"; });
-
-			var slots = [];
-			for (var i = 0; i < 6; i++) {
-				var m = p.milestones[i];
+			var MS_VISIBLE = 6;
+			var slots = p.milestones.map(function (m, i) {
 				var isNext = i === firstPendingIndex;
-				slots.push({
+				return {
 					index: "M" + (i + 1),
-					description: m ? m.title : "—",
-					weightLabel: (m && m.weight) ? m.weight + "%" : "—",
+					description: m.title || "—",
+					weightLabel: m.weight ? m.weight + "%" : "—",
 					work: deriveWorkStatus(m, isNext),
-					payment: derivePaymentStatus(m, isNext),
-					muted: !m
-				});
+					payment: derivePaymentStatus(m, isNext)
+				};
+			});
+
+			function msRow(m) {
+				return `
+			<div style="display:grid; grid-template-columns:30px 44px minmax(0,1fr) 130px 130px; align-items:center; gap:14px; padding:10px 14px; border-bottom:1px solid var(--border-strong);">
+				<span style="height:22px; border-radius:999px; display:inline-flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; ${workPillStyle(m.work.kind).replace(/padding:[^;]*;/, "")}">${m.index}</span>
+				<span class="d-meta" style="font-weight:600;">${m.weightLabel}</span>
+				<span title="${escapeHtml(m.description)}" style="font-size:13px; font-weight:500; color:var(--text-primary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${m.description}</span>
+				<span><span style="${workPillStyle(m.work.kind)}">${m.work.label}</span></span>
+				<span><span style="${paymentPillStyle(m.payment.kind)}">${m.payment.label}</span></span>
+			</div>`;
 			}
 
-			var milestonesHtml = slots.map(function (m) {
-				return `
-			<div style="display:flex; align-items:center; gap:14px; padding:10px 0; border-bottom:1px solid var(--surface-1);">
-				<span class="d-meta" style="width:34px; flex-shrink:0;">${m.index}</span>
-				<span style="flex-grow:1; font-size:13px; color:${m.muted ? "var(--text-muted)" : "var(--text-primary)"};">${m.description}</span>
-				<span class="d-meta" style="width:44px; text-align:right; flex-shrink:0;">${m.weightLabel}</span>
-				<span style="${workPillStyle(m.work.kind)}">${m.work.label}</span>
-				<span style="${paymentPillStyle(m.payment.kind)}">${m.payment.label}</span>
-			</div>`;
-			}).join("");
+			var milestonesHtml;
+			if (!slots.length) {
+				milestonesHtml = `<div class="d-meta">No milestones defined yet.</div>`;
+			} else {
+				var extra = slots.length - MS_VISIBLE;
+				milestonesHtml = slots.slice(0, MS_VISIBLE).map(msRow).join("");
+				if (extra > 0) {
+					milestonesHtml += `
+				<div class="ms-extra" style="display:none;">${slots.slice(MS_VISIBLE).map(msRow).join("")}</div>
+				<button class="btn btn-xs btn-default" data-act="toggle-ms" data-more="Show ${extra} more" style="margin:8px 14px;">Show ${extra} more</button>`;
+				}
+			}
+
+			var overdueProject = isOverdue(p);
+
+			// work bar — milestone completion, weighted
+			var wDone = 0, wLate = 0, wActive = 0, wTodo = 0;
+			// payment bar — milestone payment, weighted
+			var pPaid = 0, pLate = 0, pDue = 0;
+			p.milestones.forEach(function (m) {
+				var w = m.weight || 0;
+				var past = milestoneIsPastDue(m);
+				if (m.completion_status === "Completed") wDone += w;
+				else if (past) wLate += w;
+				else if (m.completion_status === "In Progress") wActive += w;
+				else wTodo += w;
+				if (m.payment_status === "Paid") pPaid += w;
+				else if (past) pLate += w;
+				else pDue += w;
+			});
+			var wTotal = wDone + wLate + wActive + wTodo;
+			var workPct = wTotal ? Math.round(wDone / wTotal * 100) : 0;
+			var payPct = wTotal ? Math.round(pPaid / wTotal * 100) : 0;
 
 			return `
-		<div class="d-card" style="padding:0; margin-bottom:16px; overflow:hidden;">
-			<div style="display:flex; justify-content:space-between; align-items:flex-start; gap:16px; padding:18px 22px; border-bottom:1px solid var(--surface-1);">
-				<div style="display:flex; flex-direction:column; gap:6px;">
-					<div style="display:flex; flex-direction:column; gap:2px;">
-	<div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
-		<span style="font-weight:600; font-size:15px; ${isOverdue(p) ? 'color:var(--text-danger);' : ''}">${p.client || "—"}</span>
-		<span class="d-meta">${p.product}</span>
-		${isOverdue(p) ? '<span style="' + milestonePillStyleByKind("danger") + '">Overdue</span>' : ''}
-	</div>
-	<div class="d-meta">${p.quote_no}</div>
-</div>
+		<div class="d-card" style="padding:0; margin-bottom:20px; overflow:hidden; border-radius:14px; box-shadow:0 1px 2px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.06);">
+
+			<div style="display:flex; justify-content:space-between; align-items:flex-start; gap:16px; padding:18px 22px 14px;">
+				<div style="display:flex; flex-direction:column; gap:8px; min-width:0;">
+					<div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+						<span style="font-weight:700; font-size:17px;">${p.client || "—"}</span>
+					</div>
+					<div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; font-size:12px; color:var(--text-secondary);">
+						<span style="padding:2px 8px; border-radius:6px; background:var(--surface-1); font-family:var(--font-mono); font-size:11px;">${p.quote_no}</span>
+						<span style="font-weight:500;">${p.product || ""}</span>
+					</div>
 					<div style="display:flex; gap:6px; flex-wrap:wrap;">
 						${p.modules.map(function (m) {
 				return `<span style="${moduleChipStyle(m.module_status)}">${m.module_name}</span>`;
 			}).join("")}
 					</div>
 				</div>
-				<div style="display:flex; gap:8px;">
-					Project Status: ${chip(p.project_status)}
-					Current Phase: ${chip(p.current_phase)}
-				</div>
-			</div>
-
-			<div style="display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:1px; background:var(--surface-1);">
-				<div style="background:var(--surface-2); padding:14px 20px;">
-					<div style="font-weight:600; font-size:13px;">${p.timeline}</div>
-					<div class="d-meta">Duration</div>
-				</div>
-				<div style="background:var(--surface-2); padding:14px 20px;">
-					<div style="font-weight:600; font-size:13px;">${fmtDate(p.start_date, true)} → ${fmtDate(p.delivery_date, true)}</div>
-					<div class="d-meta">Start → Delivery</div>
-				</div>
-				<div style="background:var(--surface-2); padding:14px 20px;">
-					<div style="font-weight:600; font-size:13px;">${p.overall_percent != null ? p.overall_percent + "%" : "—"}</div>
-					<div class="d-meta">Overall progress</div>
-				</div>
-				<div style="background:var(--surface-2); padding:14px 20px;">
-					<div style="font-weight:600; font-size:13px;">${p.modules_completed} of ${p.modules_total}</div>
-					<div class="d-meta">Modules completed</div>
-				</div>
-				<div style="background:var(--surface-2); padding:14px 20px;">
-					<div style="font-weight:600; font-size:13px; color:var(--text-accent);">${p.current_module}</div>
-					<div class="d-meta">Current module</div>
-				</div>
-			</div>
-
-			<div style="padding:18px 22px; border-bottom:1px solid var(--surface-1);">
-				<div class="d-meta" style="margin-bottom:8px;">Management Dashboard</div>
-				${milestonesHtml}
-			</div>
-
-			<div style="display:grid; grid-template-columns:1.3fr 1fr; gap:1px; background:var(--surface-1);">
-				<div style="background:var(--surface-2); padding:18px 22px;">
-					<div class="d-meta" style="margin-bottom:8px;">Payment</div>
-					<div style="display:flex; height:24px; border-radius:3px; overflow:hidden;">
-						<div style="flex:${p.payment_received_pct} 0 auto; background:var(--text-success); color:#fff; font-size:11px; font-weight:600; display:flex; align-items:center; justify-content:center;">${p.payment_received_pct}% received</div>
-						<div style="flex:${p.payment_pending_pct} 0 auto; background:var(--text-warning); color:#fff; font-size:11px; font-weight:600; display:flex; align-items:center; justify-content:center;">${p.payment_pending_pct}% pending</div>
+				<div style="display:flex; gap:16px; flex-shrink:0;">
+					<div style="display:flex; align-items:center; gap:6px;">
+						<span style="font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.6px; color:var(--text-muted);">Status</span>
+						${chip(p.project_status)}
 					</div>
-					<div class="d-meta" style="margin-top:8px;">Next payment milestone: <strong>${p.next_payment_milestone}</strong></div>
-				</div>
-				<div style="background:var(--surface-2); padding:18px 22px;">
-					<div class="d-meta">Next activity</div>
-					<div style="font-size:13px; margin-bottom:8px;">${p.next_activity}</div>
-					<div class="d-meta">Remarks</div>
-					<div style="font-size:13px;">${p.remarks}</div>
+					<div style="display:flex; align-items:center; gap:6px;">
+						<span style="font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.6px; color:var(--text-muted);">Phase</span>
+						${chip(p.current_phase)}
+					</div>
 				</div>
 			</div>
+
+			<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:10px; padding:0 22px 18px;">
+				${statTile("Duration", p.timeline)}
+				${statTile("Start → Delivery", fmtDate(p.start_date, true) + " → "
+				+ (overdueProject ? '<span style="color:var(--text-danger);">' + fmtDate(p.delivery_date, true) + '</span>' : fmtDate(p.delivery_date, true)))}
+				${statTile("Overall progress", p.overall_percent != null ? p.overall_percent + "%" : "—")}
+				${statTile("Modules completed", p.modules_completed + " of " + p.modules_total)}
+				${statTile("Current module", p.current_module)}
+			</div>
+
+			<div style="padding:0 22px 18px;">
+				<div style="display:flex; align-items:center; gap:8px; margin-bottom:10px;">
+					<span style="font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.6px; color:var(--text-secondary);">Milestones</span>
+					<span style="padding:1px 8px; border-radius:999px; font-size:11px; font-weight:600; background:var(--surface-1); color:var(--text-secondary);">${p.milestones.length}</span>
+				</div>
+				<div style="border:1px solid var(--border-strong); border-radius:10px; overflow:hidden;">
+					${milestonesHtml}
+				</div>
+			</div>
+
+			<div style="margin:0 22px 18px; padding:16px 18px; border-radius:12px; background:var(--surface-1); display:flex; flex-direction:column; gap:16px;">
+				${stackedBar("Work status", workPct + "% completed", wLate ? "#DC2626" : "var(--text-accent)", [
+					[wDone, "var(--text-success)", "Completed"],
+					[wActive, "var(--text-accent)", "In progress"],
+					[wLate, "#DC2626", "Overdue"],
+					[wTodo, "var(--border-strong)", "Not started"]
+				])}
+				${stackedBar("Payment status", payPct + "% received", pLate ? "#92400E" : "var(--text-success)", [
+					[pPaid, "var(--text-success)", "Received"],
+					[pLate, "#92400E", "Overdue"],
+					[pDue, "var(--text-warning)", "Pending"]
+				])}
+				${wTotal && wTotal !== 100 ? `<div style="font-size:11px; color:var(--text-danger);">Milestone weights add up to ${wTotal}%, should be 100%</div>` : ""}
+			</div>
+
+			<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:10px; padding:0 22px 20px;">
+				${infoBox("Next milestone", p.next_payment_milestone, "color-mix(in srgb, var(--bg-accent) 55%, var(--surface-2))", "var(--text-accent)", p.next_payment_milestone === "—")}
+				${infoBox("Next activity", p.next_activity, "color-mix(in srgb, var(--bg-warning) 55%, var(--surface-2))", "var(--text-warning)", p.next_activity === "Not logged")}
+				${infoBox("Remarks", p.remarks, "color-mix(in srgb, var(--bg-success) 55%, var(--surface-2))", "var(--text-success)", p.remarks === "None")}
+			</div>
+
 		</div>`;
 		}).join("");
+		var totalP = projects.length;
+		var workOverdueN = projects.filter(function (p) {
+			return p.milestones.some(function (m) { return deriveWorkStatus(m).kind === "danger"; });
+		}).length;
+		var payOverdueN = projects.filter(function (p) {
+			return p.milestones.some(function (m) { return derivePaymentStatus(m).kind === "danger"; });
+		}).length;
+		function pctOf(n) { return totalP ? Math.round(n / totalP * 100) : 0; }
+		function overdueCard(label, n, color) {
+			return `
+			<div class="d-card" style="padding:12px; text-align:center">
+				<div class="d-meta">${label}</div>
+				<div style="font-size:22px; font-weight:600; color:${n > 0 ? color : "var(--text-primary)"}">${pctOf(n)}%</div>
+				<div class="d-meta" style="font-size:11px;">${n} of ${totalP} projects</div>
+			</div>`;
+		}
+
 		var kpiHtml = summary ? `
-    <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:20px;">
-        ${metricCard("Total Projects", summary.projects)}
-        ${metricCard("Overdue", summary.overdue, true)}
-        ${metricCard("Overall Completed %", summary.avg_progress + "%")}
-    </div>` : "";
+	    <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-bottom:20px;">
+	        ${metricCard("Total Projects", summary.projects)}
+	        ${overdueCard("Work overdue", workOverdueN, "#DC2626")}
+	        ${overdueCard("Payment overdue", payOverdueN, "#92400E")}
+	        ${metricCard("Overall Completed %", summary.avg_progress + "%")}
+	    </div>` : "";
+
 
 		el.innerHTML = kpiHtml + chartsHtml + cardsHtml;
 	}
@@ -1581,6 +1687,19 @@ ${legendDot("#450A0A", "Both overdue")}
 	bindColFilterHeader("h-tasks", "tasks");
 	bindColFilterHeader("h-todos", "todos");
 	// bindColFilterHeader("h-tasks", "tasks", "taskDivFilter");
+	document.getElementById("milestones-view").addEventListener("click", function (e) {
+		var btn = e.target.closest("[data-act='toggle-ms']");
+		if (!btn) return;
+		var extra = btn.previousElementSibling;          // the .ms-extra div
+		var open = extra.style.display === "none";
+		extra.style.display = open ? "block" : "none";
+		btn.textContent = open ? "Show less" : btn.getAttribute("data-more");
+	});
+	document.getElementById("ms-type-filter").addEventListener("change", function (e) {
+		state.msType = e.target.value;
+		loadMilestoneDashboard();
+	});
+
 
 	document.getElementById("btn-board").addEventListener("click", function (e) {
 		state.view = "board";
@@ -1592,10 +1711,10 @@ ${legendDot("#450A0A", "Both overdue")}
 			updateView()
 		})
 	})
-	document.getElementById("btn-dashboard").addEventListener("click", function (e) {
-		state.view = "dashboard";
-		loadDashboard().then(function () { updateView(); });
-	});
+	// document.getElementById("btn-dashboard").addEventListener("click", function (e) {
+	// 	state.view = "dashboard";
+	// 	loadDashboard().then(function () { updateView(); });
+	// });
 	document.getElementById("btn-report").addEventListener("click", function (e) {
 		state.view = "report";
 		loadReports().then(function () { updateView(); });
