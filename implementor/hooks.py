@@ -13,13 +13,12 @@ app_license = "mit"
 
 # ]
 fixtures = [
-    # {"dt": "Role", "filters": [["name", "in", [
-    #     "Implementor Manager",
-    #     "Implementor User",
-    # ]]]},
     {"dt": "Custom Field", "filters": [["module", "=", "Implementor"]]},
+    {"dt": "Property Setter", "filters": [["module", "=", "Implementor"]]},
     {"dt": "Report", "filters": [["module", "=", "Implementor"]]},
+    {"dt": "Workflow", "filters": [["name", "in", ["Project Delivery Workflow", "Task Status Workflow"]]]},
 ]
+
 permission_query_conditions = {
 	    "Task": "implementor.implementor.auth.get_task_permission_query_conditions",
 		"ToDo": "implementor.implementor.auth.get_todo_permission_query_conditions",
