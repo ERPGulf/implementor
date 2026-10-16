@@ -6,11 +6,19 @@ app_email = "support@erpgulf.com"
 app_license = "mit"
 
 # fixtures = []
-fixtures = [
-    "Role",
-    {"dt": "Custom Field", "filters": [["dt", "in", ["Project", "Task", "ToDo", "User", "Customer", "Employee","Notification Log"]]]},
-    {"dt": "Report", "filters": [["module", "=", "Implementor"]]},
+# fixtures = [
+#     "Role",
+#     {"dt": "Custom Field", "filters": [["dt", "in", ["Project", "Task", "ToDo", "User", "Customer", "Employee","Notification Log"]]]},
+#     {"dt": "Report", "filters": [["module", "=", "Implementor"]]},
 
+# ]
+fixtures = [
+    # {"dt": "Role", "filters": [["name", "in", [
+    #     "Implementor Manager",
+    #     "Implementor User",
+    # ]]]},
+    {"dt": "Custom Field", "filters": [["module", "=", "Implementor"]]},
+    {"dt": "Report", "filters": [["module", "=", "Implementor"]]},
 ]
 permission_query_conditions = {
 	    "Task": "implementor.implementor.auth.get_task_permission_query_conditions",
