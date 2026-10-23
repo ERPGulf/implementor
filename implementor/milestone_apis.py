@@ -41,15 +41,38 @@ def _project_milestones(project_name):
 def get_milestone_dashboard(project_type="ongoing"):
     if not frappe.has_permission("Project", "read"):
         frappe.throw("Not permitted", frappe.PermissionError)
-    filters = {"status": ["!=", "Cancelled"]}
+    filters = [["status", "!=", "Cancelled"]]
+    or_filters = None
     if project_type == "amc":
-        filters["imp_status"] = "AMC"
+        filters.append(["imp_status", "=", "AMC"])
+    elif project_type == "completed":
+        or_filters = [["status", "=", "Completed"], ["imp_status", "=", "Closed"]]
+    elif project_type == "internal":
+        filters.append(["project_type", "=", "Internal"])
+    elif project_type == "all":
+        pass
+    elif project_type == "int-ongoing":
+        filters += [
+            ["project_type", "=", "Internal"],
+            ["status", "!=", "Completed"],
+            ["imp_status", "not in", ["AMC", "Closed"]],
+        ]
+    elif project_type == "ext-ongoing":
+        filters += [
+            ["project_type", "=", "External"],
+            ["status", "!=", "Completed"],
+            ["imp_status", "not in", ["AMC", "Closed"]],
+        ]
     else:
-        filters["imp_status"] = ["!=", "AMC"]
+        filters += [
+            ["status", "!=", "Completed"],
+            ["imp_status", "not in", ["AMC", "Closed"]],
+        ]
 
     projects = frappe.get_list(
         "Project",
         filters=filters,
+        or_filters=or_filters,
         fields=[
             "name", "custom_quote_no as quote_no", "customer as client", "project_name as product",
             "expected_start_date as start_date", "imp_deadline as delivery_date",

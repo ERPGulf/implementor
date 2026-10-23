@@ -678,8 +678,13 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 	</div>
 	<div style="display:flex; align-items:center; gap:10px">
 	<select id="ms-type-filter" style="display:none;">
-		<option value="ongoing" selected>Ongoing projects</option>
-		<option value="amc">AMC projects</option>
+		<option value="ongoing" selected>All Ongoing</option>
+		<option value="int-ongoing">Internal Ongoing</option>
+		<option value="ext-ongoing">External Ongoing</option>
+		<option value="amc">AMC</option>
+		<option value="completed">Completed</option>
+		<option value="internal">Internal</option>
+		<option value="all">All</option>
 	</select>
 	<div style="position:relative">
 	<button id="btn-notif" class="icon-btn-lg">
@@ -961,11 +966,8 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		return rows
 	}
 	async function loadMilestoneDashboard() {
-		var [data, summary] = await Promise.all([
-			frappe.xcall("implementor.milestone_apis.get_milestone_dashboard", { project_type: state.msType }),
-			frappe.xcall("implementor.api.dashboard_summary", {})   // no project_id → org-wide totals
-		]);
-		renderMilestoneDashboard(data, summary);
+		var data = await frappe.xcall("implementor.milestone_apis.get_milestone_dashboard", { project_type: state.msType });
+		renderMilestoneDashboard(data);
 	}
 	function parseLocalDate(str) {
 		if (!str) return null;
@@ -1334,7 +1336,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 	function chartLabel(p) {
 		return shortName(p.client || p.product || p.name);
 	}
-	function renderMilestoneDashboard(projects, summary) {
+	function renderMilestoneDashboard(projects) {
 		var el = document.getElementById("milestones-view");
 		// 	var toolbarHtml = `
 		// <div style="display:flex; justify-content:flex-end; margin-bottom:12px;">
@@ -1557,13 +1559,15 @@ ${legendDot("#450A0A", "Both overdue")}
 			</div>`;
 		}
 
-		var kpiHtml = summary ? `
+		// all four cards come from the filtered list, so they follow the Ongoing / AMC / Completed / Internal / All select
+		var avgProgress = totalP ? Math.round(projects.reduce(function (sum, p) { return sum + (p.overall_percent || 0); }, 0) / totalP) : 0;
+		var kpiHtml = `
 	    <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-bottom:20px;">
-	        ${metricCard("Total Projects", summary.projects)}
+	        ${metricCard("Total Projects", totalP)}
 	        ${overdueCard("Work overdue", workOverdueN, "#DC2626")}
 	        ${overdueCard("Payment overdue", payOverdueN, "#92400E")}
-	        ${metricCard("Overall Completed %", summary.avg_progress + "%")}
-	    </div>` : "";
+	        ${metricCard("Overall Completed %", avgProgress + "%")}
+	    </div>`;
 
 
 		el.innerHTML = kpiHtml + chartsHtml + cardsHtml;
