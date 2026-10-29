@@ -1,0 +1,65 @@
+meta {
+  name: Client testing
+  type: http
+  seq: 7
+}
+
+post {
+  url: {{baseUrl}}/api/method/implementor.client_api.confirm_fix
+  body: formUrlEncoded
+  auth: inherit
+}
+
+body:form-urlencoded {
+  ticket: 12ht7l2q84
+  fixed: 1
+  comment: Both users can see the Stock workspace now. Thanks!
+  ~customer: Hamza
+}
+
+tests {
+  test("returns 200", function () {
+    expect(res.status).to.equal(200);
+  });
+  
+  test("has message", function () {
+    expect(res.body).to.have.property("message");
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}
+
+docs {
+  The client confirms whether a resolved ticket is fixed.
+  
+  **Endpoint:** `POST /api/method/implementor.client_api.confirm_fix`  
+  **Screen:** Ticket status → It is fixed / Still an issue
+  
+  > ⚠️ **Changes data** on the shared server. Use test records only.
+  
+  **Permission:** Signed-in client user (Client User or Client Admin). Only records of the user's own client company are returned.
+  
+  **Body fields (form-encoded):**
+  
+  | Field | Type | Required | Example | Notes |
+  | --- | --- | --- | --- | --- |
+  | `ticket` | string | yes | `12ht7l2q84` |  |
+  | `fixed` | 1 / 0 | yes | `1` | 1 = It is fixed, 0 = Still an issue. |
+  | `comment` | string | when fixed=0 | `...` |  |
+  | `customer` | string | no | `Hamza` | Client company. Send only when `me.customers` has more than one entry. Disabled by default. |
+  
+  **Response (trimmed):**
+  
+  ```json
+  { "message": { ... updated ticket ... } }
+  ```
+  
+  **Errors:**
+  
+  - **401:** Token missing, expired or invalid. Refresh once and retry, else sign out.
+  - **403:** Not this client's record, or role not allowed.
+  - **417:** Ticket not ready to confirm, or comment missing when fixed=0.
+}

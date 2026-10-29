@@ -1,0 +1,48 @@
+meta {
+  name: Master Token
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/api/method/employee_app.authentication.master_token
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+tests {
+  test("returns 200", function () {
+    expect(res.status).to.equal(200);
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}
+
+docs {
+  Returns the app-level token used for the sign-up, sign-in, OTP and policy calls before a user is signed in.
+  
+  **Endpoint:** `GET /api/method/employee_app.authentication.master_token`
+  
+  > **From another app:** this endpoint belongs to **employee_app**, not implementor. Its code, fields and errors are owned by the employee_app team. The app calls it through `@erpgulf/auth-sdk`.
+  
+  **Permission:** Bearer token (`{{token}}`). The server identifies the user from it.
+  
+  **Query parameters:** none.
+  
+  **Response (trimmed):**
+  
+  ```json
+  { "message": { ... master token ... } }
+  ```
+  
+  **Notes:**
+  
+  - Put the token in `.env` as `MASTER_TOKEN=...`.
+}

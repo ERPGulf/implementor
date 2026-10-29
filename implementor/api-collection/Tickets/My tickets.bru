@@ -1,0 +1,71 @@
+meta {
+  name: My tickets
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{baseUrl}}/api/method/implementor.client_api.get_tickets?scope=open&project=PROJ-0029&limit=20
+  body: none
+  auth: inherit
+}
+
+params:query {
+  scope: open
+  project: PROJ-0029
+  limit: 20
+  ~offset: 
+  ~search: 
+  ~customer: Hamza
+}
+
+tests {
+  test("returns 200", function () {
+    expect(res.status).to.equal(200);
+  });
+  
+  test("has message", function () {
+    expect(res.body).to.have.property("message");
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}
+
+docs {
+  Lists the client's tickets, with filters and paging.
+  
+  **Endpoint:** `GET /api/method/implementor.client_api.get_tickets`  
+  **Screen:** My Tickets
+  
+  **Permission:** Signed-in client user (Client User or Client Admin). Only records of the user's own client company are returned.
+  
+  **Query parameters:**
+  
+  | Field | Type | Required | Example | Notes |
+  | --- | --- | --- | --- | --- |
+  | `scope` | open / closed / all | no | `open` |  |
+  | `project` | string | no | `PROJ-0029` |  |
+  | `search` | string | no |  |  |
+  | `limit` | int | no | `20` |  |
+  | `offset` | int | no | `0` |  |
+  | `customer` | string | no | `Hamza` | Client company. Send only when `me.customers` has more than one entry. Disabled by default. |
+  
+  **Response (trimmed):**
+  
+  ```json
+  { "message": [ { "name": "12hnuea73s", "subject": "...", "status": "Resolved", "needs_you": true } ] }
+  ```
+  
+  **Errors:**
+  
+  - **401:** Token missing, expired or invalid. Refresh once and retry, else sign out.
+  - **403:** Not this client's record, or role not allowed.
+  
+  **Notes:**
+  
+  - Labels: New → Submitted, Triaged → Under review, In Progress → In progress (blue); Waiting on Client → Waiting on you (amber); Resolved → Ready for your testing (maroon); Closed (green).
+  - `name` is a short random code: show it small and grey, lead with `subject`.
+}

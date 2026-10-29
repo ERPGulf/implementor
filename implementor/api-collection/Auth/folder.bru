@@ -1,0 +1,24 @@
+meta {
+  name: Auth
+  seq: 1
+}
+
+auth {
+  mode: bearer
+}
+
+auth:bearer {
+  token: {{masterToken}}
+}
+
+docs {
+  Sign-up, sign-in, OTP and token calls.
+  
+  > **From another app:** every request here except **Company code** belongs to **employee_app**, not implementor. Its code, fields and errors are owned by the employee_app team. The app calls it through `@erpgulf/auth-sdk`.
+  
+  Auth for this folder is the **master token** (`{{masterToken}}`), not a user token. **Company code** and **Refresh token** send no token. **Master Token** sends the user's `{{token}}`.
+  
+  Passwords and refresh tokens come from `.env` (`PASSWORD`, `REFRESH_TOKEN`). Mobile numbers and OTPs in the bodies are test values.
+  
+  Flow: Company code → Master Token → Employee policy → Sign up / Sign in (with OTP) → store tokens → Refresh token before expiry. Cold Boot policy runs on app restart.
+}

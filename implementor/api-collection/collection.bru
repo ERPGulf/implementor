@@ -1,0 +1,51 @@
+auth {
+  mode: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+docs {
+  # Implementor Client App API
+  
+  Backend for the ERPGulf Client App: implementation projects, milestones, AMC, hosting, backups and tickets. Owned by the ERPGulf backend team.
+  
+  ## Getting started
+  
+  1. Copy `.env.example` to `.env` in this folder (`api-collection/`). `.env` is gitignored.
+  2. Select the **Default** environment (top right in Bruno).
+  3. Run **Auth → Master Token** and put the result in `.env` as `MASTER_TOKEN=...`.
+  4. Sign in with **Auth → Sign in** (or take a token from the app) and put `token.access_token` in `.env` as `TOKEN=...`.
+  5. Run **Home & Profile → Me**, then any other request.
+  
+  If Bruno doesn't pick up a changed `.env`, close and reopen the collection.
+  
+  ## Auth
+  
+  Every request inherits `Authorization: Bearer {{token}}` from this collection. The **Auth** folder overrides it with `{{masterToken}}`. Never paste a real token into a request, header or body.
+  
+  ## Conventions
+  
+  - Data calls: `{{baseUrl}}/api/method/implementor.client_api.<function>`.
+  - **GET** sends parameters in the query string. **POST** sends a form-encoded body.
+  - Success data is inside `message`. Unwrap it in one place.
+  - `customer` is only needed when the user belongs to more than one company (see **Me**). It is disabled in every request by default.
+  - Dates are `YYYY-MM-DD`; date-times are in the server time zone.
+  - Requests marked ⚠️ change data on the shared server.
+  - Requests in **Auth** belong to **employee_app**, a different app.
+  
+  ## Error codes
+  
+  | HTTP | Meaning | What the app does |
+  | --- | --- | --- |
+  | 401 | Token expired or invalid | Refresh once, retry, else sign out |
+  | 403 | Not this client's record, or role not allowed | Show the message, go back |
+  | 404 | Record not found | Show the message, go back |
+  | 417 | Validation (e.g. empty comment) | Show the message, stay on screen |
+  | 5xx | Server problem | Generic error, allow retry |
+  
+  Error text is in `_server_messages` (a JSON string holding a JSON list) or `exception`.
+  
+  See the *ERPGulf Client App: Mobile UI Developer Guide* for screens, labels and empty states.
+}

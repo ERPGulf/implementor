@@ -1,0 +1,60 @@
+meta {
+  name: Sign in
+  type: http
+  seq: 7
+}
+
+post {
+  url: {{baseUrl}}/api/method/employee_app.sign_in.sign_in_api
+  body: formUrlEncoded
+  auth: inherit
+}
+
+body:form-urlencoded {
+  mobile_no: 1234567891
+  otp: 123456
+  password: {{password}}
+}
+
+tests {
+  test("returns 200", function () {
+    expect(res.status).to.equal(200);
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}
+
+docs {
+  Signs the user in with mobile plus OTP and/or password, as the login policy requires.
+  
+  **Endpoint:** `POST /api/method/employee_app.sign_in.sign_in_api`
+  
+  > **From another app:** this endpoint belongs to **employee_app**, not implementor. Its code, fields and errors are owned by the employee_app team. The app calls it through `@erpgulf/auth-sdk`.
+  
+  **Permission:** Master token.
+  
+  **Body fields (form-encoded):**
+  
+  | Field | Type | Required | Example | Notes |
+  | --- | --- | --- | --- | --- |
+  | `mobile_no` | string | yes | `1234567891` | Use a test number. |
+  | `otp` | string | depends on policy | `123456` | From Generate and send otp. |
+  | `password` | string | depends on policy | `{{password}}` | From `.env` (`PASSWORD`). Never type a real password here. |
+  
+  **Response (trimmed):**
+  
+  ```json
+  {
+    "token": { "access_token": "...", "refresh_token": "...", "expires_in": 3600 },
+    "employee": { "id": "...", "employee_name": "...", "phone": "...", "email": "..." }
+  }
+  ```
+  
+  **Notes:**
+  
+  - Put `access_token` in `.env` as `TOKEN=...` to call the client API from Bruno.
+  - The `employee` object only identifies the person. For company and role, call **Me**.
+}

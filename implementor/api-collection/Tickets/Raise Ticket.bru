@@ -1,0 +1,77 @@
+meta {
+  name: Raise Ticket
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/method/implementor.client_api.create_ticket
+  body: formUrlEncoded
+  auth: inherit
+}
+
+body:form-urlencoded {
+  subject: System Log Information Not Working
+  description: Some Bug when System Log Information Not Working
+  ticket_type: Bug
+  priority: Low
+  project: PROJ-0029
+  module: Accounting
+  reference: 
+  ~customer: Hamza
+}
+
+tests {
+  test("returns 200", function () {
+    expect(res.status).to.equal(200);
+  });
+  
+  test("has message", function () {
+    expect(res.body).to.have.property("message");
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}
+
+docs {
+  Creates a support ticket.
+  
+  **Endpoint:** `POST /api/method/implementor.client_api.create_ticket`  
+  **Screen:** Raise Ticket
+  
+  > ⚠️ **Changes data** on the shared server. Use test records only.
+  
+  **Permission:** Signed-in client user (Client User or Client Admin). Only records of the user's own client company are returned.
+  
+  **Body fields (form-encoded):**
+  
+  | Field | Type | Required | Example | Notes |
+  | --- | --- | --- | --- | --- |
+  | `subject` | string | yes | `System Log Information Not Working` |  |
+  | `description` | string | yes | `...` |  |
+  | `ticket_type` | string | no | `Bug` | From Raise Ticket Form. |
+  | `priority` | string | no | `Low` | From Raise Ticket Form. |
+  | `project` | string | no | `PROJ-0029` |  |
+  | `module` | string | no | `Accounting` | Saved into the description. |
+  | `reference` | string | no |  | Screen or document. Saved into the description. |
+  | `customer` | string | no | `Hamza` | Client company. Send only when `me.customers` has more than one entry. Disabled by default. |
+  
+  **Response (trimmed):**
+  
+  ```json
+  { "message": { "name": "12hnuea73s", "subject": "...", "status": "New", ... } }
+  ```
+  
+  **Errors:**
+  
+  - **401:** Token missing, expired or invalid. Refresh once and retry, else sign out.
+  - **403:** Not this client's record, or role not allowed.
+  - **417:** Missing subject or description.
+  
+  **Notes:**
+  
+  - Create the ticket first, then upload each file with **Attach** using the returned `name`. Confirm only after uploads finish.
+}

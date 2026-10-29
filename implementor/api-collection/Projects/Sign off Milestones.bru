@@ -1,0 +1,70 @@
+meta {
+  name: Sign off Milestones
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/api/method/implementor.client_api.sign_off_milestone
+  body: formUrlEncoded
+  auth: inherit
+}
+
+body:form-urlencoded {
+  project: PROJ-0029
+  milestone: s6ri3u6d64
+  remarks: For Testing
+  ~customer: Hamza
+}
+
+tests {
+  test("returns 200", function () {
+    expect(res.status).to.equal(200);
+  });
+  
+  test("has message", function () {
+    expect(res.body).to.have.property("message");
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}
+
+docs {
+  Client Admin signs off a milestone.
+  
+  **Endpoint:** `POST /api/method/implementor.client_api.sign_off_milestone`  
+  **Screen:** Milestones → Sign off
+  
+  > ⚠️ **Changes data** on the shared server. Use test records only.
+  
+  **Permission:** Client Admin only (`me.is_client_admin`), and the milestone's `can_sign_off` must be true.
+  
+  **Body fields (form-encoded):**
+  
+  | Field | Type | Required | Example | Notes |
+  | --- | --- | --- | --- | --- |
+  | `project` | string | yes | `PROJ-0029` |  |
+  | `milestone` | string | yes | `s6ri3u6d64` | Milestone `name`. |
+  | `remarks` | string | no | `For Testing` |  |
+  | `customer` | string | no | `Hamza` | Client company. Send only when `me.customers` has more than one entry. Disabled by default. |
+  
+  **Response (trimmed):**
+  
+  ```json
+  { "message": { "milestones": [ ... updated ... ] } }
+  ```
+  
+  **Errors:**
+  
+  - **401:** Token missing, expired or invalid. Refresh once and retry, else sign out.
+  - **403:** Not this client's record, or role not allowed.
+  - **403:** Not a Client Admin.
+  - **417:** Milestone not ready for sign-off.
+  
+  **Notes:**
+  
+  - Re-render from the response; don't call Milestones again.
+}

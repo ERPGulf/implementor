@@ -1,0 +1,69 @@
+meta {
+  name: AMC
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{baseUrl}}/api/method/implementor.client_api.get_amc?project=PROJ-0030
+  body: none
+  auth: inherit
+}
+
+params:query {
+  project: PROJ-0030
+  ~customer: Hamza
+}
+
+tests {
+  test("returns 200", function () {
+    expect(res.status).to.equal(200);
+  });
+  
+  test("has message", function () {
+    expect(res.body).to.have.property("message");
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}
+
+docs {
+  Returns the AMC contract period and usage.
+  
+  **Endpoint:** `GET /api/method/implementor.client_api.get_amc`  
+  **Screen:** AMC
+  
+  **Permission:** Signed-in client user (Client User or Client Admin). Only records of the user's own client company are returned.
+  
+  **Query parameters:**
+  
+  | Field | Type | Required | Example | Notes |
+  | --- | --- | --- | --- | --- |
+  | `project` | string | yes | `PROJ-0030` | AMC project name. |
+  | `customer` | string | no | `Hamza` | Client company. Send only when `me.customers` has more than one entry. Disabled by default. |
+  
+  **Response (trimmed):**
+  
+  ```json
+  {
+    "message": {
+      "start_date": "2026-01-01", "end_date": "2026-12-31",
+      "days_left": 64, "elapsed_percent": 82,
+      "hours_used": 18, "tickets": ...
+    }
+  }
+  ```
+  
+  **Errors:**
+  
+  - **401:** Token missing, expired or invalid. Refresh once and retry, else sign out.
+  - **403:** Not this client's record, or role not allowed.
+  - **404:** AMC not found.
+  
+  **Notes:**
+  
+  - No contracted-hours total yet: show "18 hrs used" alone, no used/total bar.
+}

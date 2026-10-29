@@ -1,0 +1,60 @@
+meta {
+  name: Waiting for you
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{baseUrl}}/api/method/implementor.client_api.get_my_actions
+  body: none
+  auth: inherit
+}
+
+params:query {
+  ~customer: Hamza
+}
+
+tests {
+  test("returns 200", function () {
+    expect(res.status).to.equal(200);
+  });
+  
+  test("has message", function () {
+    expect(res.body).to.have.property("message");
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}
+
+docs {
+  Returns tasks the ERPGulf team assigned to this user.
+  
+  **Endpoint:** `GET /api/method/implementor.client_api.get_my_actions`  
+  **Screen:** Waiting on you
+  
+  **Permission:** Signed-in client user (Client User or Client Admin). Only records of the user's own client company are returned.
+  
+  **Query parameters:**
+  
+  | Field | Type | Required | Example | Notes |
+  | --- | --- | --- | --- | --- |
+  | `customer` | string | no | `Hamza` | Client company. Send only when `me.customers` has more than one entry. Disabled by default. |
+  
+  **Response (trimmed):**
+  
+  ```json
+  { "message": [ { "name": "12glqu2bo8", "text": "...", "due": "2026-11-02", "days_left": 4, "project": "PROJ-0029" } ] }
+  ```
+  
+  **Errors:**
+  
+  - **401:** Token missing, expired or invalid. Refresh once and retry, else sign out.
+  - **403:** Not this client's record, or role not allowed.
+  
+  **Notes:**
+  
+  - Empty list: show "Nothing needed from you right now".
+}

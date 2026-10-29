@@ -1,0 +1,54 @@
+meta {
+  name: Sign up
+  type: http
+  seq: 6
+}
+
+post {
+  url: {{baseUrl}}/api/method/employee_app.authentication.sign_up_api
+  body: formUrlEncoded
+  auth: inherit
+}
+
+body:form-urlencoded {
+  mobile_no: 1234567891
+  otp: 123456
+  password: {{password}}
+}
+
+tests {
+  test("returns 200", function () {
+    expect(res.status).to.equal(200);
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}
+
+docs {
+  Registers the user's mobile on first use. The SDK's `begin(mobile)` decides whether the flow is sign-up, sign-in or cold boot.
+  
+  **Endpoint:** `POST /api/method/employee_app.authentication.sign_up_api`
+  
+  > **From another app:** this endpoint belongs to **employee_app**, not implementor. Its code, fields and errors are owned by the employee_app team. The app calls it through `@erpgulf/auth-sdk`.
+  
+  > ⚠️ **Changes data** on the shared server. Use test records only.
+  
+  **Permission:** Master token.
+  
+  **Body fields (form-encoded):**
+  
+  | Field | Type | Required | Example | Notes |
+  | --- | --- | --- | --- | --- |
+  | `mobile_no` | string | yes | `1234567891` | Use a test number. |
+  | `otp` | string | depends on policy | `123456` | From Generate and send otp. |
+  | `password` | string | depends on policy | `{{password}}` | From `.env` (`PASSWORD`). Never type a real password here. |
+  
+  **Response (trimmed):**
+  
+  ```json
+  { "message": { ... } }
+  ```
+}

@@ -1,0 +1,68 @@
+meta {
+  name: Milestones
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/api/method/implementor.client_api.get_milestones?project=PROJ-0029
+  body: none
+  auth: inherit
+}
+
+params:query {
+  project: PROJ-0029
+  ~customer: Hamza
+}
+
+tests {
+  test("returns 200", function () {
+    expect(res.status).to.equal(200);
+  });
+  
+  test("has message", function () {
+    expect(res.body).to.have.property("message");
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}
+
+docs {
+  Returns a project's milestones and sign-off counts.
+  
+  **Endpoint:** `GET /api/method/implementor.client_api.get_milestones`  
+  **Screen:** Milestones
+  
+  **Permission:** Signed-in client user (Client User or Client Admin). Only records of the user's own client company are returned.
+  
+  **Query parameters:**
+  
+  | Field | Type | Required | Example | Notes |
+  | --- | --- | --- | --- | --- |
+  | `project` | string | yes | `PROJ-0029` |  |
+  | `customer` | string | no | `Hamza` | Client company. Send only when `me.customers` has more than one entry. Disabled by default. |
+  
+  **Response (trimmed):**
+  
+  ```json
+  {
+    "message": {
+      "milestones": [ { "name": "...", "status": "Due", "can_sign_off": true, "signed_off": { "by": "...", "on": "2026-10-01" } } ],
+      "signed_off": 2, "completed": 3, "total": 6
+    }
+  }
+  ```
+  
+  **Errors:**
+  
+  - **401:** Token missing, expired or invalid. Refresh once and retry, else sign out.
+  - **403:** Not this client's record, or role not allowed.
+  - **404:** Project not found.
+  
+  **Notes:**
+  
+  - Status colors: Completed green; Due maroon ("Ready for sign-off" when `can_sign_off`); In Progress blue; Not Started, Partially Completed, On Hold grey.
+}

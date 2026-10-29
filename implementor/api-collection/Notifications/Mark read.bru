@@ -1,0 +1,62 @@
+meta {
+  name: Mark read
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/method/implementor.client_api.mark_notification_read
+  body: formUrlEncoded
+  auth: inherit
+}
+
+body:form-urlencoded {
+  mark_all: 1
+  ~name: bbjqcbg636
+  ~customer: Hamza
+}
+
+tests {
+  test("returns 200", function () {
+    expect(res.status).to.equal(200);
+  });
+  
+  test("has message", function () {
+    expect(res.body).to.have.property("message");
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}
+
+docs {
+  Marks one notification, or all of them, as read.
+  
+  **Endpoint:** `POST /api/method/implementor.client_api.mark_notification_read`  
+  **Screen:** Notifications
+  
+  > ⚠️ **Changes data** on the shared server. Use test records only.
+  
+  **Permission:** Signed-in client user (Client User or Client Admin). Only records of the user's own client company are returned.
+  
+  **Body fields (form-encoded):**
+  
+  | Field | Type | Required | Example | Notes |
+  | --- | --- | --- | --- | --- |
+  | `name` | string | one of | `bbjqcbg636` | One notification. |
+  | `mark_all` | 1 | one of | `1` | All notifications. Send `name` or `mark_all`, not both. |
+  | `customer` | string | no | `Hamza` | Client company. Send only when `me.customers` has more than one entry. Disabled by default. |
+  
+  **Response (trimmed):**
+  
+  ```json
+  { "message": { "success": true } }
+  ```
+  
+  **Errors:**
+  
+  - **401:** Token missing, expired or invalid. Refresh once and retry, else sign out.
+  - **403:** Not this client's record, or role not allowed.
+}

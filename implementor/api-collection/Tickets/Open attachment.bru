@@ -1,0 +1,55 @@
+meta {
+  name: Open attachment
+  type: http
+  seq: 8
+}
+
+get {
+  url: {{baseUrl}}/api/method/implementor.client_api.download_attachment?file=e890f3425b
+  body: none
+  auth: inherit
+}
+
+params:query {
+  file: e890f3425b
+  ~customer: Hamza
+}
+
+tests {
+  test("returns 200", function () {
+    expect(res.status).to.equal(200);
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}
+
+docs {
+  Downloads a ticket attachment.
+  
+  **Endpoint:** `GET /api/method/implementor.client_api.download_attachment`  
+  **Screen:** Ticket status → attachment
+  
+  **Permission:** Signed-in client user (Client User or Client Admin). Only records of the user's own client company are returned.
+  
+  **Query parameters:**
+  
+  | Field | Type | Required | Example | Notes |
+  | --- | --- | --- | --- | --- |
+  | `file` | string | yes | `e890f3425b` | From `get_ticket.attachments[].name`. |
+  | `customer` | string | no | `Hamza` | Client company. Send only when `me.customers` has more than one entry. Disabled by default. |
+  
+  **Response:** The file bytes (not JSON).
+  
+  **Errors:**
+  
+  - **401:** Token missing, expired or invalid. Refresh once and retry, else sign out.
+  - **403:** Not this client's record, or role not allowed.
+  - **404:** File not found.
+  
+  **Notes:**
+  
+  - Attachments are private. Always open them through this call, never through `file_url`.
+}

@@ -1,0 +1,52 @@
+meta {
+  name: Raise Ticket Form
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/method/implementor.client_api.get_ticket_options
+  body: none
+  auth: inherit
+}
+
+tests {
+  test("returns 200", function () {
+    expect(res.status).to.equal(200);
+  });
+  
+  test("has message", function () {
+    expect(res.body).to.have.property("message");
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}
+
+docs {
+  Returns the dropdown values for the Raise Ticket form.
+  
+  **Endpoint:** `GET /api/method/implementor.client_api.get_ticket_options`  
+  **Screen:** Raise Ticket form
+  
+  **Permission:** Signed-in client user (Client User or Client Admin). Only records of the user's own client company are returned.
+  
+  **Query parameters:**
+  
+  | Field | Type | Required | Example | Notes |
+  | --- | --- | --- | --- | --- |
+  | `customer` | string | no | `Hamza` | Client company. Send only when `me.customers` has more than one entry. Disabled by default. |
+  
+  **Response (trimmed):**
+  
+  ```json
+  { "message": { "ticket_types": [ "Bug", ... ], "priorities": [ "Low", ... ], "projects": [ ... ], "modules": [ ... ] } }
+  ```
+  
+  **Errors:**
+  
+  - **401:** Token missing, expired or invalid. Refresh once and retry, else sign out.
+  - **403:** Not this client's record, or role not allowed.
+}

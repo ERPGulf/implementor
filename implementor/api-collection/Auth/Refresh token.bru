@@ -1,0 +1,56 @@
+meta {
+  name: Refresh token
+  type: http
+  seq: 9
+}
+
+post {
+  url: {{baseUrl}}/api/method/employee_app.gauth.create_refresh_token
+  body: formUrlEncoded
+  auth: none
+}
+
+body:form-urlencoded {
+  refresh_token: {{refreshToken}}
+}
+
+tests {
+  test("returns 200", function () {
+    expect(res.status).to.equal(200);
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}
+
+docs {
+  Gets a new access token from the refresh token, before expiry or once after a 401.
+  
+  **Endpoint:** `POST /api/method/employee_app.gauth.create_refresh_token`
+  
+  > **From another app:** this endpoint belongs to **employee_app**, not implementor. Its code, fields and errors are owned by the employee_app team. The app calls it through `@erpgulf/auth-sdk`.
+  
+  **Permission:** Refresh token.
+  
+  **Body fields (form-encoded):**
+  
+  | Field | Type | Required | Example | Notes |
+  | --- | --- | --- | --- | --- |
+  | `refresh_token` | string | yes | `{{refreshToken}}` | From sign-in (`token.refresh_token`). Set in `.env` as `REFRESH_TOKEN`. |
+  
+  **Response (trimmed):**
+  
+  ```json
+  { "status": ..., "data": { "token": { ... }, "time": "..." } }
+  ```
+  
+  **Errors:**
+  
+  - **401:** Refresh token invalid or expired. Sign the user out.
+  
+  **Notes:**
+  
+  - ⚠️ The Mobile UI guide names `employee_app.authentication.refresh_employee_token`; this request calls `employee_app.gauth.create_refresh_token`. Confirm which one the app uses.
+}

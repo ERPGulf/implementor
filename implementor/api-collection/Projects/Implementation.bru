@@ -1,0 +1,74 @@
+meta {
+  name: Implementation
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/api/method/implementor.client_api.get_project?project=PROJ-0029
+  body: none
+  auth: inherit
+}
+
+params:query {
+  project: PROJ-0029
+  ~customer: Hamza
+}
+
+tests {
+  test("returns 200", function () {
+    expect(res.status).to.equal(200);
+  });
+  
+  test("has message", function () {
+    expect(res.body).to.have.property("message");
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}
+
+docs {
+  Returns one implementation project with progress, phases, modules and milestones.
+  
+  **Endpoint:** `GET /api/method/implementor.client_api.get_project`  
+  **Screen:** Implementation
+  
+  **Permission:** Signed-in client user (Client User or Client Admin). Only records of the user's own client company are returned.
+  
+  **Query parameters:**
+  
+  | Field | Type | Required | Example | Notes |
+  | --- | --- | --- | --- | --- |
+  | `project` | string | yes | `PROJ-0029` | Project name. |
+  | `customer` | string | no | `Hamza` | Client company. Send only when `me.customers` has more than one entry. Disabled by default. |
+  
+  **Response (trimmed):**
+  
+  ```json
+  {
+    "message": {
+      "percent": 62, "stage": "...", "health": "Green",
+      "phases": [ { "title": "...", "state": "done" } ],
+      "modules": [ { "module": "...", "percent": null, "status": "..." } ],
+      "milestones": [ ... ], "training": [ ... ], "my_actions": [ ... ],
+      "go_live_days_left": -3
+    }
+  }
+  ```
+  
+  **Errors:**
+  
+  - **401:** Token missing, expired or invalid. Refresh once and retry, else sign out.
+  - **403:** Not this client's record, or role not allowed.
+  - **404:** Project not found.
+  
+  **Notes:**
+  
+  - `health`: Green, Amber, Red → On track, Needs attention, At risk.
+  - `phases[].state`: done, current, upcoming.
+  - `modules[].percent` can be null; show `status` instead.
+  - Negative `go_live_days_left` means overdue: show "3 days overdue".
+}

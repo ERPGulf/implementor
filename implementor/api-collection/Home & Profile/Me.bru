@@ -1,0 +1,68 @@
+meta {
+  name: Me
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api/method/implementor.client_api.me
+  body: formUrlEncoded
+  auth: inherit
+}
+
+body:form-urlencoded {
+  ~customer: Hamza
+}
+
+tests {
+  test("returns 200", function () {
+    expect(res.status).to.equal(200);
+  });
+  
+  test("has message", function () {
+    expect(res.body).to.have.property("message");
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}
+
+docs {
+  Returns who the signed-in user is, which client companies they belong to, and whether they are a Client Admin.
+  
+  **Endpoint:** `POST /api/method/implementor.client_api.me`  
+  **Screen:** Profile, company switcher
+  
+  **Permission:** Signed-in client user (Client User or Client Admin). Only records of the user's own client company are returned.
+  
+  **Body fields (form-encoded):**
+  
+  | Field | Type | Required | Example | Notes |
+  | --- | --- | --- | --- | --- |
+  | `customer` | string | no | `Hamza` | Client company. Send only when `me.customers` has more than one entry. Disabled by default. |
+  
+  **Response (trimmed):**
+  
+  ```json
+  {
+    "message": {
+      "full_name": "...",
+      "customer_name": "...",
+      "customers": [ { "name": "...", "customer_name": "..." } ],
+      "is_client_admin": true
+    }
+  }
+  ```
+  
+  **Errors:**
+  
+  - **401:** Token missing, expired or invalid. Refresh once and retry, else sign out.
+  - **403:** Not this client's record, or role not allowed.
+  - **403:** Mobile not linked to any client. Show a clear message, not a blank Home.
+  
+  **Notes:**
+  
+  - More than one entry in `customers`: show a company switcher in Profile and send `customer` on every call.
+}

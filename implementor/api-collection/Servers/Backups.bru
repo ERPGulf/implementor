@@ -1,0 +1,74 @@
+meta {
+  name: Backups
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/api/method/implementor.client_api.get_backups?server=s6qivo97hn&limit=2&refresh=0
+  body: none
+  auth: inherit
+}
+
+params:query {
+  server: s6qivo97hn
+  limit: 2
+  refresh: 0
+  ~customer: Hamza
+}
+
+tests {
+  test("returns 200", function () {
+    expect(res.status).to.equal(200);
+  });
+  
+  test("has message", function () {
+    expect(res.body).to.have.property("message");
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}
+
+docs {
+  Returns the backup policy and recent backup runs for a server.
+  
+  **Endpoint:** `GET /api/method/implementor.client_api.get_backups`  
+  **Screen:** Backup
+  
+  **Permission:** Signed-in client user (Client User or Client Admin). Only records of the user's own client company are returned.
+  
+  **Query parameters:**
+  
+  | Field | Type | Required | Example | Notes |
+  | --- | --- | --- | --- | --- |
+  | `server` | string | yes | `s6qivo97hn` |  |
+  | `limit` | int | no | `2` | Number of runs. |
+  | `refresh` | 0 / 1 | no | `0` | 1 bypasses the 10-minute cache. Pull-to-refresh only. |
+  | `customer` | string | no | `Hamza` | Client company. Send only when `me.customers` has more than one entry. Disabled by default. |
+  
+  **Response (trimmed):**
+  
+  ```json
+  {
+    "message": {
+      "backup_schedule": "...", "last_restore_test": "...",
+      "oci": { "available": true, "policy": { ... }, "backups": [ { "state": "confirmed", ... } ], "errors": [], "overdue": false }
+    }
+  }
+  ```
+  
+  **Errors:**
+  
+  - **401:** Token missing, expired or invalid. Refresh once and retry, else sign out.
+  - **403:** Not this client's record, or role not allowed.
+  - **404:** Server not found.
+  
+  **Notes:**
+  
+  - Runs: `confirmed` green, `failed` red, anything else grey with `state` as label.
+  - `oci.overdue` true: show the red alert even if `errors` is empty.
+  - `oci.available` false: hide policy and runs; don't show `oci.reason` to clients.
+}

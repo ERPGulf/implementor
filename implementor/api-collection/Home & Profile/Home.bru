@@ -1,0 +1,69 @@
+meta {
+  name: Home
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/api/method/implementor.client_api.home
+  body: none
+  auth: inherit
+}
+
+params:query {
+  ~customer: Hamza
+}
+
+tests {
+  test("returns 200", function () {
+    expect(res.status).to.equal(200);
+  });
+  
+  test("has message", function () {
+    expect(res.body).to.have.property("message");
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}
+
+docs {
+  Returns everything the Home screen needs in one call.
+  
+  **Endpoint:** `GET /api/method/implementor.client_api.home`  
+  **Screen:** Home
+  
+  **Permission:** Signed-in client user (Client User or Client Admin). Only records of the user's own client company are returned.
+  
+  **Query parameters:**
+  
+  | Field | Type | Required | Example | Notes |
+  | --- | --- | --- | --- | --- |
+  | `customer` | string | no | `Hamza` | Client company. Send only when `me.customers` has more than one entry. Disabled by default. |
+  
+  **Response (trimmed):**
+  
+  ```json
+  {
+    "message": {
+      "implementations": [ ... ],
+      "amc": [ ... ],
+      "servers": [ ... ],
+      "tickets": { "open": 3, "waiting_for_you": 1 },
+      "my_actions": 2,
+      "unread_notifications": 4
+    }
+  }
+  ```
+  
+  **Errors:**
+  
+  - **401:** Token missing, expired or invalid. Refresh once and retry, else sign out.
+  - **403:** Not this client's record, or role not allowed.
+  
+  **Notes:**
+  
+  - A client with only AMC has an empty `implementations[]`. Hide that section.
+}

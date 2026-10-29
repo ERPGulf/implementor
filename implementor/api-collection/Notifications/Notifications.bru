@@ -1,0 +1,60 @@
+meta {
+  name: Notifications
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/method/implementor.client_api.get_notifications?unread_only=1&limit=4
+  body: none
+  auth: inherit
+}
+
+params:query {
+  unread_only: 1
+  limit: 4
+  ~customer: Hamza
+}
+
+tests {
+  test("returns 200", function () {
+    expect(res.status).to.equal(200);
+  });
+  
+  test("has message", function () {
+    expect(res.body).to.have.property("message");
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}
+
+docs {
+  Lists the user's notifications.
+  
+  **Endpoint:** `GET /api/method/implementor.client_api.get_notifications`  
+  **Screen:** Notifications
+  
+  **Permission:** Signed-in client user (Client User or Client Admin). Only records of the user's own client company are returned.
+  
+  **Query parameters:**
+  
+  | Field | Type | Required | Example | Notes |
+  | --- | --- | --- | --- | --- |
+  | `unread_only` | 0 / 1 | no | `1` |  |
+  | `limit` | int | no | `4` |  |
+  | `customer` | string | no | `Hamza` | Client company. Send only when `me.customers` has more than one entry. Disabled by default. |
+  
+  **Response (trimmed):**
+  
+  ```json
+  { "message": [ { "name": "bbjqcbg636", "subject": "...", "read": 0, "creation": "..." } ] }
+  ```
+  
+  **Errors:**
+  
+  - **401:** Token missing, expired or invalid. Refresh once and retry, else sign out.
+  - **403:** Not this client's record, or role not allowed.
+}

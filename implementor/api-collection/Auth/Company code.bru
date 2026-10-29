@@ -1,0 +1,54 @@
+meta {
+  name: Company code
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{lookupUrl}}/api/method/get_mobile_server_url
+  body: formUrlEncoded
+  auth: none
+}
+
+body:form-urlencoded {
+  company_code: 654393
+}
+
+tests {
+  test("returns 200", function () {
+    expect(res.status).to.equal(200);
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}
+
+docs {
+  Looks up the backend URL for a company code. The app uses the result as `baseUrl` for every other call (via `@erpgulf/server-lookup`).
+  
+  **Endpoint:** `POST /api/method/get_mobile_server_url`
+  
+  **Permission:** None (public lookup server).
+  
+  **Body fields (form-encoded):**
+  
+  | Field | Type | Required | Example | Notes |
+  | --- | --- | --- | --- | --- |
+  | `company_code` | string | yes | `654393` | Company code the user types in the app. |
+  
+  **Response (trimmed):**
+  
+  ```json
+  { "message": "<backend URL for this company>" }
+  ```
+  
+  **Errors:**
+  
+  - **404 / empty:** Unknown company code.
+  
+  **Notes:**
+  
+  - Runs against the lookup server (`{{lookupUrl}}`), not `{{baseUrl}}`.
+}

@@ -1,0 +1,48 @@
+meta {
+  name: Employee policy
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/api/method/employee_app.authentication.get_employee_login_policy
+  body: formUrlEncoded
+  auth: inherit
+}
+
+body:form-urlencoded {
+  mobile: 1234567891
+}
+
+tests {
+  test("returns 200", function () {
+    expect(res.status).to.equal(200);
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}
+
+docs {
+  Returns the site's login policy: which authentication type is used (OTP, password, optional, both).
+  
+  **Endpoint:** `POST /api/method/employee_app.authentication.get_employee_login_policy`
+  
+  > **From another app:** this endpoint belongs to **employee_app**, not implementor. Its code, fields and errors are owned by the employee_app team. The app calls it through `@erpgulf/auth-sdk`.
+  
+  **Permission:** Master token.
+  
+  **Body fields (form-encoded):**
+  
+  | Field | Type | Required | Example | Notes |
+  | --- | --- | --- | --- | --- |
+  | `mobile` | string | yes | `1234567891` | User's mobile number. |
+  
+  **Response (trimmed):**
+  
+  ```json
+  { "message": { ... policy ... } }
+  ```
+}
