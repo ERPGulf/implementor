@@ -1,0 +1,25 @@
+meta {
+  name: Me
+  type: http
+  seq: 11
+}
+
+get {
+  url: https://sahana16.erpgulf.com:2727/api/method/implementor.client_api.me
+  body: formUrlEncoded
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:form-urlencoded {
+  customer: Hamza
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+  forwardAuthorizationHeader: false
+}

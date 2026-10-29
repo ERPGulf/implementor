@@ -1,0 +1,27 @@
+meta {
+  name: Notifications
+  type: http
+  seq: 30
+}
+
+get {
+  url: https://sahana16.erpgulf.com:2727/api/method/implementor.client_api.get_notifications
+  body: formUrlEncoded
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:form-urlencoded {
+  unread_only: 1
+  limit: 4
+  customer: Hamza
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+  forwardAuthorizationHeader: false
+}

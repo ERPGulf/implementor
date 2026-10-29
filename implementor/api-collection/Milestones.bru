@@ -1,0 +1,30 @@
+meta {
+  name: Milestones
+  type: http
+  seq: 14
+}
+
+get {
+  url: https://sahana16.erpgulf.com:2727/api/method/implementor.client_api.get_milestones
+  body: formUrlEncoded
+  auth: bearer
+}
+
+headers {
+  Authorization: Bearer e347550e78c6d72976b971d34a30f5
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:form-urlencoded {
+  project: PROJ-0029
+  customer: Hamza
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+  forwardAuthorizationHeader: false
+}

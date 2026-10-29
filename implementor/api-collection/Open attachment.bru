@@ -1,0 +1,31 @@
+meta {
+  name: Open attachment
+  type: http
+  seq: 29
+}
+
+post {
+  url: https://sahana16.erpgulf.com:2727/api/method/implementor.client_api.download_attachment
+  body: formUrlEncoded
+  auth: bearer
+}
+
+headers {
+  Authorization: Bearer e347550e78c6d72976b971d34a30f5
+  Content-Type: application/x-www-form-urlencoded
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:form-urlencoded {
+  file: e890f3425b
+  customer: Hamza
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+  forwardAuthorizationHeader: false
+}

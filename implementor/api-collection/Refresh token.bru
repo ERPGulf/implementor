@@ -1,0 +1,21 @@
+meta {
+  name: Refresh token
+  type: http
+  seq: 7
+}
+
+post {
+  url: https://sahana16.erpgulf.com:2727/api/method/employee_app.gauth.create_refresh_token
+  body: formUrlEncoded
+  auth: inherit
+}
+
+headers {
+  Cookie: full_name=Guest; sid=Guest; system_user=no; user_id=Guest; user_lang=en
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+  forwardAuthorizationHeader: false
+}

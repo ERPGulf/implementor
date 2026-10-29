@@ -1,0 +1,30 @@
+meta {
+  name: Server Details
+  type: http
+  seq: 18
+}
+
+get {
+  url: https://sahana16.erpgulf.com:2727/api/method/implementor.client_api.get_server
+  body: formUrlEncoded
+  auth: bearer
+}
+
+headers {
+  Authorization: Bearer e347550e78c6d72976b971d34a30f5
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:form-urlencoded {
+  server: s6qivo97hn
+  customer: Hamza
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+  forwardAuthorizationHeader: false
+}

@@ -1,0 +1,22 @@
+meta {
+  name: Cold Boot policy
+  type: http
+  seq: 9
+}
+
+post {
+  url: https://sahana16.erpgulf.com:2727/api/method/employee_app.authentication.cold_boot_api
+  body: formUrlEncoded
+  auth: inherit
+}
+
+headers {
+  Authorization: Bearer MeqJenwkyOKwl5iog1NNhI2FNT8hUe
+  Cookie: full_name=Guest; sid=Guest; system_user=no; user_id=Guest; user_lang=en
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+  forwardAuthorizationHeader: false
+}

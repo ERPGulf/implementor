@@ -1,0 +1,21 @@
+meta {
+  name: Raise Ticket Form
+  type: http
+  seq: 22
+}
+
+get {
+  url: https://sahana16.erpgulf.com:2727/api/method/implementor.client_api.get_ticket_options
+  body: formUrlEncoded
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+  forwardAuthorizationHeader: false
+}

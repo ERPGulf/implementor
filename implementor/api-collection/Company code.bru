@@ -1,0 +1,21 @@
+meta {
+  name: Company code
+  type: http
+  seq: 10
+}
+
+post {
+  url: https://mum.claudion.com/api/method/get_mobile_server_url
+  body: formUrlEncoded
+  auth: inherit
+}
+
+headers {
+  Cookie: full_name=Guest; sid=Guest; system_user=no; user_id=Guest; user_lang=en
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+  forwardAuthorizationHeader: false
+}

@@ -1,0 +1,30 @@
+meta {
+  name: Waiting for you
+  type: http
+  seq: 20
+}
+
+get {
+  url: https://sahana16.erpgulf.com:2727/api/method/implementor.client_api.get_my_actions
+  body: formUrlEncoded
+  auth: bearer
+}
+
+headers {
+  Authorization: Bearer e347550e78c6d72976b971d34a30f5
+  Content-Type: application/x-www-form-urlencoded
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:form-urlencoded {
+  customer: Hamza
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+  forwardAuthorizationHeader: false
+}

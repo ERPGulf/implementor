@@ -1,0 +1,33 @@
+meta {
+  name: Attach
+  type: http
+  seq: 28
+}
+
+post {
+  url: https://sahana16.erpgulf.com:2727/api/method/implementor.client_api.upload_ticket_attachment
+  body: formUrlEncoded
+  auth: bearer
+}
+
+headers {
+  Authorization: Bearer e347550e78c6d72976b971d34a30f5
+  Content-Type: application/x-www-form-urlencoded
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:form-urlencoded {
+  ticket: 12h2sd9uia
+  filename: stock_valuation_screenshot.png
+  filedata: iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==
+  custiomer: Hamza
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+  forwardAuthorizationHeader: false
+}
