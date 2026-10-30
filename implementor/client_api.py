@@ -290,14 +290,14 @@ def home(customer=None):
     return {
         "customer": ctx.customer,
         "customer_name": frappe.db.get_value("Customer", ctx.customer, "customer_name"),
-        "implementations": [p for p in projects if p["kind"] == "implementation"],
-        "amc": [p for p in projects if p["kind"] == "amc"],
-        "servers": [_server_summary(s) for s in servers],
+        # "implementations": [p for p in projects if p["kind"] == "implementation"],
+        # "amc": [p for p in projects if p["kind"] == "amc"],
+        # "servers": [_server_summary(s) for s in servers],
         "tickets": {
             "open": len(tickets),
             "waiting_for_you": len([t for t in tickets if t.status in ("Waiting on Client", "Resolved")]),
         },
-        "my_actions": len(_my_todos(ctx)),
+        "my_actions": _my_todos(ctx),
         "unread_notifications": frappe.db.count("Notification Log", {"for_user": ctx.user, "read": 0}),
     }
 
