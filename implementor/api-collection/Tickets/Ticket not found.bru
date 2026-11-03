@@ -1,0 +1,48 @@
+meta {
+  name: Ticket not found
+  type: http
+  seq: 9
+}
+
+get {
+  url: {{baseUrl}}/api/method/implementor.client_api.get_ticket?ticket=does-not-exist
+  body: none
+  auth: inherit
+}
+
+params:query {
+  ticket: does-not-exist
+  ~customer: Hamza
+}
+
+tests {
+  test("returns 404", function () {
+    expect(res.status).to.equal(404);
+  });
+
+  test("no Python traceback in the body", function () {
+    expect(res.body).to.not.have.property("exc");
+  });
+
+  test("has a user-facing message", function () {
+    expect(res.body).to.have.property("_server_messages");
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}
+
+docs {
+  Error check for `get_ticket`: a ticket ID that doesn't exist.
+
+  **Endpoint:** `GET /api/method/implementor.client_api.get_ticket`
+  **Screen:** none (regression check)
+
+  **Expected:**
+
+  - **404** with `_server_messages` ("Ticket … not found").
+  - No `exc` key: client API errors never include the Python traceback.
+  - Another client company's ticket returns **403** instead.
+}

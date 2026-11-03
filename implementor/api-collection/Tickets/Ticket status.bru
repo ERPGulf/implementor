@@ -23,6 +23,10 @@ tests {
   test("has message", function () {
     expect(res.body).to.have.property("message");
   });
+
+  test("has module, created and ratings", function () {
+    expect(res.body.message).to.include.keys("module", "created", "ratings");
+  });
 }
 
 settings {
@@ -50,23 +54,71 @@ docs {
   ```json
   {
     "message": {
-      "name": "...", "subject": "...", "description": "Module: ...\nScreen or document: ...", "status": "Resolved",
-      "steps": [ { "label": "...", "state": "done", "at": null } ],
-      "assigned_to": [ ... ], "hours_logged": 2.5,
-      "comments": [ ... ], "attachments": [ { "name": "e890f3425b", ... } ],
-      "needs_confirmation": true
+      "name": "12h2sd9uia",
+      "subject": "Stock valuation report is blank",
+      "description": "Module: Stock\nScreen or document: Stock Ledger\n\nThe report shows no rows.",
+      "project": "PROJ-0029",
+      "project_title": "Hamza ERPNext Implementation",
+      "module": "Stock",
+      "ticket_type": "Bug",
+      "priority": "Normal",
+      "status": "Resolved",
+      "raised_by": "Aisha Khan",
+      "created": "2026-10-28 15:41:40.112233",
+      "sla_due": "2026-10-30 15:41:40",
+      "resolution_notes": "Valuation method was missing on the item group.",
+      "assigned_to": ["Mohammed Ali"],
+      "hours_logged": 2.5,
+      "progress": 100,
+      "steps": [
+        { "status": "New", "at": "2026-10-28 15:41:40.112233", "done": true, "current": false },
+        { "status": "Triaged", "at": null, "done": true, "current": false },
+        { "status": "In Progress", "at": "2026-10-29 09:12:03.000000", "done": true, "current": false },
+        { "status": "Resolved", "at": "2026-10-30 11:20:45.000000", "done": false, "current": true },
+        { "status": "Closed", "at": null, "done": false, "current": false }
+      ],
+      "history": [
+        { "status": "New", "at": "2026-10-28 15:41:40.112233" },
+        { "status": "In Progress", "at": "2026-10-29 09:12:03.000000" },
+        { "status": "Resolved", "at": "2026-10-30 11:20:45.000000" }
+      ],
+      "needs_confirmation": true,
+      "ratings": { "rating_overall": null, "rating_quality": null, "rating_communication": null, "rating_response_time": null },
+      "comments": [
+        { "id": "a1b2c3d4e5", "text": "Please check again now.", "by": "Mohammed Ali", "mine": false, "at": "2026-10-30 11:21:00.000000" }
+      ],
+      "attachments": [
+        { "name": "e890f3425b", "file_name": "stock_valuation_screenshot.png", "file_size": 70, "creation": "2026-10-28 15:41:45.380698" }
+      ]
     }
   }
   ```
-  
+
+  **Response fields:**
+
+  | Field | Type | Notes |
+  | --- | --- | --- |
+  | `module` | string / null | Module picked on Raise Ticket. Use this, not the `Module:` line in `description`. |
+  | `project_title` | string / null | Project name for `project`. |
+  | `raised_by` | string | Display name of the user who raised it. |
+  | `created` | datetime | When the ticket was raised. Same key as in `get_tickets`. |
+  | `resolution_notes` | string / null | Plain text, filled when the team resolves it. |
+  | `assigned_to` | string[] | Display names (full name) of the team members working on it, e.g. `["Mohammed Ali"]`. `[]` = not assigned yet. |
+  | `hours_logged`, `progress` | number / null | From the linked task. `null` until the ticket becomes a task. |
+  | `steps[]` | `{status, at, done, current}` | The timeline. `status` is the ticket status, `done` = passed, `current` = where it is now. |
+  | `history[]` | `{status, at}` | Only the status changes that really happened, oldest first. |
+  | `ratings` | object | The client's 1–5 stars from `confirm_fix`, or `null` per rating if not given. |
+  | `attachments[]` | `{name, file_name, file_size, creation}` | `name` is the File ID for **Open attachment**. `file_size` is in bytes. |
+
   **Errors:**
-  
+
   - **401:** Token missing, expired or invalid. Refresh once and retry, else sign out.
-  - **403:** Not this client's record, or role not allowed.
+  - **403:** Another client company's ticket, or a ticket raised by someone else (Client User), or role not allowed.
   - **404:** Ticket not found.
-  
+
   **Notes:**
-  
-  - Timeline: `done` green check, `current` maroon ring, others grey. `at` can be null.
+
+  - Timeline: `done` green check, `current` maroon ring, others grey.
+  - A step can be `done: true` with `at: null`. The ticket skipped it (for example it went from New straight to In Progress, past Triaged), so there is no time to show. This is expected, not an error.
   - `needs_confirmation` true: show "It is fixed" and "Still an issue".
 }

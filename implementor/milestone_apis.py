@@ -47,8 +47,16 @@ def get_milestone_dashboard(project_type="ongoing"):
         filters.append(["imp_status", "=", "AMC"])
     elif project_type == "completed":
         or_filters = [["status", "=", "Completed"], ["imp_status", "=", "Closed"]]
+    elif project_type == "int-completed":
+        filters.append(["project_type", "=", "Internal"])
+        or_filters = [["status", "=", "Completed"], ["imp_status", "=", "Closed"]]
+    elif project_type == "ext-completed":
+        filters.append(["project_type", "=", "External"])
+        or_filters = [["status", "=", "Completed"], ["imp_status", "=", "Closed"]]
     elif project_type == "internal":
         filters.append(["project_type", "=", "Internal"])
+    elif project_type == "external":
+        filters.append(["project_type", "=", "External"])
     elif project_type == "all":
         pass
     elif project_type == "int-ongoing":

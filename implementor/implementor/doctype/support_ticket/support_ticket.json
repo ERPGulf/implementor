@@ -9,6 +9,7 @@
   "subject",
   "customer",
   "project",
+  "module",
   "raised_by",
   "ticket_type",
   "priority",
@@ -16,7 +17,13 @@
   "description",
   "converted_task",
   "sla_due",
-  "resolution_notes"
+  "resolution_notes",
+  "client_feedback_section",
+  "rating_overall",
+  "rating_quality",
+  "column_break_rating",
+  "rating_communication",
+  "rating_response_time"
  ],
  "fields": [
   {
@@ -35,6 +42,11 @@
    "fieldtype": "Link",
    "label": "Project",
    "options": "Project"
+  },
+  {
+   "fieldname": "module",
+   "fieldtype": "Data",
+   "label": "Module"
   },
   {
    "fieldname": "raised_by",
@@ -82,12 +94,46 @@
    "fieldname": "resolution_notes",
    "fieldtype": "Text",
    "label": "Resolution Notes"
+  },
+  {
+   "fieldname": "client_feedback_section",
+   "fieldtype": "Section Break",
+   "label": "Client Feedback",
+   "collapsible": 1
+  },
+  {
+   "fieldname": "rating_overall",
+   "fieldtype": "Rating",
+   "label": "Overall Rating",
+   "read_only": 1
+  },
+  {
+   "fieldname": "rating_quality",
+   "fieldtype": "Rating",
+   "label": "Fix Quality",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_rating",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "rating_communication",
+   "fieldtype": "Rating",
+   "label": "Communication",
+   "read_only": 1
+  },
+  {
+   "fieldname": "rating_response_time",
+   "fieldtype": "Rating",
+   "label": "Response Time",
+   "read_only": 1
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-07-20 16:13:51.594512",
+ "modified": "2026-11-03 12:00:00.000000",
  "modified_by": "Administrator",
  "module": "Implementor",
  "name": "Support Ticket",

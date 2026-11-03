@@ -19,6 +19,10 @@ tests {
   test("returns 200", function () {
     expect(res.status).to.equal(200);
   });
+
+  test("file name is quoted", function () {
+    expect(res.headers["content-disposition"]).to.match(/filename="[^"]*"; filename\*=UTF-8''/);
+  });
 }
 
 settings {
@@ -41,7 +45,7 @@ docs {
   | `file` | string | yes | `e890f3425b` | From `get_ticket.attachments[].name`. |
   | `customer` | string | no | `Hamza` | Client company. Send only when `me.customers` has more than one entry. Disabled by default. |
   
-  **Response:** The file bytes (not JSON).
+  **Response:** The file bytes (not JSON), with `Content-Disposition: attachment; filename="…"; filename*=UTF-8''…`. Read `filename*` for names with spaces or non-ASCII characters.
   
   **Errors:**
   

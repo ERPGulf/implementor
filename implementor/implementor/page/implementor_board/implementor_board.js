@@ -681,9 +681,12 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		<option value="ongoing" selected>All Ongoing</option>
 		<option value="int-ongoing">Internal Ongoing</option>
 		<option value="ext-ongoing">External Ongoing</option>
-		<option value="amc">AMC</option>
 		<option value="completed">Completed</option>
-		<option value="internal">Internal</option>
+		<option value="int-completed">Internal Completed</option>
+		<option value="ext-completed">External Completed</option>
+		<option value="amc">AMC</option>
+		<option value="internal">All Internal</option>
+		<option value="external">All External</option>
 		<option value="all">All</option>
 	</select>
 	<div style="position:relative">
@@ -1058,6 +1061,22 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		return isNextPending ? { label: "Work pending", kind: "warning" } : { label: "Work upcoming", kind: "muted" };
 	}
 
+	// AMC work is service over time — measured by how much of the AMC period (start → expiry) has elapsed
+	function amcElapsedPercent(p) {
+		if (!p.start_date || !p.delivery_date) return 0;
+		var today = new Date(); today.setHours(0, 0, 0, 0);
+		var start = parseLocalDate(p.start_date); start.setHours(0, 0, 0, 0);
+		var expiry = parseLocalDate(p.delivery_date); expiry.setHours(0, 0, 0, 0);
+		if (today >= expiry) return 100;
+		if (today <= start) return 0;
+		return Math.floor((today - start) / (expiry - start) * 100);
+	}
+	function deriveAmcWorkStatus(p) {
+		return amcElapsedPercent(p) >= 100
+			? { label: "Work done", kind: "success" }
+			: { label: "Work ongoing", kind: "warning" };
+	}
+
 	function derivePaymentStatus(m, isNextPending) {
 		if (!m) return { label: "—", kind: "muted" };
 		if (m.payment_status === "Paid") return { label: "Payment done", kind: "success" };
@@ -1412,6 +1431,7 @@ ${legendDot("#450A0A", "Both overdue")}
 
 </div>`;
 		var cardsHtml = projects.map(function (p) {
+			var isAmc = p.project_status === "AMC";
 			var firstPendingIndex = p.milestones.findIndex(function (m) { return m.completion_status !== "Completed"; });
 			var MS_VISIBLE = 6;
 			var slots = p.milestones.map(function (m, i) {
@@ -1420,7 +1440,7 @@ ${legendDot("#450A0A", "Both overdue")}
 					index: "M" + (i + 1),
 					description: m.title || "—",
 					weightLabel: m.weight ? m.weight + "%" : "—",
-					work: deriveWorkStatus(m, isNext),
+					work: isAmc ? deriveAmcWorkStatus(p) : deriveWorkStatus(m, isNext),
 					payment: derivePaymentStatus(m, isNext)
 				};
 			});
@@ -1455,10 +1475,15 @@ ${legendDot("#450A0A", "Both overdue")}
 			var wDone = 0, wLate = 0, wActive = 0, wTodo = 0;
 			// payment bar — milestone payment, weighted
 			var pPaid = 0, pLate = 0, pDue = 0;
+			var amcPct = isAmc ? amcElapsedPercent(p) : 0;
 			p.milestones.forEach(function (m) {
 				var w = m.weight || 0;
 				var past = milestoneIsPastDue(m);
-				if (m.completion_status === "Completed") wDone += w;
+				if (isAmc) {
+					wDone += w * amcPct / 100;
+					wActive += w * (100 - amcPct) / 100;
+				}
+				else if (m.completion_status === "Completed") wDone += w;
 				else if (past) wLate += w;
 				else if (m.completion_status === "In Progress") wActive += w;
 				else wTodo += w;
@@ -1466,7 +1491,7 @@ ${legendDot("#450A0A", "Both overdue")}
 				else if (past) pLate += w;
 				else pDue += w;
 			});
-			var wTotal = wDone + wLate + wActive + wTodo;
+			var wTotal = Math.round((wDone + wLate + wActive + wTodo) * 100) / 100;
 			var workPct = wTotal ? Math.round(wDone / wTotal * 100) : 0;
 			var payPct = wTotal ? Math.round(pPaid / wTotal * 100) : 0;
 
@@ -1493,20 +1518,24 @@ ${legendDot("#450A0A", "Both overdue")}
 						<span style="font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.6px; color:var(--text-muted);">Status</span>
 						${chip(p.project_status)}
 					</div>
+					${p.project_status !== "AMC" ? `
 					<div style="display:flex; align-items:center; gap:6px;">
 						<span style="font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.6px; color:var(--text-muted);">Phase</span>
 						${chip(p.current_phase)}
-					</div>
+					</div>` : ""}
 				</div>
 			</div>
 
-			<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:10px; padding:0 22px 18px;">
+			<div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(max(150px, calc((100% - 40px) / 5)), 1fr)); gap:10px; padding:0 22px 18px;">
 				${statTile("Duration", p.timeline)}
-				${statTile("Start → Delivery", fmtDate(p.start_date, true) + " → "
+				${statTile(p.project_status === "AMC" ? "AMC Start → Expiry" : "Start → Delivery", fmtDate(p.start_date, true) + " → "
 				+ (overdueProject ? '<span style="color:var(--text-danger);">' + fmtDate(p.delivery_date, true) + '</span>' : fmtDate(p.delivery_date, true)))}
-				${statTile("Overall progress", p.overall_percent != null ? p.overall_percent + "%" : "—")}
-				${statTile("Modules completed", p.modules_completed + " of " + p.modules_total)}
-				${statTile("Current module", p.current_module)}
+				
+			${p.project_status !== "AMC"
+					? statTile("Overall progress", p.overall_percent != null ? p.overall_percent + "%" : "—")
+					+ statTile("Modules completed", p.modules_completed + " of " + p.modules_total)
+					+ statTile("Current module", p.current_module)
+					: ""}
 			</div>
 
 			<div style="padding:0 22px 18px;">
@@ -1520,25 +1549,27 @@ ${legendDot("#450A0A", "Both overdue")}
 			</div>
 
 			<div style="margin:0 22px 18px; padding:16px 18px; border-radius:12px; background:var(--surface-1); display:flex; flex-direction:column; gap:16px;">
+			
 				${stackedBar("Work status", workPct + "% completed", wLate ? "#DC2626" : "var(--text-accent)", [
-					[wDone, "var(--text-success)", "Completed"],
-					[wActive, "var(--text-accent)", "In progress"],
-					[wLate, "#DC2626", "Overdue"],
-					[wTodo, "var(--border-strong)", "Not started"]
-				])}
+						[wDone, "var(--text-success)", "Completed"],
+						[wActive, "var(--text-accent)", "In progress"],
+						[wLate, "#DC2626", "Overdue"],
+						[wTodo, "var(--border-strong)", "Not started"]
+					])}
 				${stackedBar("Payment status", payPct + "% received", pLate ? "#92400E" : "var(--text-success)", [
-					[pPaid, "var(--text-success)", "Received"],
-					[pLate, "#92400E", "Overdue"],
-					[pDue, "var(--text-warning)", "Pending"]
-				])}
+						[pPaid, "var(--text-success)", "Received"],
+						[pLate, "#92400E", "Overdue"],
+						[pDue, "var(--text-warning)", "Pending"]
+					])}
 				${wTotal && wTotal !== 100 ? `<div style="font-size:11px; color:var(--text-danger);">Milestone weights add up to ${wTotal}%, should be 100%</div>` : ""}
 			</div>
-
-			<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:10px; padding:0 22px 20px;">
+			${p.project_status != "AMC" ?
+					`<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:10px; padding:0 22px 20px;">
 				${infoBox("Next milestone", p.next_payment_milestone, "color-mix(in srgb, var(--bg-accent) 55%, var(--surface-2))", "var(--text-accent)", p.next_payment_milestone === "—")}
 				${infoBox("Next activity", p.next_activity, "color-mix(in srgb, var(--bg-warning) 55%, var(--surface-2))", "var(--text-warning)", p.next_activity === "Not logged")}
 				${infoBox("Remarks", p.remarks, "color-mix(in srgb, var(--bg-success) 55%, var(--surface-2))", "var(--text-success)", p.remarks === "None")}
-			</div>
+			</div>`
+					: ""}
 
 		</div>`;
 		}).join("");

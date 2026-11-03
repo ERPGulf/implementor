@@ -14,6 +14,10 @@ body:form-urlencoded {
   ticket: 12ht7l2q84
   fixed: 1
   comment: Both users can see the Stock workspace now. Thanks!
+  rating_overall: 5
+  rating_quality: 4
+  rating_communication: 5
+  rating_response_time: 3
   ~customer: Hamza
 }
 
@@ -21,9 +25,13 @@ tests {
   test("returns 200", function () {
     expect(res.status).to.equal(200);
   });
-  
+
   test("has message", function () {
     expect(res.body).to.have.property("message");
+  });
+
+  test("ratings are saved", function () {
+    expect(res.body.message.ratings.rating_overall).to.equal(5);
   });
 }
 
@@ -48,18 +56,43 @@ docs {
   | --- | --- | --- | --- | --- |
   | `ticket` | string | yes | `12ht7l2q84` |  |
   | `fixed` | 1 / 0 | yes | `1` | 1 = It is fixed, 0 = Still an issue. |
-  | `comment` | string | when fixed=0 | `...` |  |
+  | `comment` | string | when fixed=0 | `...` | Also saved when `fixed=1`: it is added to the "Client confirmed the fix." comment. |
+  | `rating_overall` | int 1–5 | no | `5` | Stars. |
+  | `rating_quality` | int 1–5 | no | `4` | Fix quality. |
+  | `rating_communication` | int 1–5 | no | `5` | |
+  | `rating_response_time` | int 1–5 | no | `3` | |
   | `customer` | string | no | `Hamza` | Client company. Send only when `me.customers` has more than one entry. Disabled by default. |
   
   **Response (trimmed):**
   
+  The updated ticket, in the same shape as **Ticket status**.
+
   ```json
-  { "message": { ... updated ticket ... } }
+  {
+    "message": {
+      "name": "12ht7l2q84",
+      "status": "Closed",
+      "needs_confirmation": false,
+      "ratings": { "rating_overall": 5, "rating_quality": 4, "rating_communication": 5, "rating_response_time": 3 },
+      "comments": [
+        { "id": "...", "text": "Client confirmed the fix. Both users can see the Stock workspace now. Thanks!", "by": "Aisha Khan", "mine": true, "at": "..." }
+      ],
+      ...
+    }
+  }
   ```
-  
+
   **Errors:**
-  
+
   - **401:** Token missing, expired or invalid. Refresh once and retry, else sign out.
   - **403:** Not this client's record, or role not allowed.
-  - **417:** Ticket not ready to confirm, or comment missing when fixed=0.
+  - **404:** Ticket not found.
+  - **417:** Ticket not ready to confirm, comment missing when fixed=0, or a rating that isn't a whole number from 1 to 5.
+
+  **Notes:**
+
+  - Only works while the ticket is **Resolved** (`needs_confirmation: true`).
+  - `fixed=1` → status becomes **Closed**. `fixed=0` → status goes back to **In Progress**.
+  - Ratings are saved with either verdict. Leave a rating out (or empty) if the client skipped it; it comes back as `null`.
+  - The comment is posted on the ticket with either verdict, after "Client confirmed the fix." or "Client reports it is still an issue."
 }

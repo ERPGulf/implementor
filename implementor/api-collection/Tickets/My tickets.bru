@@ -27,6 +27,16 @@ tests {
   test("has message", function () {
     expect(res.body).to.have.property("message");
   });
+
+  test("has has_more beside message", function () {
+    expect(res.body.has_more).to.be.a("boolean");
+  });
+
+  test("rows have created, module and project_title", function () {
+    if (res.body.message.length) {
+      expect(res.body.message[0]).to.include.keys("created", "module", "project_title");
+    }
+  });
 }
 
 settings {
@@ -56,8 +66,21 @@ docs {
   **Response (trimmed):**
   
   ```json
-  { "message": [ { "name": "12hnuea73s", "subject": "...", "status": "Resolved", "needs_you": true } ] }
+  {
+    "message": [
+      {
+        "name": "12hnuea73s", "subject": "...", "status": "Resolved",
+        "project": "PROJ-0029", "project_title": "Hamza ERPNext Implementation", "project_kind": "Implementation",
+        "module": "Stock", "ticket_type": "Bug", "priority": "Normal",
+        "created": "2026-10-28 15:41:40.112233", "needs_you": true
+      }
+    ],
+    "has_more": false
+  }
   ```
+
+  - `has_more` sits beside `message`, not inside it. `true` = ask for the next page (`offset + limit`); `false` = this is the last page.
+  - `created` is the raise date (same key as `get_ticket`). `creation` is also still sent for older app builds.
   
   **Errors:**
   

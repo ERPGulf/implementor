@@ -29,7 +29,7 @@ docs {
   
   - Data calls: `{{baseUrl}}/api/method/implementor.client_api.<function>`.
   - **GET** sends parameters in the query string. **POST** sends a form-encoded body.
-  - Success data is inside `message`. Unwrap it in one place.
+  - Success data is inside `message`. Unwrap it in one place. Some list calls add keys beside it, for example `has_more` in **My tickets**.
   - `customer` is only needed when the user belongs to more than one company (see **Me**). It is disabled in every request by default.
   - Dates are `YYYY-MM-DD`; date-times are in the server time zone.
   - Requests marked ⚠️ change data on the shared server.
@@ -45,7 +45,7 @@ docs {
   | 417 | Validation (e.g. empty comment) | Show the message, stay on screen |
   | 5xx | Server problem | Generic error, allow retry |
   
-  Error text is in `_server_messages` (a JSON string holding a JSON list) or `exception`.
+  Error text is in `_server_messages` (a JSON string holding a JSON list) or `exception`. Client API errors never include `exc` (the Python traceback).
   
   See the *ERPGulf Client App: Mobile UI Developer Guide* for screens, labels and empty states.
 }

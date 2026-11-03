@@ -27,6 +27,9 @@ All endpoints: /api/method/implementor.client_api.<function>
 
 import base64
 import json
+import mimetypes
+import os
+from urllib.parse import quote
 
 import frappe
 from frappe import _
@@ -39,6 +42,7 @@ from frappe.utils import (
     now_datetime,
     nowdate,
 )
+from werkzeug.wrappers import Response
 
 from implementor.api import _strip_html
 from implementor.implementor.auth import is_admin
@@ -96,6 +100,8 @@ def _customers_for_user(user):
 
 def _ctx(customer=None):
     """Resolve the session user and the Customer they may see."""
+    # client app users are System Users, so Frappe would attach the Python traceback (`exc`) to errors
+    frappe.local.flags.disable_traceback = True
     user = frappe.session.user
     if not user or user == "Guest":
         frappe.throw(_("Please log in"), frappe.AuthenticationError)
@@ -134,7 +140,9 @@ def _check_server(ctx, server):
 
 def _check_ticket(ctx, ticket):
     row = frappe.db.get_value("Support Ticket", ticket, ["customer", "raised_by"], as_dict=True)
-    if not row or row.customer != ctx.customer:
+    if not row:
+        frappe.throw(_("Ticket {0} not found").format(ticket), frappe.DoesNotExistError)
+    if row.customer != ctx.customer:
         frappe.throw(_("Not permitted"), frappe.PermissionError)
     if not ctx.is_client_admin and row.raised_by != ctx.user:
         frappe.throw(_("Not permitted"), frappe.PermissionError)
@@ -747,8 +755,10 @@ def complete_action(todo, customer=None):
 
 _TICKET_FIELDS = [
     "name", "subject", "project", "ticket_type", "priority", "status",
-    "raised_by", "creation", "modified", "sla_due", "converted_task",
+    "raised_by", "creation", "modified", "sla_due", "converted_task", "module",
 ]
+_RATING_FIELDS = ["rating_overall", "rating_quality", "rating_communication", "rating_response_time"]
+RATING_STARS = 5
 
 
 @frappe.whitelist()
@@ -786,6 +796,7 @@ def get_tickets(scope="open", project=None, search=None, limit=30, offset=0, cus
     or_filters = None
     if search:
         or_filters = {"subject": ["like", f"%{search}%"], "name": ["like", f"%{search}%"]}
+    page_size = min(cint(limit) or 30, 100)
 
     rows = frappe.get_all(
         "Support Ticket",
@@ -794,10 +805,16 @@ def get_tickets(scope="open", project=None, search=None, limit=30, offset=0, cus
         fields=_TICKET_FIELDS,
         order_by="creation desc",
         limit_start=cint(offset),
-        limit_page_length=min(cint(limit) or 30, 100),
+        limit_page_length=page_size + 1,  # one extra row tells us whether another page exists
     )
+    # top-level key beside `message`, so the list itself keeps its shape
+    frappe.response["has_more"] = len(rows) > page_size
+    rows = rows[:page_size]
     for r in rows:
-        r["project_kind"] = _project_kind(frappe.db.get_value("Project", r.project, "imp_status")) if r.project else None
+        r["created"] = r.creation
+        project = frappe.db.get_value("Project", r.project, ["imp_status", "project_name"], as_dict=True) if r.project else None
+        r["project_title"] = project.project_name if project else None
+        r["project_kind"] = _project_kind(project.imp_status) if project else None
         r["needs_you"] = r.status in ("Waiting on Client", "Resolved")
     return rows
 
@@ -825,7 +842,7 @@ def _ticket_history(ticket, created):
 def get_ticket(ticket, customer=None):
     ctx = _ctx(customer)
     _check_ticket(ctx, ticket)
-    t = frappe.db.get_value("Support Ticket", ticket, _TICKET_FIELDS + ["description", "resolution_notes"], as_dict=True)
+    t = frappe.db.get_value("Support Ticket", ticket, _TICKET_FIELDS + ["description", "resolution_notes"] + _RATING_FIELDS, as_dict=True)
 
     history = _ticket_history(ticket, t.creation)
     if history[-1]["status"] != t.status:
@@ -862,6 +879,7 @@ def get_ticket(ticket, customer=None):
         "description": _strip_html(t.description),
         "project": t.project,
         "project_title": frappe.db.get_value("Project", t.project, "project_name") if t.project else None,
+        "module": t.module,
         "ticket_type": t.ticket_type,
         "priority": t.priority,
         "status": t.status,
@@ -875,6 +893,7 @@ def get_ticket(ticket, customer=None):
         "steps": steps,
         "history": history,
         "needs_confirmation": t.status == "Resolved",
+        "ratings": {f: round(t[f] * RATING_STARS) if t[f] else None for f in _RATING_FIELDS},
         "comments": [
             {
                 "id": c.name,
@@ -896,7 +915,8 @@ def get_ticket(ticket, customer=None):
 @frappe.whitelist(methods=["POST"])
 def create_ticket(subject, description=None, ticket_type=None, priority=None, project=None,
                   module=None, reference=None, customer=None):
-    """Raise a Support Ticket. Module and screen/document go into the description (no new fields)."""
+    """Raise a Support Ticket. Module is saved on its own field and, for older app builds, also
+    written into the description with the screen/document."""
     ctx = _ctx(customer)
     if project:
         _check_project(ctx, project)
@@ -923,6 +943,7 @@ def create_ticket(subject, description=None, ticket_type=None, priority=None, pr
         "ticket_type": ticket_type or "Support",
         "priority": priority or "Normal",
         "status": "New",
+        "module": (module or "").strip() or None,
         "description": "\n".join(lines).strip(),
     })
     if not doc.subject:
@@ -958,12 +979,27 @@ def add_ticket_comment(ticket, text, customer=None):
 
 
 @frappe.whitelist(methods=["POST"])
-def confirm_fix(ticket, fixed, comment=None, customer=None):
-    """Client testing step: on a Resolved ticket, close it or send it back."""
+def confirm_fix(ticket, fixed, comment=None, customer=None, rating_overall=None,
+                rating_quality=None, rating_communication=None, rating_response_time=None):
+    """Client testing step: on a Resolved ticket, close it or send it back.
+    Ratings are optional, 1–5 stars each."""
     ctx = _ctx(customer)
     _check_ticket(ctx, ticket)
     if frappe.db.get_value("Support Ticket", ticket, "status") != "Resolved":
         frappe.throw(_("This ticket is not waiting for your confirmation"))
+
+    ratings = {}
+    for field, value in (("rating_overall", rating_overall), ("rating_quality", rating_quality),
+                         ("rating_communication", rating_communication),
+                         ("rating_response_time", rating_response_time)):
+        if value in (None, ""):
+            continue
+        stars = cint(value)
+        if str(stars) != str(value).strip() or not 1 <= stars <= 5:
+            frappe.throw(_("{0} must be a whole number from 1 to 5").format(field))
+        ratings[field] = stars / RATING_STARS  # Rating fields store a 0–1 fraction
+    if ratings:
+        frappe.db.set_value("Support Ticket", ticket, ratings)
 
     if cint(fixed):
         _set_ticket_status(ticket, "Closed")
@@ -1026,9 +1062,14 @@ def download_attachment(file, customer=None):
     if f.attached_to_doctype != "Support Ticket":
         frappe.throw(_("Not permitted"), frappe.PermissionError)
     _check_ticket(ctx, f.attached_to_name)
-    frappe.local.response.filename = f.file_name
-    frappe.local.response.filecontent = f.get_content()
-    frappe.local.response.type = "download"
+    # built by hand: Frappe's download response leaves filename unquoted
+    name = (f.file_name or "download").replace("\r", "").replace("\n", "")
+    stem, ext = os.path.splitext(name)
+    ascii_stem = stem.encode("ascii", "ignore").decode().replace('"', "").replace("\\", "").strip()
+    ascii_name = (ascii_stem or "download") + ext.encode("ascii", "ignore").decode()
+    response = Response(f.get_content(), mimetype=mimetypes.guess_type(name)[0] or "application/octet-stream")
+    response.headers["Content-Disposition"] = f"attachment; filename=\"{ascii_name}\"; filename*=UTF-8''{quote(name)}"
+    return response
 
 
 # --------------------------------------------------------------------------

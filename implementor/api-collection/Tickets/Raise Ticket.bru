@@ -29,6 +29,10 @@ tests {
   test("has message", function () {
     expect(res.body).to.have.property("message");
   });
+
+  test("module is saved on its own field", function () {
+    expect(res.body.message.module).to.equal("Accounting");
+  });
 }
 
 settings {
@@ -55,7 +59,7 @@ docs {
   | `ticket_type` | string | no | `Bug` | From Raise Ticket Form. |
   | `priority` | string | no | `Low` | From Raise Ticket Form. |
   | `project` | string | no | `PROJ-0029` |  |
-  | `module` | string | no | `Accounting` | Saved into the description. |
+  | `module` | string | no | `Accounting` | Saved on the ticket and returned as `module`. Also still written into the description for older app builds. |
   | `reference` | string | no |  | Screen or document. Saved into the description. |
   | `customer` | string | no | `Hamza` | Client company. Send only when `me.customers` has more than one entry. Disabled by default. |
   
