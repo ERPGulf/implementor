@@ -216,7 +216,7 @@ def me(customer=None):
         # ],
         # "role": CLIENT_ADMIN if ctx.is_client_admin else CLIENT_USER,
         "is_client_admin": ctx.is_client_admin,
-        "roles": [r for r in frappe.get_roles(ctx.user) if r in (CLIENT_ADMIN, CLIENT_USER)]
+        "roles": [r for r in frappe.get_roles(ctx.user)]
     }
 
 
