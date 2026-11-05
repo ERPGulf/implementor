@@ -48,6 +48,7 @@ from implementor.api import _strip_html
 from implementor.implementor.auth import is_admin
 
 CLIENT_ADMIN = "Client Admin"
+CLIENT_USER = "Client User"
 OPEN_TICKET_STATUSES = ("New", "Triaged", "In Progress", "Waiting on Client", "Resolved")
 CLOSED_TICKET_STATUSES = ("Closed",)
 TICKET_FLOW = ["New", "Triaged", "In Progress", "Waiting on Client", "Resolved", "Closed"]
@@ -209,12 +210,15 @@ def me(customer=None):
         "user_image": user.user_image,
         "customer": ctx.customer,
         "customer_name": frappe.db.get_value("Customer", ctx.customer, "customer_name"),
-        "customers": [
-            {"name": c, "customer_name": frappe.db.get_value("Customer", c, "customer_name")}
-            for c in ctx.customers
-        ],
+        # "customers": [
+        #     {"name": c, "customer_name": frappe.db.get_value("Customer", c, "customer_name")}
+        #     for c in ctx.customers
+        # ],
+        # "role": CLIENT_ADMIN if ctx.is_client_admin else CLIENT_USER,
         "is_client_admin": ctx.is_client_admin,
+        "roles": [r for r in frappe.get_roles(ctx.user) if r in (CLIENT_ADMIN, CLIENT_USER)]
     }
+
 
 
 # --------------------------------------------------------------------------

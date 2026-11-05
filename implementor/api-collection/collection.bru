@@ -30,7 +30,7 @@ docs {
   - Data calls: `{{baseUrl}}/api/method/implementor.client_api.<function>`.
   - **GET** sends parameters in the query string. **POST** sends a form-encoded body.
   - Success data is inside `message`. Unwrap it in one place. Some list calls add keys beside it, for example `has_more` in **My tickets**.
-  - `customer` is only needed when the user belongs to more than one company (see **Me**). It is disabled in every request by default.
+  - `customer` is not used by the app: the server picks the signed-in user's company. It is disabled in every request by default.
   - Dates are `YYYY-MM-DD`; date-times are in the server time zone.
   - Requests marked ⚠️ change data on the shared server.
   - Requests in **Auth** belong to **employee_app**, a different app.

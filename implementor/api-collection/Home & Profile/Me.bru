@@ -22,6 +22,10 @@ tests {
   test("has message", function () {
     expect(res.body).to.have.property("message");
   });
+
+  test("has roles list", function () {
+    expect(res.body.message.roles).to.be.an("array");
+  });
 }
 
 settings {
@@ -30,10 +34,10 @@ settings {
 }
 
 docs {
-  Returns who the signed-in user is, which client companies they belong to, and whether they are a Client Admin.
+  Returns who the signed-in user is, their client company, and their client app roles.
   
   **Endpoint:** `POST /api/method/implementor.client_api.me`  
-  **Screen:** Profile, company switcher
+  **Screen:** Profile
   
   **Permission:** Signed-in client user (Client User or Client Admin). Only records of the user's own client company are returned.
   
@@ -41,21 +45,37 @@ docs {
   
   | Field | Type | Required | Example | Notes |
   | --- | --- | --- | --- | --- |
-  | `customer` | string | no | `Hamza` | Client company. Send only when `me.customers` has more than one entry. Disabled by default. |
+  | `customer` | string | no | `Hamza` | Not used by the app. The server picks the user's company. Disabled by default. |
   
   **Response (trimmed):**
   
   ```json
   {
     "message": {
-      "full_name": "...",
-      "customer_name": "...",
-      "customers": [ { "name": "...", "customer_name": "..." } ],
-      "is_client_admin": true
+      "user": "aisha@hamza.com",
+      "full_name": "Aisha Khan",
+      "email": "aisha@hamza.com",
+      "mobile_no": "+966500000000",
+      "user_image": "/files/aisha.jpg",
+      "customer": "Hamza",
+      "customer_name": "Hamza Trading Co.",
+      "is_client_admin": true,
+      "roles": ["Client User", "Client Admin"]
     }
   }
   ```
-  
+
+  **Response fields:**
+
+  | Field | Type | Notes |
+  | --- | --- | --- |
+  | `user` | string | User ID (email). |
+  | `full_name`, `email`, `mobile_no` | string / null | Profile details. |
+  | `user_image` | string / null | Relative URL of the profile photo. |
+  | `customer`, `customer_name` | string | The client company this session works with. |
+  | `is_client_admin` | boolean | `true` = sees every ticket of the company; `false` = sees only tickets they raised. Use this to decide what the app shows. |
+  | `roles` | string[] | The user's client app roles: `"Client User"`, `"Client Admin"`, or both. Other Frappe roles are never included. ERPGulf staff can get `[]` here with `is_client_admin: true`. |
+
   **Errors:**
   
   - **401:** Token missing, expired or invalid. Refresh once and retry, else sign out.
@@ -64,5 +84,5 @@ docs {
   
   **Notes:**
   
-  - More than one entry in `customers`: show a company switcher in Profile and send `customer` on every call.
+  - A user can hold both roles. Check `is_client_admin` for access, not the order of `roles`.
 }
