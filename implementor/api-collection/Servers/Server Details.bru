@@ -19,9 +19,20 @@ tests {
   test("returns 200", function () {
     expect(res.status).to.equal(200);
   });
-  
+
   test("has message", function () {
     expect(res.body).to.have.property("message");
+  });
+
+  test("specs come as fields and versions are flat", function () {
+    const s = res.body.message;
+    ["cpu", "memory_gb", "storage_gb", "os"].forEach(function (k) {
+      expect(s.specs).to.have.property(k);
+    });
+    expect(s).to.have.property("erpnext_version");
+    expect(s).to.have.property("frappe_version");
+    expect(s).to.not.have.property("versions");
+    expect(s.activity).to.be.an("array");
   });
 }
 
@@ -31,29 +42,70 @@ settings {
 }
 
 docs {
-  Returns one server's versions, specs and recent activity.
-  
+  One server: everything from Servers, plus specs, versions and recent activity.
+
   **Endpoint:** `GET /api/method/implementor.client_api.get_server`  
   **Screen:** Hosting detail
-  
+
   **Permission:** Signed-in client user (Client User or Client Admin). Only records of the user's own client company are returned.
-  
+
   **Query parameters:**
-  
+
   | Field | Type | Required | Example | Notes |
   | --- | --- | --- | --- | --- |
   | `server` | string | yes | `s6qivo97hn` | `name` from Servers. |
   | `customer` | string | no | `Hamza` | Not used by the app. The server picks the user's company. Disabled by default. |
-  
-  **Response (trimmed):**
-  
+
+  **Response:** every field of a Servers item, plus the ones below.
+
   ```json
-  { "message": { "name": "...", "versions": { ... }, "specs": { ... }, "activity": [ ... ] } }
+  {
+    "message": {
+      "name": "s6qivo97hn",
+      "server_name": "hamza-erp-prod",
+      "site_url": "erp.hamza.sa",
+      "status": "online",
+      "erpnext_version": "v15.40.0",
+      "frappe_version": "v15.45.2",
+      "...": "... the other Servers fields ...",
+      "specs": {
+        "cpu": "4 OCPU (Ampere A1)",
+        "memory_gb": 24,
+        "storage_gb": 200,
+        "os": "Ubuntu 22.04 LTS"
+      },
+      "specs_text": "4 OCPU (Ampere A1)\n24 GB RAM\n200 GB Block Volume\nUbuntu 22.04 LTS",
+      "activity": [
+        {
+          "activity_type": "Restore",
+          "date": "2026-10-15T22:00:00+03:00",
+          "downtime_window": "22:00–22:30",
+          "workflow_state": "Completed"
+        }
+      ]
+    }
+  }
   ```
-  
-  **Errors:**
-  
+
+  **Fields:**
+
+  - `erpnext_version`, `frappe_version`: flat fields. There is no `versions` object.
+  - `specs`: read from the server's spec text.
+    - `cpu`: text, e.g. "4 OCPU (Ampere A1)".
+    - `memory_gb`, `storage_gb`: numbers in GB.
+    - `os`: text.
+    - Any of them is null if it couldn't be read; show `specs_text` instead then.
+  - `specs_text`: the original text, with line breaks.
+  - `activity[]`: up to 20 recent events, newest first. Can be empty.
+    - `activity_type`: the kind of event as recorded by our team, e.g. `Restore`.
+    - `date`: date-time with offset.
+    - `downtime_window`: free text, e.g. "22:00–22:30". Can be null.
+    - `workflow_state`: the event's current state as recorded by our team, e.g. `Completed`.
+
+  **Errors:** every error has an `error_code`.
+
   - **401:** Token missing, expired or invalid. Refresh once and retry, else sign out.
-  - **403:** Not this client's record, or role not allowed.
-  - **404:** Server not found.
+  - **403** `not_permitted`: not this client's server, or the server doesn't exist.
+  - **403** `no_client_linked`: the user isn't linked to any client company.
+  - **417** `missing_parameter`: `server` left out.
 }

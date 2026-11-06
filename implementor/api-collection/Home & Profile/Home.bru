@@ -18,9 +18,20 @@ tests {
   test("returns 200", function () {
     expect(res.status).to.equal(200);
   });
-  
+
   test("has message", function () {
     expect(res.body).to.have.property("message");
+  });
+
+  test("has counts and actions, no service lists", function () {
+    const m = res.body.message;
+    expect(m.tickets).to.have.property("open");
+    expect(m.tickets).to.have.property("waiting_for_you");
+    expect(m.my_actions).to.be.an("array");
+    expect(m.unread_notifications).to.be.a("number");
+    expect(m).to.not.have.property("implementations");
+    expect(m).to.not.have.property("amc");
+    expect(m).to.not.have.property("servers");
   });
 }
 
@@ -30,40 +41,65 @@ settings {
 }
 
 docs {
-  Returns everything the Home screen needs in one call.
-  
+  Counts and actions for the Home screen.
+
   **Endpoint:** `GET /api/method/implementor.client_api.home`  
   **Screen:** Home
-  
+
+  Home makes two calls:
+
+  - `home` (this one): counts and actions
+  - `get_services`: the service cards (implementation, AMC, hosting)
+
+  `home` does **not** return `implementations[]`, `amc[]` or `servers[]`. Use `get_services`, so each card has only one source.
+
   **Permission:** Signed-in client user (Client User or Client Admin). Only records of the user's own client company are returned.
-  
+
   **Query parameters:**
-  
+
   | Field | Type | Required | Example | Notes |
   | --- | --- | --- | --- | --- |
   | `customer` | string | no | `Hamza` | Not used by the app. The server picks the user's company. Disabled by default. |
-  
-  **Response (trimmed):**
-  
+
+  **Response:**
+
   ```json
   {
     "message": {
-      "implementations": [ ... ],
-      "amc": [ ... ],
-      "servers": [ ... ],
+      "customer": "Hamza",
+      "customer_name": "Hamza Trading",
       "tickets": { "open": 3, "waiting_for_you": 1 },
-      "my_actions": 2,
+      "my_actions": [
+        {
+          "name": "ee1p51uomd",
+          "text": "Upload VAT registration certificate and CR copy",
+          "due": "2026-11-10",
+          "days_left": 4,
+          "urgency": "Normal",
+          "project": "PROJ-0029",
+          "cta": "upload",
+          "reference": { "doctype": "Project", "name": "PROJ-0029" },
+          "status": "open",
+          "completed_on": null
+        }
+      ],
       "unread_notifications": 4
     }
   }
   ```
-  
-  **Errors:**
-  
+
+  **Field notes:**
+
+  - `customer_name`: show this, not `customer` (the ID).
+  - `tickets.open`: open tickets. A Client User sees only the tickets they raised; a Client Admin sees all of the company's.
+  - `tickets.waiting_for_you`: tickets in Waiting on Client or Resolved (waiting for the client to confirm the fix).
+  - `my_actions`: a list, not a count. Same items as `get_my_actions`: open actions only, oldest due date first. Use its length for the badge.
+  - `my_actions[].cta`: `upload`, `sign_off`, `review` or `mark_done`.
+  - `unread_notifications`: count for the bell badge.
+
+  **Errors:** every error has an `error_code`.
+
   - **401:** Token missing, expired or invalid. Refresh once and retry, else sign out.
-  - **403:** Not this client's record, or role not allowed.
-  
-  **Notes:**
-  
-  - A client with only AMC has an empty `implementations[]`. Hide that section.
+  - **403** `no_client_linked`: the user isn't linked to any client company.
+  - **403** `not_permitted`: role not allowed.
 }

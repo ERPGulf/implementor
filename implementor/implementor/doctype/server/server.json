@@ -7,6 +7,7 @@
  "engine": "InnoDB",
  "field_order": [
   "server_name",
+  "site_url",
   "customer",
   "environment",
   "provider",
@@ -16,13 +17,21 @@
   "frappe_version",
   "backup_schedule",
   "ssl_expiry",
-  "last_restore_test"
+  "last_restore_test",
+  "status_checked_at"
  ],
  "fields": [
   {
    "fieldname": "server_name",
    "fieldtype": "Data",
    "label": "Server Name"
+  },
+  {
+   "fieldname": "site_url",
+   "fieldtype": "Data",
+   "label": "Site URL",
+   "options": "URL",
+   "description": "Shown to the client, e.g. erp.example.com"
   },
   {
    "fieldname": "customer",
@@ -75,12 +84,18 @@
    "fieldname": "last_restore_test",
    "fieldtype": "Date",
    "label": "Last Restore Test"
+  },
+  {
+   "fieldname": "status_checked_at",
+   "fieldtype": "Datetime",
+   "label": "Status Checked At",
+   "read_only": 1
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-07-20 15:54:13.167051",
+ "modified": "2026-11-05 12:00:00.000000",
  "modified_by": "Administrator",
  "module": "Implementor",
  "name": "Server",

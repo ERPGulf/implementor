@@ -4,7 +4,25 @@ meta {
 }
 
 docs {
-  Implementation projects, milestones and sign-off, AMC, and tasks waiting on the client.
-  
-  Main flows: Home → Implementation → Milestones → Sign off (Client Admin only); Home → Waiting for you → Complete Action.
+  Implementation projects, milestones and sign-off, AMC, and actions waiting on the client.
+
+  **Main flows**
+
+  - Home → Implementation (`get_project`) → Milestones → Sign off (Client Admin only)
+  - Home → AMC (`get_amc`) → Milestones (`get_milestones`) → Sign off (Client Admin only)
+  - Home → Waiting for you → button by `cta`:
+    - `upload` → Upload Action Attachment
+    - `sign_off` → Milestones, at the milestone in `reference`
+    - `review`, `mark_done` → Complete Action
+  - Tasks tab → Waiting for you with `status=open` and `status=done`
+
+  **Rules for every request in this folder**
+
+  - Every error has an `error_code`. Match on it, never on the message text. Show the message from `_server_messages`.
+  - Unknown IDs and other clients' IDs both return **403** `not_permitted`, not 404. This hides which IDs exist.
+  - A missing required parameter returns **417** `missing_parameter`.
+  - Errors never include a traceback.
+  - Dates are `YYYY-MM-DD`. Date-times are ISO 8601 with an offset, e.g. `2026-10-28T15:13:48+03:00`.
+  - Every write (sign-off, complete, upload) is safe to repeat. A retry after a dropped connection returns 200 with the current state.
+  - Writes return fresh data. Re-render from the response; don't call the list again.
 }

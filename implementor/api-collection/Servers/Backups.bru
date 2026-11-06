@@ -5,14 +5,14 @@ meta {
 }
 
 get {
-  url: {{baseUrl}}/api/method/implementor.client_api.get_backups?server=s6qivo97hn&limit=2&refresh=0
+  url: {{baseUrl}}/api/method/implementor.client_api.get_backups?server=s6qivo97hn&refresh=0
   body: none
   auth: inherit
 }
 
 params:query {
   server: s6qivo97hn
-  limit: 2
+  ~limit: 10
   refresh: 0
   ~customer: Hamza
 }
@@ -21,9 +21,25 @@ tests {
   test("returns 200", function () {
     expect(res.status).to.equal(200);
   });
-  
+
   test("has message", function () {
     expect(res.body).to.have.property("message");
+  });
+
+  test("never sends oci.reason", function () {
+    expect(res.body.message.oci).to.not.have.property("reason");
+  });
+
+  test("OCI fields when available", function () {
+    const oci = res.body.message.oci;
+    if (!oci.available) return;
+    expect(oci).to.have.property("fetched_at");
+    expect(oci).to.have.property("last_confirmed_at");
+    expect(oci.backups).to.be.an("array");
+    expect(oci.errors).to.be.an("array");
+    if (oci.policy) {
+      expect(oci.policy.rules).to.be.an("array");
+    }
   });
 }
 
@@ -33,42 +49,106 @@ settings {
 }
 
 docs {
-  Returns the backup policy and recent backup runs for a server.
-  
+  The backup policy, recent backup runs, errors and restores for one server.
+
   **Endpoint:** `GET /api/method/implementor.client_api.get_backups`  
   **Screen:** Backup
-  
+
   **Permission:** Signed-in client user (Client User or Client Admin). Only records of the user's own client company are returned.
-  
+
   **Query parameters:**
-  
+
   | Field | Type | Required | Example | Notes |
   | --- | --- | --- | --- | --- |
-  | `server` | string | yes | `s6qivo97hn` |  |
-  | `limit` | int | no | `2` | Number of runs. |
-  | `refresh` | 0 / 1 | no | `0` | 1 bypasses the 10-minute cache. Pull-to-refresh only. |
+  | `server` | string | yes | `s6qivo97hn` | `name` from Servers. |
+  | `limit` | int | no | `10` | Number of runs. Default 10, max 50. **Leave it at 10:** the background job caches 10 runs, so any other value makes the request wait on OCI. |
+  | `refresh` | 0 / 1 | no | `0` | 1 reads OCI live. Pull-to-refresh only. At most once every 2 minutes per server; extra refreshes get the cached data. |
   | `customer` | string | no | `Hamza` | Not used by the app. The server picks the user's company. Disabled by default. |
-  
-  **Response (trimmed):**
-  
+
+  **Response:**
+
   ```json
   {
     "message": {
-      "backup_schedule": "...", "last_restore_test": "...",
-      "oci": { "available": true, "policy": { ... }, "backups": [ { "state": "confirmed", ... } ], "errors": [], "overdue": false }
+      "server": "s6qivo97hn",
+      "server_name": "hamza-erp-prod",
+      "backup_schedule": "Daily 02:00 AST, 14-day retention + weekly offsite",
+      "last_restore_test": "2026-10-15",
+      "restores": [
+        { "date": "2026-10-15T22:00:00+03:00", "workflow_state": "Completed", "downtime_window": "22:00–22:30" }
+      ],
+      "oci": {
+        "available": true,
+        "fetched_at": "2026-11-06T02:05:00+03:00",
+        "policy": {
+          "name": "OCI Gold",
+          "rules": [
+            { "frequency": "daily", "type": "incremental", "keep_value": 2, "keep_unit": "weeks" },
+            { "frequency": "weekly", "type": "full", "keep_value": 1, "keep_unit": "months" }
+          ]
+        },
+        "backups": [
+          {
+            "name": "hamza-erp-prod-2026-11-06",
+            "at": "2026-11-06T02:00:12+03:00",
+            "expires_at": "2026-11-20T02:00:12+03:00",
+            "frequency": "daily",
+            "type": "incremental",
+            "state": "confirmed",
+            "size_gb": 47
+          }
+        ],
+        "errors": [
+          {
+            "at": "2026-11-05T02:00:05+03:00",
+            "message": "The backup did not complete.",
+            "resolved_at": "2026-11-05T03:10:00+03:00",
+            "resolution": "A later backup completed and was confirmed."
+          }
+        ],
+        "last_confirmed_at": "2026-11-06T02:00:12+03:00",
+        "overdue": false
+      }
     }
   }
   ```
-  
-  **Errors:**
-  
+
+  **Top-level fields:**
+
+  - `backup_schedule`: free text written by our team. Show it only when `oci.available` is false or `oci.policy` is null.
+  - `last_restore_test`: date of the last restore test. Can be null.
+  - `restores[]`: up to 5 recent restores, newest first. Can be empty.
+    - `date`: date-time with offset.
+    - `workflow_state`: the restore's state as recorded by our team, e.g. `Completed`.
+    - `downtime_window`: free text. Can be null.
+
+  **`oci`:**
+
+  - `available`: false when OCI isn't configured for this server or can't be read. Then `oci` holds only `available`: hide the policy, runs and errors. The reason is logged on the server, never sent to the app.
+  - `fetched_at`: when the data was read from OCI, for "Read from OCI today, 02:05".
+  - `policy`: null when the server has no backup policy.
+    - `name`: e.g. "OCI Gold".
+    - `rules[]`: one row per retention rule.
+      - `frequency`: `hourly`, `daily`, `weekly`, `monthly` or `yearly`.
+      - `type`: `incremental` or `full`.
+      - `keep_value`, `keep_unit`: e.g. 2 + `weeks` → "Kept 2 weeks". `keep_unit` is `hours`, `days`, `weeks`, `months` or `years`.
+  - `backups[]`: recent runs, newest first.
+    - `at`, `expires_at`: date-times with offset.
+    - `frequency`: the policy rule it came from (`daily`, `weekly`, …), `manual` for a one-off backup, or null if unknown.
+    - `type`: `incremental` or `full`.
+    - `state`: `confirmed` (green), `failed` (red), or `running`, `queued`, `deleted` (grey, with `state` as the label).
+    - `size_gb`: number.
+  - `errors[]`: one item per failed run in the list, newest first.
+    - `at`: when the failed run started.
+    - `message`: client-safe text. Show it as is.
+    - `resolved_at`, `resolution`: when a later run was confirmed, and what fixed it. Both null while unresolved.
+  - `last_confirmed_at`: newest confirmed run, for "No confirmed backup for 30 hours". Null when none in the list.
+  - `overdue`: true when there's no confirmed backup in the last 26 hours. Show the red alert, even if `errors` is empty.
+
+  **Errors:** every error has an `error_code`.
+
   - **401:** Token missing, expired or invalid. Refresh once and retry, else sign out.
-  - **403:** Not this client's record, or role not allowed.
-  - **404:** Server not found.
-  
-  **Notes:**
-  
-  - Runs: `confirmed` green, `failed` red, anything else grey with `state` as label.
-  - `oci.overdue` true: show the red alert even if `errors` is empty.
-  - `oci.available` false: hide policy and runs; don't show `oci.reason` to clients.
+  - **403** `not_permitted`: not this client's server, or the server doesn't exist.
+  - **403** `no_client_linked`: the user isn't linked to any client company.
+  - **417** `missing_parameter`: `server` left out.
 }

@@ -5,6 +5,20 @@ meta {
 
 docs {
   Hosting and backups for the client's servers.
-  
-  Main flow: Servers → Server Details → Backups.
+
+  **Main flow:** Servers → Server Details → Backups.
+
+  **Home and the Services list don't call Servers.** They read `get_services`, whose `hosting[]` holds the same items. Use Servers only for a screen that lists servers on their own.
+
+  **Where the data comes from**
+
+  - Server status (`online`, `degraded`, `offline`) is checked by the server every 5 minutes. `status_checked_at` says when.
+  - Backup data is read from OCI every 10 minutes and cached. Requests never wait on OCI unless `refresh=1` is sent.
+
+  **Rules for every request in this folder**
+
+  - Every error has an `error_code`. Match on it, never on the message text.
+  - Unknown server IDs and other clients' server IDs both return **403** `not_permitted`, not 404. This hides which IDs exist.
+  - A missing required parameter returns **417** `missing_parameter`.
+  - Dates are `YYYY-MM-DD`. Date-times are ISO 8601 with an offset, e.g. `2026-11-06T02:00:12+03:00`.
 }

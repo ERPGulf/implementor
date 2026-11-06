@@ -1,0 +1,100 @@
+meta {
+  name: Sign off Milestones
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/api/method/implementor.client_api.sign_off_milestone
+  body: formUrlEncoded
+  auth: inherit
+}
+
+body:form-urlencoded {
+  project: PROJ-0029
+  milestone: s6ri3u6d64
+  remarks: For Testing
+  ~customer: Hamza
+}
+
+tests {
+  test("returns 200", function () {
+    expect(res.status).to.equal(200);
+  });
+
+  test("has message", function () {
+    expect(res.body).to.have.property("message");
+  });
+
+  test("returns the same envelope as Milestones", function () {
+    const m = res.body.message;
+    expect(m.milestones).to.be.an("array");
+    expect(m).to.have.property("signed_off");
+    expect(m).to.have.property("completed");
+    expect(m).to.have.property("total");
+  });
+
+  test("milestone is now signed off", function () {
+    const id = req.getBody().milestone || "s6ri3u6d64";
+    const row = res.body.message.milestones.find(function (x) { return x.id === id; });
+    expect(row.display_state).to.equal("signed_off");
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}
+
+docs {
+  Client Admin signs off a milestone.
+
+  **Endpoint:** `POST /api/method/implementor.client_api.sign_off_milestone`  
+  **Screen:** Milestones → Sign off
+
+  > ⚠️ **Changes data** on the shared server, and a sign-off **can't be undone** through the API. Use test records only.
+
+  **Permission:** Client Admin only (`me.is_client_admin`). Show the button only when the milestone's `can_sign_off` is true.
+
+  **Body fields (form-encoded):**
+
+  | Field | Type | Required | Example | Notes |
+  | --- | --- | --- | --- | --- |
+  | `project` | string | yes | `PROJ-0029` | Project `name`. |
+  | `milestone` | string | yes | `s6ri3u6d64` | Milestone `id` from Milestones. |
+  | `remarks` | string | no | `For Testing` | Shown later in `signed_off.remarks`. |
+  | `customer` | string | no | `Hamza` | Not used by the app. The server picks the user's company. Disabled by default. |
+
+  **Response:** the same envelope as Milestones, already updated.
+
+  ```json
+  {
+    "message": {
+      "milestones": [ ... updated, same items as Milestones ... ],
+      "signed_off": 3,
+      "completed": 3,
+      "total": 6
+    }
+  }
+  ```
+
+  **What the server does:**
+
+  - Records the sign-off and notifies the project manager.
+  - Closes the matching "Sign off the '…' milestone" action, so it leaves Waiting for you.
+
+  **Safe to repeat:** signing off a milestone that is already signed off returns **200** with the current state. A phone that retries after a dropped response gets success, not an error.
+
+  **Errors:** every error has an `error_code`.
+
+  - **401:** Token missing, expired or invalid. Refresh once and retry, else sign out.
+  - **403** `not_client_admin`: the user is a Client User.
+  - **403** `not_permitted`: not this client's project, or the project doesn't exist.
+  - **404** `not_found`: no such milestone on this project.
+  - **417** `not_ready_for_sign_off`: the milestone isn't Completed or Due yet.
+  - **417** `missing_parameter`: `project` or `milestone` left out.
+
+  **Notes:**
+
+  - Re-render from the response; don't call Milestones again.
+}

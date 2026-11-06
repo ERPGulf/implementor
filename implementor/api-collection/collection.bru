@@ -8,44 +8,83 @@ auth:bearer {
 
 docs {
   # Implementor Client App API
-  
+
   Backend for the ERPGulf Client App: implementation projects, milestones, AMC, hosting, backups and tickets. Owned by the ERPGulf backend team.
-  
+
   ## Getting started
-  
+
   1. Copy `.env.example` to `.env` in this folder (`api-collection/`). `.env` is gitignored.
   2. Select the **Default** environment (top right in Bruno).
   3. Run **Auth → Master Token** and put the result in `.env` as `MASTER_TOKEN=...`.
   4. Sign in with **Auth → Sign in** (or take a token from the app) and put `token.access_token` in `.env` as `TOKEN=...`.
   5. Run **Home & Profile → Me**, then any other request.
-  
+
   If Bruno doesn't pick up a changed `.env`, close and reopen the collection.
-  
+
   ## Auth
-  
+
   Every request inherits `Authorization: Bearer {{token}}` from this collection. The **Auth** folder overrides it with `{{masterToken}}`. Never paste a real token into a request, header or body.
-  
+
   ## Conventions
-  
+
   - Data calls: `{{baseUrl}}/api/method/implementor.client_api.<function>`.
-  - **GET** sends parameters in the query string. **POST** sends a form-encoded body.
+  - **GET** sends parameters in the query string. **POST** sends a form-encoded body (or multipart when uploading a file).
   - Success data is inside `message`. Unwrap it in one place. Some list calls add keys beside it, for example `has_more` in **My tickets**.
   - `customer` is not used by the app: the server picks the signed-in user's company. It is disabled in every request by default.
-  - Dates are `YYYY-MM-DD`; date-times are in the server time zone.
+  - Plain dates are `YYYY-MM-DD` (e.g. `due`, `end_date`, `go_live_date`, `ssl_expiry`).
+  - Date-times in the services endpoints (Home & Profile, Projects, Servers) are ISO 8601 with the server's offset, e.g. `2026-10-28T15:13:48+03:00`: milestone `signed_off.on`, training `schedule`, server activity and restore `date`, action `completed_on`, `status_checked_at`, `last_backup.at`, and every backup time (`at`, `expires_at`, `fetched_at`, `last_confirmed_at`, `resolved_at`). Parse them with a normal ISO 8601 parser.
+  - **Ticket endpoints are not converted yet.** `created`, `sla_due`, `steps[].at`, `history[].at`, `comments[].at`, `attachments[].creation` and the like still use the server format without an offset (`2026-10-28 15:41:40.112233`), in the server time zone.
+  - Enum values keep their current casing. Nothing was renamed. Values stored in Frappe select fields stay as stored (`"Waiting on Client"`, `"Green"`, `"Due"`, `"Urgent"`). Values the API computes are lowercase (`"online"`, `"expiring"`, `"ready_for_sign_off"`, `"confirmed"`, `"sign_off"`). Each request lists its exact values.
   - Requests marked ⚠️ change data on the shared server.
   - Requests in **Auth** belong to **employee_app**, a different app.
-  
-  ## Error codes
-  
+
+  ## Errors
+
   | HTTP | Meaning | What the app does |
   | --- | --- | --- |
   | 401 | Token expired or invalid | Refresh once, retry, else sign out |
-  | 403 | Not this client's record, or role not allowed | Show the message, go back |
-  | 404 | Record not found | Show the message, go back |
-  | 417 | Validation (e.g. empty comment) | Show the message, stay on screen |
+  | 403 | Not this client's record, unknown project/server/to-do ID, or role not allowed | Show the message, go back |
+  | 404 | Ticket, milestone or customer not found | Show the message, go back |
+  | 417 | Validation: missing or invalid parameter, empty comment, bad file ... | Show the message, stay on screen |
   | 5xx | Server problem | Generic error, allow retry |
-  
-  Error text is in `_server_messages` (a JSON string holding a JSON list) or `exception`. Client API errors never include `exc` (the Python traceback).
-  
+
+  Every error raised by `implementor.client_api` has a top-level `error_code` beside `_server_messages`. Branch on `error_code`, never on the message text (it can be reworded or translated). Show the text from `_server_messages` (a JSON string holding a JSON list of JSON strings). Client API errors never include `exc` (the Python traceback).
+
+  ```json
+  {
+    "exception": "frappe.exceptions.ValidationError: project is required",
+    "error_code": "missing_parameter",
+    "_server_messages": "[\"{\\\"message\\\": \\\"project is required\\\", ...}\"]"
+  }
+  ```
+
+  Errors raised by Frappe before the client API code runs (expired or invalid token, wrong HTTP method on a POST-only call) have no `error_code`. Use the HTTP status for those.
+
+  ### Error codes
+
+  | `error_code` | HTTP | When |
+  | --- | --- | --- |
+  | `not_logged_in` | 401 | No signed-in user (Guest session). |
+  | `not_permitted` | 403 | The record belongs to another client; the project, server or to-do ID does not exist; a Client User opens a ticket someone else raised; or `customer` is a company the user is not linked to. |
+  | `no_client_linked` | 403 | The signed-in user (mobile or email) is not linked to any client company. Show a clear "not linked to a company yet" message, not a blank Home. |
+  | `not_client_admin` | 403 | The action needs a Client Admin (milestone sign-off). |
+  | `not_found` | 404 | Ticket not found, milestone not found in the project, or `customer` does not exist. |
+  | `missing_parameter` | 417 | A required parameter is missing or empty. This used to be a 500. |
+  | `invalid_parameter` | 417 | A parameter is outside its allowed values (e.g. `status` on **Waiting for you**). |
+  | `not_ready_for_sign_off` | 417 | The milestone is not Completed or Due. |
+  | `not_amc_project` | 417 | `get_amc` was called with an implementation project. |
+  | `invalid_file` | 417 | Upload is empty, or `filedata` is not valid base64. |
+  | `invalid_file_type` | 417 | Action upload is not `.pdf`, `.jpg`, `.jpeg` or `.png`. |
+  | `file_too_large` | 417 | Upload is over 10 MB. |
+  | `invalid_ticket_type` | 417 | Raise Ticket: `ticket_type` is not one of the form options. |
+  | `invalid_priority` | 417 | Raise Ticket: `priority` is not one of the form options. |
+  | `comment_required` | 417 | Empty comment, or "Still an issue" without a comment. |
+  | `not_waiting_for_confirmation` | 417 | `confirm_fix` on a ticket that is not Resolved. |
+  | `invalid_rating` | 417 | A rating that is not a whole number from 1 to 5. |
+
+  ### Unknown IDs
+
+  For **projects, servers and to-dos**, an ID that does not exist and an ID that belongs to another client both return **403 `not_permitted`**. This is deliberate: the API does not reveal which IDs exist. **Tickets and milestones** return **404 `not_found`** when they don't exist (another client's ticket is still 403).
+
   See the *ERPGulf Client App: Mobile UI Developer Guide* for screens, labels and empty states.
 }

@@ -19,9 +19,21 @@ tests {
   test("returns 200", function () {
     expect(res.status).to.equal(200);
   });
-  
+
   test("has message", function () {
     expect(res.body).to.have.property("message");
+  });
+
+  test("has counts and a display_state per milestone", function () {
+    const m = res.body.message;
+    expect(m.total).to.equal(m.milestones.length);
+    m.milestones.forEach(function (x) {
+      expect(x).to.have.property("id");
+      expect(x.display_state).to.be.oneOf([
+        "signed_off", "ready_for_sign_off", "awaiting_admin_sign_off",
+        "in_progress", "overdue", "on_hold", "upcoming"
+      ]);
+    });
   });
 }
 
@@ -31,38 +43,83 @@ settings {
 }
 
 docs {
-  Returns a project's milestones and sign-off counts.
-  
+  A project's milestones and sign-off counts. Works for implementation and AMC projects.
+
   **Endpoint:** `GET /api/method/implementor.client_api.get_milestones`  
-  **Screen:** Milestones
-  
+  **Screens:** Implementation → Milestones tab, AMC details (payment milestones)
+
   **Permission:** Signed-in client user (Client User or Client Admin). Only records of the user's own client company are returned.
-  
+
   **Query parameters:**
-  
+
   | Field | Type | Required | Example | Notes |
   | --- | --- | --- | --- | --- |
-  | `project` | string | yes | `PROJ-0029` |  |
+  | `project` | string | yes | `PROJ-0029` | Project `name`. |
   | `customer` | string | no | `Hamza` | Not used by the app. The server picks the user's company. Disabled by default. |
-  
-  **Response (trimmed):**
-  
+
+  **Response:** in order, first milestone first.
+
   ```json
   {
     "message": {
-      "milestones": [ { "name": "...", "status": "Due", "can_sign_off": true, "signed_off": { "by": "...", "on": "2026-10-01" } } ],
-      "signed_off": 2, "completed": 3, "total": 6
+      "milestones": [
+        {
+          "id": "s6ri3u6d64",
+          "title": "Configuration complete",
+          "duration": 14,
+          "start_date": "2026-10-01",
+          "end_date": "2026-10-15",
+          "days_left": null,
+          "status": "Completed",
+          "display_state": "signed_off",
+          "percent": 100,
+          "modules": 3,
+          "signed_off": {
+            "by": "Hamza Admin",
+            "on": "2026-10-28T15:13:48+03:00",
+            "remarks": "All good"
+          },
+          "ready_for_sign_off": false,
+          "can_sign_off": false
+        }
+      ],
+      "signed_off": 2,
+      "completed": 3,
+      "total": 6
     }
   }
   ```
-  
-  **Errors:**
-  
+
+  **Milestone fields:**
+
+  - `id`: send this as `milestone` to Sign off.
+  - `title`: milestone name to show.
+  - `end_date`: planned date. `start_date` and `duration` (days) are also given.
+  - `days_left`: days until `end_date`, negative when past. Null once the milestone is completed.
+  - `status`: raw status: `Not Started`, `In Progress`, `Partially Completed`, `Due`, `Completed` or `On Hold`. Don't build the UI from it; use `display_state`.
+  - `percent`: completion, 0 to 100. `modules`: number of modules the milestone covers.
+  - `signed_off`: null until signed off. Then `by` (full name), `on` (date-time with offset) and `remarks` (null if none were given).
+  - `ready_for_sign_off`: true for everyone when the milestone is waiting for sign-off.
+  - `can_sign_off`: true only when ready **and** the user is a Client Admin. Show the Sign off button only when this is true.
+
+  **`display_state`: one value per milestone, decided by the server:**
+
+  | Value | Show |
+  | --- | --- |
+  | `signed_off` | Signed off, with `signed_off.by` and date (green) |
+  | `ready_for_sign_off` | "Ready for sign-off" with the Sign off button (maroon) |
+  | `awaiting_admin_sign_off` | "Awaiting admin sign-off", no button (maroon). Client Users see this. |
+  | `in_progress` | In progress (blue) |
+  | `overdue` | Overdue: `end_date` has passed and it isn't completed |
+  | `on_hold` | On hold (grey) |
+  | `upcoming` | Not started yet (grey) |
+
+  **Counts:** `signed_off`, `completed` and `total` are for the header, e.g. "2 of 6 signed off".
+
+  **Errors:** every error has an `error_code`.
+
   - **401:** Token missing, expired or invalid. Refresh once and retry, else sign out.
-  - **403:** Not this client's record, or role not allowed.
-  - **404:** Project not found.
-  
-  **Notes:**
-  
-  - Status colors: Completed green; Due maroon ("Ready for sign-off" when `can_sign_off`); In Progress blue; Not Started, Partially Completed, On Hold grey.
+  - **403** `not_permitted`: not this client's project, or the project doesn't exist.
+  - **403** `no_client_linked`: the user isn't linked to any client company.
+  - **417** `missing_parameter`: `project` left out.
 }

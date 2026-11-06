@@ -19,9 +19,19 @@ tests {
   test("returns 200", function () {
     expect(res.status).to.equal(200);
   });
-  
+
   test("has message", function () {
     expect(res.body).to.have.property("message");
+  });
+
+  test("has AMC fields only", function () {
+    const a = res.body.message;
+    expect(a.kind).to.equal("amc");
+    expect(a.contract_status).to.be.oneOf(["active", "expiring", "expired", null]);
+    expect(a.tickets).to.have.property("open");
+    expect(a).to.not.have.property("stage");
+    expect(a).to.not.have.property("health");
+    expect(a).to.not.have.property("percent");
   });
 }
 
@@ -31,39 +41,64 @@ settings {
 }
 
 docs {
-  Returns the AMC contract period and usage.
-  
+  One AMC contract: period, status, hours used and tickets.
+
   **Endpoint:** `GET /api/method/implementor.client_api.get_amc`  
-  **Screen:** AMC
-  
+  **Screen:** AMC details
+
   **Permission:** Signed-in client user (Client User or Client Admin). Only records of the user's own client company are returned.
-  
+
   **Query parameters:**
-  
+
   | Field | Type | Required | Example | Notes |
   | --- | --- | --- | --- | --- |
-  | `project` | string | yes | `PROJ-0030` | AMC project name. |
+  | `project` | string | yes | `PROJ-0030` | AMC project `name`. |
   | `customer` | string | no | `Hamza` | Not used by the app. The server picks the user's company. Disabled by default. |
-  
-  **Response (trimmed):**
-  
+
+  **Response:** the same fields as an AMC item from `get_services` or `get_projects`.
+
   ```json
   {
     "message": {
-      "start_date": "2026-01-01", "end_date": "2026-12-31",
-      "days_left": 64, "elapsed_percent": 82,
-      "hours_used": 18, "tickets": ...
+      "name": "PROJ-0030",
+      "title": "AMC - Hamza Trading",
+      "display_title": "AMC",
+      "kind": "amc",
+      "status": "AMC",
+      "start_date": "2026-01-01",
+      "end_date": "2026-12-31",
+      "days_left": 55,
+      "project_manager": "Sahana",
+      "contract_status": "active",
+      "elapsed_percent": 85,
+      "hours_used": 18,
+      "tickets": { "open": 2, "closed": 9 }
     }
   }
   ```
-  
-  **Errors:**
-  
+
+  **Fields:**
+
+  - `display_title`: show this, not `title`.
+  - `contract_status`: drives the chip. `active`, `expiring` (30 days or less left) or `expired`. Null when the contract has no end date.
+  - `status`: always `AMC`. Don't use it for the chip.
+  - `days_left`: days until `end_date`. Negative once expired.
+  - `elapsed_percent`: how much of the contract period has passed, 0 to 100. Use it for the period bar.
+  - `hours_used`: hours logged on the contract's tasks.
+  - `tickets`: `open` and `closed` counts for this contract, across the whole company.
+  - There is no `stage`, `phase`, `health` or `percent` for an AMC.
+
+  **Payment milestones:** not in this response. Call Milestones with the same `project`. It returns the AMC's milestones with `display_state` and `can_sign_off`, the same as for implementations.
+
+  **Errors:** every error has an `error_code`.
+
   - **401:** Token missing, expired or invalid. Refresh once and retry, else sign out.
-  - **403:** Not this client's record, or role not allowed.
-  - **404:** AMC not found.
-  
+  - **403** `not_permitted`: not this client's project, or the project doesn't exist.
+  - **403** `no_client_linked`: the user isn't linked to any client company.
+  - **417** `not_amc_project`: the project is an implementation. Open it with Implementation instead.
+  - **417** `missing_parameter`: `project` left out.
+
   **Notes:**
-  
-  - No contracted-hours total yet: show "18 hrs used" alone, no used/total bar.
+
+  - No contracted-hours total yet: show "18 hrs used" alone, with no used/total bar.
 }

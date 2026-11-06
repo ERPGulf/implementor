@@ -18,9 +18,17 @@ tests {
   test("returns 200", function () {
     expect(res.status).to.equal(200);
   });
-  
+
   test("has message", function () {
     expect(res.body).to.have.property("message");
+  });
+
+  test("has the three lists and no backup[]", function () {
+    const m = res.body.message;
+    expect(m.implementation).to.be.an("array");
+    expect(m.amc).to.be.an("array");
+    expect(m.hosting).to.be.an("array");
+    expect(m).to.not.have.property("backup");
   });
 }
 
@@ -30,27 +38,107 @@ settings {
 }
 
 docs {
-  Lists the client's services. No billing data.
-  
+  Lists the client's services. No billing data. Home and the Services tab both read this one call.
+
   **Endpoint:** `GET /api/method/implementor.client_api.get_services`  
-  **Screen:** Services tab
-  
+  **Screens:** Home (service cards), Services tab
+
   **Permission:** Signed-in client user (Client User or Client Admin). Only records of the user's own client company are returned.
-  
+
   **Query parameters:**
-  
+
   | Field | Type | Required | Example | Notes |
   | --- | --- | --- | --- | --- |
   | `customer` | string | no | `Hamza` | Not used by the app. The server picks the user's company. Disabled by default. |
-  
-  **Response (trimmed):**
-  
+
+  **Response:** three lists.
+
+  - `implementation[]`: implementation projects. Same fields as `get_projects` with `kind: implementation`.
+  - `amc[]`: AMC projects. Same fields as `get_projects` with `kind: amc`.
+  - `hosting[]`: servers. Same fields as `get_servers`.
+
+  `backup[]` was removed. Backup status is now on each `hosting[]` item (`last_backup`, `overdue`).
+
   ```json
-  { "message": { "implementation": [ ... ], "amc": [ ... ], "hosting": [ ... ], "backup": [ ... ] } }
+  {
+    "message": {
+      "implementation": [
+        {
+          "name": "PROJ-0029",
+          "title": "ERPNext Implementation - Hamza Trading",
+          "display_title": "ERPNext Implementation",
+          "kind": "implementation",
+          "status": "In Progress",
+          "start_date": "2026-08-01",
+          "end_date": "2026-12-31",
+          "days_left": 55,
+          "project_manager": "Sahana",
+          "stage": "Data Migration",
+          "phase": { "index": 3, "count": 8, "name": "Data Migration" },
+          "health": "Green",
+          "percent": 40,
+          "go_live_date": "2026-12-15",
+          "go_live_days_left": 39,
+          "next_milestone": { "title": "Configuration complete", "end_date": "2026-11-20", "days_left": 14, "status": "In Progress" }
+        }
+      ],
+      "amc": [
+        {
+          "name": "PROJ-0030",
+          "title": "AMC - Hamza Trading",
+          "display_title": "AMC",
+          "kind": "amc",
+          "status": "AMC",
+          "start_date": "2026-01-01",
+          "end_date": "2026-12-31",
+          "days_left": 55,
+          "project_manager": "Sahana",
+          "contract_status": "active",
+          "elapsed_percent": 85,
+          "hours_used": 12.5,
+          "tickets": { "open": 2, "closed": 9 }
+        }
+      ],
+      "hosting": [
+        {
+          "name": "SRV-0001",
+          "server_name": "hamza-erp-prod",
+          "site_url": "erp.hamza.sa",
+          "environment": "Production",
+          "provider": "OCI",
+          "region": "me-jeddah-1",
+          "region_label": "Jeddah",
+          "status": "online",
+          "status_checked_at": "2026-11-06T09:30:00+03:00",
+          "erpnext_version": "v15.40.0",
+          "backup_schedule": "Daily 02:00 AST, 14-day retention",
+          "backup_policy_name": "OCI Gold",
+          "last_backup": { "at": "2026-11-06T02:00:12+03:00", "state": "confirmed" },
+          "overdue": false,
+          "ssl_expiry": "2027-02-10",
+          "ssl_days_left": 96,
+          "last_restore_test": "2026-10-15"
+        }
+      ]
+    }
+  }
   ```
-  
-  **Errors:**
-  
+
+  **Field notes:**
+
+  - `display_title`: `title` without the customer name. Show this one.
+  - `phase`: null when the project's stage isn't one of the known phases.
+  - `next_milestone`: first milestone not yet completed, or completed and waiting for sign-off. Null when none.
+  - `contract_status` (AMC only): `active`, `expiring` (30 days or less left) or `expired`.
+  - AMC items have no `stage`, `phase`, `health` or `percent`.
+  - `status` (hosting): `online`, `degraded`, `offline`, or null if never checked.
+  - `last_backup.state`: `confirmed`, `running`, `queued`, `failed`, `deleted`, or `recorded` (entered by hand, not read from OCI). `last_backup` is null when there's no data.
+  - `overdue`: true when there's no confirmed backup in the last 26 hours. Null when unknown.
+  - Date fields are `YYYY-MM-DD`. Datetime fields are ISO 8601 with an offset.
+
+  **Errors:** every error has an `error_code`.
+
   - **401:** Token missing, expired or invalid. Refresh once and retry, else sign out.
-  - **403:** Not this client's record, or role not allowed.
+  - **403** `no_client_linked`: the user isn't linked to any client company.
+  - **403** `not_permitted`: not this client's record, or role not allowed.
 }

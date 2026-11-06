@@ -19,9 +19,23 @@ tests {
   test("returns 200", function () {
     expect(res.status).to.equal(200);
   });
-  
+
   test("has message", function () {
     expect(res.body).to.have.property("message");
+  });
+
+  test("has every tab's data", function () {
+    const p = res.body.message;
+    ["phases", "modules", "milestones", "training", "integrations", "my_actions", "tickets_waiting_for_you"].forEach(function (k) {
+      expect(p[k]).to.be.an("array");
+    });
+  });
+
+  test("my_actions only holds this project's actions", function () {
+    const p = res.body.message;
+    p.my_actions.forEach(function (a) {
+      expect(a.project).to.equal(p.name);
+    });
   });
 }
 
@@ -31,44 +45,93 @@ settings {
 }
 
 docs {
-  Returns one implementation project with progress, phases, modules and milestones.
-  
+  One project with everything its three tabs need: Overview, Milestones and Tasks.
+
   **Endpoint:** `GET /api/method/implementor.client_api.get_project`  
-  **Screen:** Implementation
-  
+  **Screen:** Implementation (Overview, Milestones, Tasks tabs)
+
   **Permission:** Signed-in client user (Client User or Client Admin). Only records of the user's own client company are returned.
-  
+
   **Query parameters:**
-  
+
   | Field | Type | Required | Example | Notes |
   | --- | --- | --- | --- | --- |
-  | `project` | string | yes | `PROJ-0029` | Project name. |
+  | `project` | string | yes | `PROJ-0029` | Project `name`. |
   | `customer` | string | no | `Hamza` | Not used by the app. The server picks the user's company. Disabled by default. |
-  
-  **Response (trimmed):**
-  
+
+  **Response:** the same fields as a `get_projects` item, plus the lists below.
+
   ```json
   {
     "message": {
-      "percent": 62, "stage": "...", "health": "Green",
-      "phases": [ { "title": "...", "state": "done" } ],
-      "modules": [ { "module": "...", "percent": null, "status": "..." } ],
-      "milestones": [ ... ], "training": [ ... ], "my_actions": [ ... ],
-      "go_live_days_left": -3
+      "name": "PROJ-0029",
+      "title": "ERPNext Implementation - Hamza Trading",
+      "display_title": "ERPNext Implementation",
+      "kind": "implementation",
+      "status": "In Progress",
+      "start_date": "2026-08-01",
+      "end_date": "2026-12-31",
+      "days_left": 55,
+      "project_manager": "Sahana",
+      "stage": "Data Migration",
+      "phase": { "index": 3, "count": 8, "name": "Data Migration" },
+      "health": "Green",
+      "percent": 62,
+      "go_live_date": "2026-12-15",
+      "go_live_days_left": 39,
+      "next_milestone": { "title": "Configuration complete", "end_date": "2026-11-20", "days_left": 14, "status": "In Progress" },
+      "phases": [
+        { "name": "Kick-off", "state": "done" },
+        { "name": "Data Migration", "state": "current" },
+        { "name": "Go-live", "state": "upcoming" }
+      ],
+      "modules": [
+        { "module": "Accounting", "in_scope": 1, "status": "In Progress", "percent": 60 }
+      ],
+      "milestones": [ ... same items as Milestones ... ],
+      "training": [
+        { "name": "TRN-0004", "topic": "Selling basics", "trainer": "Sahana", "schedule": "2026-11-12T10:00:00+03:00" }
+      ],
+      "integrations": [
+        { "name": "INT-0002", "integration_name": "ZATCA e-invoicing", "type": "Government", "vendor": "ZATCA", "status": "Live" }
+      ],
+      "my_actions": [ ... same items as Waiting for you, this project only ... ],
+      "tickets_waiting_for_you": [
+        { "name": "TCK-0112", "subject": "Wrong VAT on credit note", "status": "Resolved" }
+      ]
     }
   }
   ```
-  
-  **Errors:**
-  
+
+  **Overview tab:**
+
+  - `display_title`: show this, not `title`.
+  - `health`: `Green`, `Amber` or `Red` → On track, Needs attention, At risk.
+  - `phase`: "Phase 3 of 8 · Data Migration". Null when the stage isn't one of the known phases; hide that line then.
+  - `go_live_days_left`: negative means overdue, e.g. -3 → "3 days overdue".
+  - `next_milestone`: first milestone not yet completed, or completed and waiting for sign-off. Null when none.
+  - `project_manager`: full name.
+  - `tickets_waiting_for_you`: tickets on this project waiting for the client. `status` is `Waiting on Client` (we need an answer) or `Resolved` (please confirm the fix).
+  - `training[].schedule`: date-time with offset. `trainer` is a full name.
+  - `integrations[]`: `status` is the integration's status as set by our team.
+
+  **Milestones tab:**
+
+  - `milestones[]`: same items as the Milestones request. Use `display_state` for the label and button.
+
+  **Tasks tab:**
+
+  - `phases[].state`: `done`, `current` or `upcoming`. Phases use `name`, not `title`.
+  - `modules[].percent`: average task progress for that module. Can be null; show `status` instead.
+  - `modules[].in_scope`: 1 or 0.
+  - `my_actions[]`: open actions for this project only. For the Done list, call Waiting for you with `status=done&project=...`.
+
+  **AMC projects:** this call also works for an AMC, but use AMC instead. For an AMC, `phases` is empty and there is no `phase`, `stage`, `health`, `percent` or `next_milestone`. `modules` may still be filled; the AMC screen doesn't show it.
+
+  **Errors:** every error has an `error_code`.
+
   - **401:** Token missing, expired or invalid. Refresh once and retry, else sign out.
-  - **403:** Not this client's record, or role not allowed.
-  - **404:** Project not found.
-  
-  **Notes:**
-  
-  - `health`: Green, Amber, Red → On track, Needs attention, At risk.
-  - `phases[].state`: done, current, upcoming.
-  - `modules[].percent` can be null; show `status` instead.
-  - Negative `go_live_days_left` means overdue: show "3 days overdue".
+  - **403** `not_permitted`: not this client's project, or the project doesn't exist.
+  - **403** `no_client_linked`: the user isn't linked to any client company.
+  - **417** `missing_parameter`: `project` left out.
 }

@@ -213,6 +213,10 @@ scheduler_events = {
         "0 22 * * 0": [
             "implementor.implementor.auth.send_weekly_task_summary"
         ],
+        "*/10 * * * *": [
+            "implementor.client_api.refresh_oci_backups"
+        ],
+        "*/5 * * * *": ["implementor.client_api.check_server_status"],
     }
 }
 

@@ -18,9 +18,19 @@ tests {
   test("returns 200", function () {
     expect(res.status).to.equal(200);
   });
-  
+
   test("has message", function () {
     expect(res.body).to.have.property("message");
+  });
+
+  test("items have the SRV fields", function () {
+    expect(res.body.message).to.be.an("array");
+    res.body.message.forEach(function (s) {
+      ["status", "status_checked_at", "site_url", "last_backup", "overdue", "erpnext_version", "region_label", "backup_policy_name"].forEach(function (k) {
+        expect(s).to.have.property(k);
+      });
+      expect(s.status).to.be.oneOf(["online", "degraded", "offline", null]);
+    });
   });
 }
 
@@ -31,30 +41,69 @@ settings {
 
 docs {
   Lists the client's hosted servers.
-  
+
   **Endpoint:** `GET /api/method/implementor.client_api.get_servers`  
-  **Screen:** Hosting list
-  
+  **Screen:** Hosting list. Home and the Services list get the same items from `get_services` → `hosting[]`.
+
   **Permission:** Signed-in client user (Client User or Client Admin). Only records of the user's own client company are returned.
-  
+
   **Query parameters:**
-  
+
   | Field | Type | Required | Example | Notes |
   | --- | --- | --- | --- | --- |
   | `customer` | string | no | `Hamza` | Not used by the app. The server picks the user's company. Disabled by default. |
-  
-  **Response (trimmed):**
-  
+
+  **Response:**
+
   ```json
-  { "message": [ { "name": "s6qivo97hn", "environment": "Production", "provider": "...", "region": "...", "ssl_expiry": "2027-01-10", "ssl_days_left": 73 } ] }
+  {
+    "message": [
+      {
+        "name": "s6qivo97hn",
+        "server_name": "hamza-erp-prod",
+        "site_url": "erp.hamza.sa",
+        "environment": "Production",
+        "provider": "OCI",
+        "region": "me-jeddah-1",
+        "region_label": "Jeddah",
+        "status": "online",
+        "status_checked_at": "2026-11-06T09:30:00+03:00",
+        "erpnext_version": "v15.40.0",
+        "backup_schedule": "Daily 02:00 AST, 14-day retention + weekly offsite",
+        "backup_policy_name": "OCI Gold",
+        "last_backup": { "at": "2026-11-06T02:00:12+03:00", "state": "confirmed" },
+        "overdue": false,
+        "ssl_expiry": "2027-01-10",
+        "ssl_days_left": 65,
+        "last_restore_test": "2026-10-15"
+      }
+    ]
+  }
   ```
-  
-  **Errors:**
-  
+
+  **Fields:**
+
+  - `name`: send this as `server` to Server Details and Backups.
+  - `server_name`: internal name. Show `site_url` on the card instead, when set.
+  - `site_url`: the client's site, e.g. `erp.hamza.sa`. Null if not entered yet.
+  - `region_label`: city name for `region`. Null for a region we haven't labelled; show `region` then.
+  - `status`: `online`, `degraded` (slow or answering with errors) or `offline`. Null if never checked; hide the chip then.
+  - `status_checked_at`: when the status was last checked.
+  - `backup_schedule`: free text written by our team.
+  - `backup_policy_name`: the OCI policy name, e.g. "OCI Gold". Null when OCI isn't configured for this server.
+  - `last_backup`: for "Last backup today 02:00 · Confirmed". Null when there's no data.
+    - `at`: date-time of the newest backup.
+    - `state`: `confirmed`, `running`, `queued`, `failed`, `deleted`, or `recorded` (entered by our team, not read from OCI).
+  - `overdue`: true when there's no confirmed backup in the last 26 hours. Show the red alert. Null when unknown.
+  - `ssl_expiry`, `ssl_days_left`: SSL certificate expiry date and days left.
+  - `last_restore_test`: date of the last restore test. Can be null.
+
+  **Errors:** every error has an `error_code`.
+
   - **401:** Token missing, expired or invalid. Refresh once and retry, else sign out.
-  - **403:** Not this client's record, or role not allowed.
-  
+  - **403** `no_client_linked`: the user isn't linked to any client company.
+
   **Notes:**
-  
+
   - There is no hosting renewal date. Label the date "SSL certificate expires".
 }

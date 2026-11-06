@@ -1,0 +1,81 @@
+meta {
+  name: Complete Action
+  type: http
+  seq: 7
+}
+
+post {
+  url: {{baseUrl}}/api/method/implementor.client_api.complete_action
+  body: formUrlEncoded
+  auth: inherit
+}
+
+body:form-urlencoded {
+  todo: 12glqu2bo8
+  ~customer: Hamza
+}
+
+tests {
+  test("returns 200", function () {
+    expect(res.status).to.equal(200);
+  });
+
+  test("has message", function () {
+    expect(res.body).to.have.property("message");
+  });
+
+  test("action is no longer in the open list", function () {
+    const id = req.getBody().todo || "12glqu2bo8";
+    const still = res.body.message.some(function (a) { return a.name === id; });
+    expect(still).to.equal(false);
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}
+
+docs {
+  Marks one action as done.
+
+  **Endpoint:** `POST /api/method/implementor.client_api.complete_action`  
+  **Screen:** Waiting on you → Mark done / Review
+
+  > ⚠️ **Changes data** on the shared server, and it **can't be undone** through the API. Use test records only.
+
+  **Permission:** Signed-in client user (Client User or Client Admin). The action must be assigned to this user.
+
+  **Body fields (form-encoded):**
+
+  | Field | Type | Required | Example | Notes |
+  | --- | --- | --- | --- | --- |
+  | `todo` | string | yes | `12glqu2bo8` | `name` from Waiting for you. |
+  | `customer` | string | no | `Hamza` | Not used by the app. The server picks the user's company. Disabled by default. |
+
+  **Response:** the updated list of **open** actions, same items as Waiting for you, for all projects.
+
+  ```json
+  { "message": [ ... open actions, without the one just completed ... ] }
+  ```
+
+  **What the server does:**
+
+  - Marks the action done and notifies the team member who assigned it.
+  - If the action is linked to a task, updates that task's progress.
+
+  **Safe to repeat:** completing an action that is already done returns **200** with the current list.
+
+  **Which button uses this:** `cta` = `mark_done` or `review`. For `upload`, use Upload Action Attachment with `complete=1`. For `sign_off`, use Sign off Milestones, which closes the action by itself.
+
+  **Errors:** every error has an `error_code`.
+
+  - **401:** Token missing, expired or invalid. Refresh once and retry, else sign out.
+  - **403** `not_permitted`: the action doesn't exist, or isn't assigned to this user.
+  - **403** `no_client_linked`: the user isn't linked to any client company.
+  - **417** `missing_parameter`: `todo` left out.
+
+  **Notes:**
+
+  - Re-render from the response; don't call Waiting for you again.
+}

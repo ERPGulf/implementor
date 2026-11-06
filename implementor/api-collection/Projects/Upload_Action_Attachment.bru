@@ -1,0 +1,86 @@
+meta {
+  name: Upload Action Attachment
+  type: http
+  seq: 8
+}
+
+post {
+  url: {{baseUrl}}/api/method/implementor.client_api.upload_action_attachment
+  body: multipartForm
+  auth: inherit
+}
+
+body:multipart-form {
+  todo: PUT_TODO_NAME_HERE
+  file: @file(/path/to/vat-certificate.pdf)
+  ~note: VAT certificate, valid until 2027
+  ~complete: 1
+  ~customer: Hamza
+}
+
+tests {
+  test("returns 200", function () {
+    expect(res.status).to.equal(200);
+  });
+
+  test("has message", function () {
+    expect(res.body).to.have.property("message");
+  });
+
+  test("returns the open actions list", function () {
+    expect(res.body.message).to.be.an("array");
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}
+
+docs {
+  Answers an action that asks for a file. One file per call.
+
+  **Endpoint:** `POST /api/method/implementor.client_api.upload_action_attachment`  
+  **Screen:** Waiting on you → Upload (actions with `cta` = `upload`)
+
+  > ⚠️ **Changes data** on the shared server. Uploaded files can't be removed through the API. Use test records only.
+
+  **Permission:** Signed-in client user (Client User or Client Admin). The action must be assigned to this user.
+
+  **Body fields (multipart form):**
+
+  | Field | Type | Required | Example | Notes |
+  | --- | --- | --- | --- | --- |
+  | `todo` | string | yes | `12glqu2bo8` | `name` from Waiting for you. |
+  | `file` | file | yes* | `vat-certificate.pdf` | PDF, JPG or PNG. 10 MB max. |
+  | `note` | string | no | `Valid until 2027` | Saved as a comment beside the file. |
+  | `complete` | 0 or 1 | no | `1` | Send `1` with the **last** file to finish the action. |
+  | `customer` | string | no | `Hamza` | Not used by the app. The server picks the user's company. Disabled by default. |
+
+  \* Instead of a multipart `file`, you can send `filename` plus base64 `filedata` (the same way ticket attachments work).
+
+  **Several files:** call once per file. Send `complete=1` only on the last call.
+
+  **Response:** the updated list of **open** actions, same items as Waiting for you.
+
+  ```json
+  { "message": [ ... open actions ... ] }
+  ```
+
+  **What the server does:**
+
+  - Attaches the file privately to the record the action is about (`reference`), or to the action itself if it has none.
+  - With `complete=1`, marks the action done and notifies our team.
+
+  **Safe to repeat:** a call on an action that is already done uploads nothing and returns **200** with the current list. A retry after a dropped connection is safe.
+
+  **Errors:** every error has an `error_code`.
+
+  - **401:** Token missing, expired or invalid. Refresh once and retry, else sign out.
+  - **403** `not_permitted`: the action doesn't exist, or isn't assigned to this user.
+  - **403** `no_client_linked`: the user isn't linked to any client company.
+  - **417** `missing_parameter`: `todo`, or the file, left out.
+  - **417** `invalid_file_type`: not a PDF, JPG or PNG.
+  - **417** `file_too_large`: over 10 MB.
+  - **417** `invalid_file`: empty file or bad base64.
+}
