@@ -681,7 +681,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		<option value="ongoing" selected>All Ongoing</option>
 		<option value="int-ongoing">Internal Ongoing</option>
 		<option value="ext-ongoing">External Ongoing</option>
-		<option value="completed">Completed</option>
+		<option value="completed">All Completed</option>
 		<option value="int-completed">Internal Completed</option>
 		<option value="ext-completed">External Completed</option>
 		<option value="amc">AMC</option>
@@ -836,6 +836,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 						<option value="Overdue">Overdue</option>
 						<option value="Partially Paid">Partially Paid</option>
 						<option value="Pending">Pending</option>
+						<option value="Free">Free</option>
 						</select>
 					</div>
 					<div style="display:flex; flex-direction:column; gap:3px; flex:1;">
@@ -1080,6 +1081,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 	function derivePaymentStatus(m, isNextPending) {
 		if (!m) return { label: "—", kind: "muted" };
 		if (m.payment_status === "Paid") return { label: "Payment done", kind: "success" };
+		if (m.payment_status === "Free") return { label: "Free AMC", kind: "success" };
 		if (milestoneIsPastDue(m)) return { label: "Payment due", kind: "danger" };
 		return isNextPending ? { label: "Payment pending", kind: "warning" } : { label: "Payment upcoming", kind: "muted" };
 	}
@@ -1326,6 +1328,68 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			+ '<defs>' + defsHtml + '</defs>'
 			+ zebraHtml + gridLines + rows + '</svg>';
 	}
+	function paymentBreakdown(p) {
+		var paid = 0, late = 0, due = 0;
+		p.milestones.forEach(function (m) {
+			var w = m.weight || 0;
+			if (m.payment_status === "Paid" || m.payment_status === "Free") paid += w;
+			else if (milestoneIsPastDue(m)) late += w;
+			else due += w;
+		});
+		var total = paid + late + due;
+		var allFree = p.milestones.length > 0 && p.milestones.every(function (m) { return m.payment_status === "Free"; });
+		return { paid: paid, late: late, due: due, total: total, pct: total ? Math.round(paid / total * 100) : 0, allFree: allFree };
+	}
+	function buildAmcStatusChart(projects) {
+		var plotLeft = 130, plotRight = 900, plotTop = 18, rowHeight = 40, barH = 6;
+		var width = plotRight - plotLeft;
+		var plotBottom = plotTop + projects.length * rowHeight;
+
+		var grid = [0, 25, 50, 75, 100].map(function (pct) {
+			var x = plotLeft + pct / 100 * width;
+			return '<line x1="' + x + '" y1="' + plotTop + '" x2="' + x + '" y2="' + plotBottom + '" stroke="var(--border)" stroke-width="0.5"></line>'
+				+ '<text x="' + x + '" y="' + (plotTop - 5) + '" font-size="10" fill="var(--text-muted)" text-anchor="middle">' + pct + '%</text>';
+		}).join("");
+
+		var rows = projects.map(function (p, i) {
+			var y0 = plotTop + i * rowHeight;
+			var workY = y0 + 10, payY = y0 + 23;
+			var workPct = amcElapsedPercent(p);
+			var pay = paymentBreakdown(p);
+			var name = escapeHtml(p.client || p.product || p.name);
+
+			var zebra = i % 2 === 1
+				? '<rect x="0" y="' + y0 + '" width="' + (plotRight + 110) + '" height="' + rowHeight + '" fill="var(--surface-1)" opacity="0.5"></rect>'
+				: "";
+
+			// work bar
+			var workW = workPct / 100 * width;
+			var workBar = '<rect x="' + plotLeft + '" y="' + workY + '" width="' + width + '" height="' + barH + '" rx="2" fill="var(--surface-1)"></rect>'
+				+ '<rect x="' + plotLeft + '" y="' + workY + '" width="' + workW + '" height="' + barH + '" rx="2" fill="var(--text-accent)" data-tip="' + name + ': ' + workPct + '% of AMC period completed">'
+				+ '<animate attributeName="width" from="0" to="' + workW + '" dur="0.6s" begin="' + (i * 0.05) + 's" fill="freeze"/></rect>';
+
+			// payment bar (received → overdue → pending)
+			var payBar = '<rect x="' + plotLeft + '" y="' + payY + '" width="' + width + '" height="' + barH + '" rx="2" fill="var(--surface-1)"></rect>';
+			if (pay.total) {
+				var cx = plotLeft;
+				[[pay.paid, "var(--text-success)", "Received"], [pay.late, "#92400E", "Overdue"], [pay.due, "var(--text-warning)", "Pending"]]
+					.forEach(function (s) {
+						if (!s[0]) return;
+						var w = s[0] / pay.total * width;
+						payBar += '<rect x="' + cx + '" y="' + payY + '" width="' + w + '" height="' + barH + '" fill="' + s[1] + '" data-tip="' + name + ': ' + s[2] + ' ' + Math.round(s[0] / pay.total * 100) + '%"></rect>';
+						cx += w;
+					});
+			}
+			var payText = !pay.total ? "No plan" : pay.allFree ? "Free" : pay.pct + "% paid";
+
+			return zebra + workBar + payBar
+				+ '<text x="' + (plotLeft - 8) + '" y="' + (y0 + 22) + '" font-size="11" font-weight="600" fill="var(--text-primary)" text-anchor="end" data-tip="' + name + '">' + chartLabel(p) + '</text>'
+				+ '<text x="' + (plotRight + 8) + '" y="' + (workY + barH) + '" font-size="10" fill="var(--text-secondary)" font-family="var(--font-mono)">Work ' + workPct + '%</text>'
+				+ '<text x="' + (plotRight + 8) + '" y="' + (payY + barH) + '" font-size="10" fill="' + (pay.late ? "#92400E" : "var(--text-secondary)") + '" font-family="var(--font-mono)">' + payText + '</text>';
+		}).join("");
+
+		return '<svg viewBox="0 0 ' + (plotRight + 110) + ' ' + (plotBottom + 10) + '" style="width:100%; min-width:560px; height:auto; display:block;">' + grid + rows + '</svg>';
+	}
 
 	function escapeHtml(str) {
 		return String(str == null ? "" : str)
@@ -1355,6 +1419,14 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 	function chartLabel(p) {
 		return shortName(p.client || p.product || p.name);
 	}
+	// the AMC milestone currently running = first one whose end date hasn't passed
+	function amcNextIndex(p) {
+		return p.milestones.findIndex(function (m) { return !milestoneIsPastDue(m); });
+	}
+	function deriveAmcMilestoneWork(m, p, isCurrent) {
+		if (amcElapsedPercent(p) >= 100 || milestoneIsPastDue(m)) return { label: "Work done", kind: "success" };
+		return isCurrent ? { label: "Work ongoing", kind: "warning" } : { label: "Work pending", kind: "muted" };
+	}
 	function renderMilestoneDashboard(projects) {
 		var el = document.getElementById("milestones-view");
 		// 	var toolbarHtml = `
@@ -1372,7 +1444,20 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		var cardStyle = "background:var(--surface-2); border-radius:12px; box-shadow:0 1px 2px rgba(0,0,0,0.04), 0 2px 12px rgba(0,0,0,0.05); padding:18px 22px;";
 		var dividerStyle = "height:1px; background:var(--border); margin:12px 0 14px;";
 
-		var chartsHtml = `
+		var chartsHtml = state.msType === "amc" ? `
+<div style="${cardStyle} margin-bottom:20px;">
+	<div style="display:flex; justify-content:space-between; align-items:baseline; flex-wrap:wrap; gap:8px;">
+		<div style="font-size:14px; font-weight:600;">AMC work & payment status</div>
+		<div style="display:flex; gap:14px; flex-wrap:wrap;">
+			${legendItem("var(--text-accent)", "Work (AMC period completed)")}
+			${legendItem("var(--text-success)", "Payment received")}
+			${legendItem("var(--text-warning)", "Payment pending")}
+			${legendItem("#92400E", "Payment overdue")}
+		</div>
+	</div>
+	<div style="${dividerStyle}"></div>
+	<div style="max-height:320px; overflow:auto;">${buildAmcStatusChart(projects)}</div>
+</div>` : `
 <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-bottom:20px;">
 
 	<div style="${cardStyle}">
@@ -1434,14 +1519,15 @@ ${legendDot("#450A0A", "Both overdue")}
 			var isAmc = p.project_status === "AMC";
 			var firstPendingIndex = p.milestones.findIndex(function (m) { return m.completion_status !== "Completed"; });
 			var MS_VISIBLE = 6;
+			var amcCurrent = isAmc ? amcNextIndex(p) : -1;
 			var slots = p.milestones.map(function (m, i) {
 				var isNext = i === firstPendingIndex;
 				return {
 					index: "M" + (i + 1),
 					description: m.title || "—",
 					weightLabel: m.weight ? m.weight + "%" : "—",
-					work: isAmc ? deriveAmcWorkStatus(p) : deriveWorkStatus(m, isNext),
-					payment: derivePaymentStatus(m, isNext)
+					work: isAmc ? deriveAmcMilestoneWork(m, p, i === amcCurrent) : deriveWorkStatus(m, isNext),
+					payment: derivePaymentStatus(m, isAmc ? true : isNext)
 				};
 			});
 
@@ -1487,7 +1573,7 @@ ${legendDot("#450A0A", "Both overdue")}
 				else if (past) wLate += w;
 				else if (m.completion_status === "In Progress") wActive += w;
 				else wTodo += w;
-				if (m.payment_status === "Paid") pPaid += w;
+				if (m.payment_status === "Paid" || m.payment_status === "Free") pPaid += w;
 				else if (past) pLate += w;
 				else pDue += w;
 			});
@@ -1528,7 +1614,7 @@ ${legendDot("#450A0A", "Both overdue")}
 
 			<div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(max(150px, calc((100% - 40px) / 5)), 1fr)); gap:10px; padding:0 22px 18px;">
 				${statTile("Duration", p.timeline)}
-				${statTile(p.project_status === "AMC" ? "AMC Start → Expiry" : "Start → Delivery", fmtDate(p.start_date, true) + " → "
+				${statTile(p.project_status === "AMC" ? "Start → Expiry" : "Start → Delivery", fmtDate(p.start_date, true) + " → "
 				+ (overdueProject ? '<span style="color:var(--text-danger);">' + fmtDate(p.delivery_date, true) + '</span>' : fmtDate(p.delivery_date, true)))}
 				
 			${p.project_status !== "AMC"
@@ -1556,7 +1642,7 @@ ${legendDot("#450A0A", "Both overdue")}
 						[wLate, "#DC2626", "Overdue"],
 						[wTodo, "var(--border-strong)", "Not started"]
 					])}
-				${stackedBar("Payment status", payPct + "% received", pLate ? "#92400E" : "var(--text-success)", [
+				${stackedBar("Payment status", (isAmc && p.milestones.length && p.milestones.every(function (m) { return m.payment_status === "Free"; })) ? "Free" : payPct + "% received", pLate ? "#92400E" : "var(--text-success)", [
 						[pPaid, "var(--text-success)", "Received"],
 						[pLate, "#92400E", "Overdue"],
 						[pDue, "var(--text-warning)", "Pending"]
@@ -1591,14 +1677,31 @@ ${legendDot("#450A0A", "Both overdue")}
 		}
 
 		// all four cards come from the filtered list, so they follow the Ongoing / AMC / Completed / Internal / All select
-		var avgProgress = totalP ? Math.round(projects.reduce(function (sum, p) { return sum + (p.overall_percent || 0); }, 0) / totalP) : 0;
-		var kpiHtml = `
-	    <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-bottom:20px;">
-	        ${metricCard("Total Projects", totalP)}
-	        ${overdueCard("Work overdue", workOverdueN, "#DC2626")}
-	        ${overdueCard("Payment overdue", payOverdueN, "#92400E")}
-	        ${metricCard("Overall Completed %", avgProgress + "%")}
-	    </div>`;
+		var kpiHtml;
+		if (state.msType === "amc") {
+			// work = share of the AMC period that has passed (time-based, as he described)
+			var amcProgress = totalP ? Math.round(projects.reduce(function (sum, p) { return sum + amcElapsedPercent(p); }, 0) / totalP) : 0;
+			// payment = average % received, only over AMCs that have a milestone
+			var withPlan = projects.filter(function (p) { return paymentBreakdown(p).total > 0; });
+			var amcPaid = withPlan.length ? Math.round(withPlan.reduce(function (sum, p) { return sum + paymentBreakdown(p).pct; }, 0) / withPlan.length) : 0;
+
+			kpiHtml = `
+	<div style="display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-bottom:20px;">
+		${metricCard("Total AMC", totalP)}
+		${metricCard("Overall progress", amcProgress + "%")}
+		${metricCard("Payment received", amcPaid + "%")}
+		${overdueCard("Payment overdue", payOverdueN, "#92400E")}
+	</div>`;
+		} else {
+			var avgProgress = totalP ? Math.round(projects.reduce(function (sum, p) { return sum + (p.overall_percent || 0); }, 0) / totalP) : 0;
+			kpiHtml = `
+	<div style="display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-bottom:20px;">
+		${metricCard("Total Projects", totalP)}
+		${overdueCard("Work overdue", workOverdueN, "#DC2626")}
+		${overdueCard("Payment overdue", payOverdueN, "#92400E")}
+		${metricCard("Overall Completed %", avgProgress + "%")}
+	</div>`;
+		}
 
 
 		el.innerHTML = kpiHtml + chartsHtml + cardsHtml;

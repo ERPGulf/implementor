@@ -23,7 +23,7 @@ def _project_modules(project_name):
     )
 
 
-def _project_milestones(project_name):
+def _project_milestones(project_name, is_amc=False):
     doc = frappe.get_doc("Project", project_name)
     return [
         {
@@ -31,11 +31,11 @@ def _project_milestones(project_name):
             "weight": float(m.payment_ or 0),
             "completion_status": m.completion_status,
             "payment_status": m.payment_status,
-            "end_date":m.end_date
+            "end_date": m.end_date
         }
         for m in doc.get("payment_milestone")
+        if bool(m.get("custom_is_amc")) == is_amc
     ]
-
 
 @frappe.whitelist()
 def get_milestone_dashboard(project_type="ongoing"):
@@ -92,12 +92,12 @@ def get_milestone_dashboard(project_type="ongoing"):
 
     result = []
     for p in projects:
-        milestones = _project_milestones(p.name)
+        milestones = _project_milestones(p.name, is_amc=(p.project_status == "AMC"))
         modules = _project_modules(p.name)
 
-        received_pct = sum(m["weight"] for m in milestones if m["payment_status"] == "Paid")
-        pending_pct = sum(m["weight"] for m in milestones if m["payment_status"] != "Paid")
-        next_ms = next((m["title"] for m in milestones if m["payment_status"] != "Paid"), None)
+        received_pct = sum(m["weight"] for m in milestones if m["payment_status"] in ("Paid", "Free"))
+        pending_pct = sum(m["weight"] for m in milestones if m["payment_status"] not in ("Paid", "Free"))
+        next_ms = next((m["title"] for m in milestones if m["payment_status"] not in ("Paid", "Free")), None)
 
         modules_completed = len([m for m in modules if m.get("module_status") == "Completed"])
         current_module = next((m["module_name"] for m in modules if m.get("module_status") == "In Progress"), None)

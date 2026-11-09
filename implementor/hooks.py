@@ -166,7 +166,10 @@ doc_events = {
     },
     "ToDo": {
         "validate": "implementor.api.validate"
-    }
+    },
+        "Project": {
+        "before_save": "implementor.amc.create_amc_milestone",
+    },
 }
 # doc_events = {
 # 	"Employee": {

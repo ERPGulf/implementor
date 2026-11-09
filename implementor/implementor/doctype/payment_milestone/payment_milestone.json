@@ -41,7 +41,7 @@
    "fieldname": "payment_status",
    "fieldtype": "Select",
    "label": "Payment Status",
-   "options": "Paid\nUnPaid\nOverdue\nPartially Paid\nPending"
+   "options": "Free\nPaid\nUnPaid\nOverdue\nPartially Paid\nPending"
   },
   {
    "fieldname": "milestone_completion_perc",
@@ -77,7 +77,7 @@
  "index_web_pages_for_search": 1,
  "istable": 1,
  "links": [],
- "modified": "2026-10-14 14:20:30.491272",
+ "modified": "2026-11-09 11:42:40.750411",
  "modified_by": "Administrator",
  "module": "Implementor",
  "name": "Payment Milestone",

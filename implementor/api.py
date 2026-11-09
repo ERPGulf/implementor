@@ -1032,21 +1032,23 @@ def toggle_todo_done(todo):
         "project": project_name,
         "project_percent": project_percent,
     }
-@frappe.whitelist(allow_guest=False)
+@frappe.whitelist()
 def get_milestone(project):
     if not frappe.has_permission("Project", "read", project):
         frappe.throw("Not permitted", frappe.PermissionError)
-    doc = frappe.get_doc("Project",project)
+    doc = frappe.get_doc("Project", project)
+    is_amc = doc.imp_status == "AMC"
     return [
         {
-            "name":m.name,
-            "m_title":m.m_title,
-            "duration":m.duration,
-            "completion_status":m.completion_status,
-            "payment_percent":m.payment_,
-            "payment_status":m.payment_status
+            "name": m.name,
+            "m_title": m.m_title,
+            "duration": m.duration,
+            "completion_status": m.completion_status,
+            "payment_percent": m.payment_,
+            "payment_status": m.payment_status
         }
         for m in doc.get("payment_milestone")
+        if bool(m.get("custom_is_amc")) == is_amc
     ]
 @frappe.whitelist(allow_guest=False)
 def deleteproj(doctype,id):
@@ -1075,9 +1077,11 @@ def set_milestone(project, duration, percent, cstatus, pstatus, estart, edate, c
         "end_date": edate,
         "milestone_completion_perc": c_perc,
         "no_of_modules": nofmod,
+        "custom_is_amc": 1 if doc.imp_status == "AMC" else 0,
     })
     doc.save()
     return get_milestone(project)
+
 
 @frappe.whitelist()
 def delete_milestone(name,project):
