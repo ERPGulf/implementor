@@ -436,7 +436,11 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		showToDosForSelectedTasks();
 		scrollToSelected();
 	}
+	// one toggle at a time: each toggle rewrites the parent Task/Project progress rows,
+	// so overlapping toggles (fast clicks) would contend for the same row locks
+	var toggleInFlight = false;
 	async function toggleToDoDone(id) {
+		if (toggleInFlight) return;
 		var todo = todosById.get(id);
 		if (!todo) return;
 		if (currentUser !== todo.who && currentUser !== todo.assigned_by) {
@@ -450,6 +454,7 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		todo.status = todo.done ? "Closed" : "Open"
 
 		showToDosForSelectedTasks();
+		toggleInFlight = true;
 		try {
 			var result = await frappe.xcall("implementor.api.toggle_todo_done", { todo: id });
 			await frappe.xcall("implementor.api.set_status", {
@@ -462,10 +467,11 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			var project = projectsById.get(result.project);
 			if (project) project.percent = result.project_percent;
 		} catch (err) {
-			todo.done = wasDone;
+			todo.done = wasDone;      // revert optimistic UI update
 			todo.status = wasStatus;
-			todo.done = !todo.done;   // revert optimistic UI update
 			frappe.msgprint("Could not update to-do: " + (err.message || "unknown error"));
+		} finally {
+			toggleInFlight = false;
 		}
 		showFilteredTasks();
 		showFilteredProjects();
@@ -1533,13 +1539,15 @@ ${legendDot("#450A0A", "Both overdue")}
 
 			function msRow(m) {
 				return `
-			<div style="display:grid; grid-template-columns:30px 44px minmax(0,1fr) 130px 130px; align-items:center; gap:14px; padding:10px 14px; border-bottom:1px solid var(--border-strong);">
-				<span style="height:22px; border-radius:999px; display:inline-flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; ${workPillStyle(m.work.kind).replace(/padding:[^;]*;/, "")}">${m.index}</span>
-				<span class="d-meta" style="font-weight:600;">${m.weightLabel}</span>
-				<span title="${escapeHtml(m.description)}" style="font-size:13px; font-weight:500; color:var(--text-primary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${m.description}</span>
-				<span><span style="${workPillStyle(m.work.kind)}">${m.work.label}</span></span>
-				<span><span style="${paymentPillStyle(m.payment.kind)}">${m.payment.label}</span></span>
-			</div>`;
+<div style="display:grid; grid-template-columns:30px 44px minmax(0,1fr) auto; align-items:center; gap:14px; padding:10px 14px; border-bottom:1px solid var(--border-strong);">
+	<span style="height:22px; border-radius:999px; display:inline-flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; ${workPillStyle(m.work.kind).replace(/padding:[^;]*;/, "")}">${m.index}</span>
+	<span class="d-meta" style="font-weight:600;">${m.weightLabel}</span>
+	<span title="${escapeHtml(m.description)}" style="font-size:13px; font-weight:500; color:var(--text-primary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${m.description}</span>
+	<span style="display:flex; gap:6px; justify-content:flex-end;">
+		<span style="${workPillStyle(m.work.kind)}">${m.work.label}</span>
+		<span style="${paymentPillStyle(m.payment.kind)}">${m.payment.label}</span>
+	</span>
+</div>`;
 			}
 
 			var milestonesHtml;
@@ -1599,30 +1607,35 @@ ${legendDot("#450A0A", "Both overdue")}
 			}).join("")}
 					</div>
 				</div>
-				<div style="display:flex; gap:16px; flex-shrink:0;">
-					<div style="display:flex; align-items:center; gap:6px;">
-						<span style="font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.6px; color:var(--text-muted);">Status</span>
-						${chip(p.project_status)}
+				<div style="display:flex; flex-direction:column; align-items:flex-end; gap:8px; flex-shrink:0;">
+					<div style="display:flex; gap:16px;">
+						<div style="display:flex; align-items:center; gap:6px;">
+							<span style="font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.6px; color:var(--text-muted);">Status</span>
+							${chip(p.project_status)}
+						</div>
+						${!isAmc ? `
+						<div style="display:flex; align-items:center; gap:6px;">
+							<span style="font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.6px; color:var(--text-muted);">Phase</span>
+							${chip(p.current_phase)}
+						</div>` : ""}
 					</div>
-					${p.project_status !== "AMC" ? `
-					<div style="display:flex; align-items:center; gap:6px;">
-						<span style="font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.6px; color:var(--text-muted);">Phase</span>
-						${chip(p.current_phase)}
+					${isAmc ? `
+					<div style="text-align:right;">
+						<div style="font-size:14px; font-weight:600; color:var(--text-primary);">${p.timeline}</div>
+						<div style="font-size:12px; color:var(--text-secondary); margin-top:2px;">${fmtDate(p.start_date, true)} → ${fmtDate(p.delivery_date, true)}</div>
 					</div>` : ""}
 				</div>
 			</div>
 
+			${isAmc ? "" : `
 			<div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(max(150px, calc((100% - 40px) / 5)), 1fr)); gap:10px; padding:0 22px 18px;">
 				${statTile("Duration", p.timeline)}
-				${statTile(p.project_status === "AMC" ? "Start → Expiry" : "Start → Delivery", fmtDate(p.start_date, true) + " → "
+				${statTile("Start → Delivery", fmtDate(p.start_date, true) + " → "
 				+ (overdueProject ? '<span style="color:var(--text-danger);">' + fmtDate(p.delivery_date, true) + '</span>' : fmtDate(p.delivery_date, true)))}
-				
-			${p.project_status !== "AMC"
-					? statTile("Overall progress", p.overall_percent != null ? p.overall_percent + "%" : "—")
-					+ statTile("Modules completed", p.modules_completed + " of " + p.modules_total)
-					+ statTile("Current module", p.current_module)
-					: ""}
-			</div>
+				${statTile("Overall progress", p.overall_percent != null ? p.overall_percent + "%" : "—")}
+				${statTile("Modules completed", p.modules_completed + " of " + p.modules_total)}
+				${statTile("Current module", p.current_module)}
+			</div>`}
 
 			<div style="padding:0 22px 18px;">
 				<div style="display:flex; align-items:center; gap:8px; margin-bottom:10px;">
@@ -1637,16 +1650,16 @@ ${legendDot("#450A0A", "Both overdue")}
 			<div style="margin:0 22px 18px; padding:16px 18px; border-radius:12px; background:var(--surface-1); display:flex; flex-direction:column; gap:16px;">
 			
 				${stackedBar("Work status", workPct + "% completed", wLate ? "#DC2626" : "var(--text-accent)", [
-						[wDone, "var(--text-success)", "Completed"],
-						[wActive, "var(--text-accent)", "In progress"],
-						[wLate, "#DC2626", "Overdue"],
-						[wTodo, "var(--border-strong)", "Not started"]
-					])}
+					[wDone, "var(--text-success)", "Completed"],
+					[wActive, "var(--text-accent)", "In progress"],
+					[wLate, "#DC2626", "Overdue"],
+					[wTodo, "var(--border-strong)", "Not started"]
+				])}
 				${stackedBar("Payment status", (isAmc && p.milestones.length && p.milestones.every(function (m) { return m.payment_status === "Free"; })) ? "Free" : payPct + "% received", pLate ? "#92400E" : "var(--text-success)", [
-						[pPaid, "var(--text-success)", "Received"],
-						[pLate, "#92400E", "Overdue"],
-						[pDue, "var(--text-warning)", "Pending"]
-					])}
+					[pPaid, "var(--text-success)", "Received"],
+					[pLate, "#92400E", "Overdue"],
+					[pDue, "var(--text-warning)", "Pending"]
+				])}
 				${wTotal && wTotal !== 100 ? `<div style="font-size:11px; color:var(--text-danger);">Milestone weights add up to ${wTotal}%, should be 100%</div>` : ""}
 			</div>
 			${p.project_status != "AMC" ?
@@ -2180,7 +2193,10 @@ ${legendDot("#450A0A", "Both overdue")}
 
 					// Override Save action
 					dialog.set_primary_action(__('Save'), () => {
+						if (dialog.__saving) return;   // a save is already in flight — ignore repeat clicks / Enter
 						const values = dialog.get_values(true); // true = validate
+						if (!values) return;           // validation failed — dialog shows the missing fields
+						dialog.__saving = true;
 
 						frappe.call({
 							method: "frappe.client.insert",
@@ -2191,13 +2207,15 @@ ${legendDot("#450A0A", "Both overdue")}
 									...values
 								}
 							},
+							freeze: true,
 							callback(r) {
 								if (!r.exc) {
 									frappe.msgprint(__("Project Successfully created"));
 									loadProjects();
 								}
 								dialog.hide();
-							}
+							},
+							always() { dialog.__saving = false; },
 						});
 					});
 				}
@@ -2223,7 +2241,10 @@ ${legendDot("#450A0A", "Both overdue")}
 				const dialog = quick_entry.dialog;
 
 				dialog.set_primary_action(__('Save'), () => {
+					if (dialog.__saving) return;   // a save is already in flight — ignore repeat clicks / Enter
 					const values = dialog.get_values(true); // true = validate
+					if (!values) return;           // validation failed — dialog shows the missing fields
+					dialog.__saving = true;
 					var selectedProjectId = values.project || state.selectedProject;
 
 					frappe.call({
@@ -2238,13 +2259,15 @@ ${legendDot("#450A0A", "Both overdue")}
 								...values
 							}
 						},
+						freeze: true,
 						callback(r) {
 							if (!r.exc) {
 								frappe.msgprint(__("Task Successfully created"));
 								loadTasks(state.selectedProject);
 							}
 							dialog.hide();
-						}
+						},
+						always() { dialog.__saving = false; },
 					});
 				});
 			});
@@ -2266,7 +2289,10 @@ ${legendDot("#450A0A", "Both overdue")}
 				}
 				const dialog = quick_entry.dialog;
 				dialog.set_primary_action(__('Save'), () => {
+					if (dialog.__saving) return;   // a save is already in flight — ignore repeat clicks / Enter
 					const values = dialog.get_values(true); // true = validate
+					if (!values) return;           // validation failed — dialog shows the missing fields
+					dialog.__saving = true;
 
 					frappe.call({
 						method: "frappe.client.insert",
@@ -2281,6 +2307,7 @@ ${legendDot("#450A0A", "Both overdue")}
 								...values
 							}
 						},
+						freeze: true,
 						callback(r) {
 							if (!r.exc) {
 								frappe.msgprint(__("ToDo Successfully created"));
@@ -2288,7 +2315,8 @@ ${legendDot("#450A0A", "Both overdue")}
 							}
 							// Important: just hide the dialog, no redirect
 							dialog.hide();
-						}
+						},
+						always() { dialog.__saving = false; },
 					});
 				});
 
@@ -2777,7 +2805,10 @@ ${legendDot("#450A0A", "Both overdue")}
 
 				const dialog = quick_entry.dialog;
 				dialog.set_primary_action(__('Save'), () => {
+					if (dialog.__saving) return;   // a save is already in flight — ignore repeat clicks / Enter
 					const values = dialog.get_values(true); // true = validate
+					if (!values) return;           // validation failed — dialog shows the missing fields
+					dialog.__saving = true;
 
 					frappe.call({
 						method: "frappe.client.insert",
@@ -2792,6 +2823,7 @@ ${legendDot("#450A0A", "Both overdue")}
 								...values
 							}
 						},
+						freeze: true,
 						callback(r) {
 							if (!r.exc) {
 								frappe.msgprint(__("Task Successfully created"));
@@ -2800,7 +2832,8 @@ ${legendDot("#450A0A", "Both overdue")}
 							}
 							// Important: just hide the dialog, no redirect
 							dialog.hide();
-						}
+						},
+						always() { dialog.__saving = false; },
 					});
 				});
 
@@ -2823,7 +2856,10 @@ ${legendDot("#450A0A", "Both overdue")}
 
 				const dialog = quick_entry.dialog;
 				dialog.set_primary_action(__('Save'), () => {
+					if (dialog.__saving) return;   // a save is already in flight — ignore repeat clicks / Enter
 					const values = dialog.get_values(true); // true = validate
+					if (!values) return;           // validation failed — dialog shows the missing fields
+					dialog.__saving = true;
 
 					frappe.call({
 						method: "frappe.client.insert",
@@ -2839,6 +2875,7 @@ ${legendDot("#450A0A", "Both overdue")}
 								...values
 							}
 						},
+						freeze: true,
 						callback(r) {
 							if (!r.exc) {
 								frappe.msgprint(__("ToDo Successfully created"));
@@ -2847,7 +2884,8 @@ ${legendDot("#450A0A", "Both overdue")}
 							}
 							// Important: just hide the dialog, no redirect
 							dialog.hide();
-						}
+						},
+						always() { dialog.__saving = false; },
 					});
 				});
 
@@ -3343,7 +3381,10 @@ ${legendDot("#450A0A", "Both overdue")}
 				}
 				const dialog = quick_entry.dialog;
 				dialog.set_primary_action(__('Save'), () => {
+					if (dialog.__saving) return;   // a save is already in flight — ignore repeat clicks / Enter
 					const values = dialog.get_values(true); // true = validate
+					if (!values) return;           // validation failed — dialog shows the missing fields
+					dialog.__saving = true;
 
 					frappe.call({
 						method: "frappe.client.insert",
@@ -3358,6 +3399,7 @@ ${legendDot("#450A0A", "Both overdue")}
 								...values
 							}
 						},
+						freeze: true,
 						callback(r) {
 							if (!r.exc) {
 								frappe.msgprint(__("ToDo Successfully created"));
@@ -3366,7 +3408,8 @@ ${legendDot("#450A0A", "Both overdue")}
 							}
 							// Important: just hide the dialog, no redirect
 							dialog.hide();
-						}
+						},
+						always() { dialog.__saving = false; },
 					});
 				});
 
