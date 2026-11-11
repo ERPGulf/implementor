@@ -13,11 +13,12 @@ post {
 body:form-urlencoded {
   subject: System Log Information Not Working
   description: Some Bug when System Log Information Not Working
-  ticket_type: Bug
-  priority: Low
+  ticket_type: bug
+  priority: low
   project: PROJ-0029
   module: Accounting
-  reference: 
+  reference:
+  ~server: s6qivo97hn
   ~customer: Hamza
 }
 
@@ -25,13 +26,19 @@ tests {
   test("returns 200", function () {
     expect(res.status).to.equal(200);
   });
-  
+
   test("has message", function () {
     expect(res.body).to.have.property("message");
   });
 
   test("module is saved on its own field", function () {
     expect(res.body.message.module).to.equal("Accounting");
+  });
+
+  test("new ticket comes back as status new with codes", function () {
+    expect(res.body.message.status).to.equal("new");
+    expect(res.body.message.ticket_type).to.equal("bug");
+    expect(res.body.message.priority).to.equal("low");
   });
 }
 
@@ -42,40 +49,62 @@ settings {
 
 docs {
   Creates a support ticket.
-  
-  **Endpoint:** `POST /api/method/implementor.client_api.create_ticket`  
+
+  **Endpoint:** `POST /api/method/implementor.client_api.create_ticket`
   **Screen:** Raise Ticket
-  
+
   > ⚠️ **Changes data** on the shared server. Use test records only.
-  
+
   **Permission:** Signed-in client user (Client User or Client Admin). Only records of the user's own client company are returned.
-  
+
   **Body fields (form-encoded):**
-  
+
   | Field | Type | Required | Example | Notes |
   | --- | --- | --- | --- | --- |
-  | `subject` | string | yes | `System Log Information Not Working` |  |
-  | `description` | string | yes | `...` |  |
-  | `ticket_type` | string | no | `Bug` | From Raise Ticket Form. |
-  | `priority` | string | no | `Low` | From Raise Ticket Form. |
-  | `project` | string | no | `PROJ-0029` |  |
-  | `module` | string | no | `Accounting` | Saved on the ticket and returned as `module`. Also still written into the description for older app builds. |
-  | `reference` | string | no |  | Screen or document. Saved into the description. |
+  | `subject` | string | yes | `System Log Information Not Working` | Trimmed and cut to 140 characters. |
+  | `description` | string | no | `...` | Defaults to empty. |
+  | `ticket_type` | string | no | `bug` | A `value` from **Raise Ticket Form**: `bug`, `support`, `feature_request`, `training_request`, `question`. Default `support`. The desk label (e.g. `Bug`) is still accepted for older builds. |
+  | `priority` | string | no | `low` | A `value` from **Raise Ticket Form**: `emergency`, `urgent`, `normal`, `low`. Default `normal`. The label is still accepted. |
+  | `project` | string | no | `PROJ-0029` | A `name` from **Raise Ticket Form** `projects`. The project manager is notified. |
+  | `module` | string | no | `Accounting` | Saved on the ticket and returned as `module`. Also written into the description as `Module: …` for older app builds. |
+  | `reference` | string | no |  | Screen or document. Written into the description as `Screen or document: …`. |
+  | `server` | string | no | `s6qivo97hn` | A server `name` from Servers, when the ticket is about a hosted server. Must be one of the client's servers. Returned as `server` / `server_name`. Disabled by default. |
   | `customer` | string | no | `Hamza` | Not used by the app. The server picks the user's company. Disabled by default. |
-  
+
   **Response (trimmed):**
-  
+
+  The new ticket, in the same shape as **Ticket status**.
+
   ```json
-  { "message": { "name": "12hnuea73s", "subject": "...", "status": "New", ... } }
+  {
+    "message": {
+      "name": "12hnuea73s",
+      "subject": "System Log Information Not Working",
+      "description": "Module: Accounting\n\nSome Bug when System Log Information Not Working",
+      "module": "Accounting",
+      "server": null,
+      "server_name": null,
+      "ticket_type": "bug",
+      "priority": "low",
+      "status": "new",
+      "needs_confirmation": false,
+      ...
+    }
+  }
   ```
-  
+
   **Errors:**
-  
-  - **401:** Token missing, expired or invalid. Refresh once and retry, else sign out.
-  - **403:** Not this client's record, or role not allowed.
-  - **417:** Missing subject or description.
-  
+
+  - **401** (no error_code): token expired or invalid. Refresh once and retry, else sign out.
+  - **403** (no error_code): no Authorization header sent.
+  - **403 `no_client_linked`:** the signed-in user is not linked to any client company.
+  - **403 `not_permitted`:** `project` or `server` is unknown or belongs to another client, or `customer` was sent for a company the user is not linked to.
+  - **404 `not_found`:** `customer` was sent and does not exist.
+  - **417 `missing_parameter`:** `subject` missing or blank.
+  - **417 `invalid_ticket_type`:** `ticket_type` is not one of the form options.
+  - **417 `invalid_priority`:** `priority` is not one of the form options.
+
   **Notes:**
-  
+
   - Create the ticket first, then upload each file with **Attach** using the returned `name`. Confirm only after uploads finish.
 }

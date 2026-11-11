@@ -10,13 +10,23 @@ get {
   auth: inherit
 }
 
+params:query {
+  ~customer: Hamza
+}
+
 tests {
   test("returns 200", function () {
     expect(res.status).to.equal(200);
   });
-  
+
   test("has message", function () {
     expect(res.body).to.have.property("message");
+  });
+
+  test("options are {value, label} objects with lowercase codes", function () {
+    const t = res.body.message.ticket_types[0];
+    expect(t).to.include.keys("value", "label");
+    expect(t.value).to.match(/^[a-z0-9_]+$/);
   });
 }
 
@@ -27,26 +37,58 @@ settings {
 
 docs {
   Returns the dropdown values for the Raise Ticket form.
-  
-  **Endpoint:** `GET /api/method/implementor.client_api.get_ticket_options`  
+
+  **Endpoint:** `GET /api/method/implementor.client_api.get_ticket_options`
   **Screen:** Raise Ticket form
-  
+
   **Permission:** Signed-in client user (Client User or Client Admin). Only records of the user's own client company are returned.
-  
+
   **Query parameters:**
-  
+
   | Field | Type | Required | Example | Notes |
   | --- | --- | --- | --- | --- |
   | `customer` | string | no | `Hamza` | Not used by the app. The server picks the user's company. Disabled by default. |
-  
-  **Response (trimmed):**
-  
+
+  **Response:**
+
   ```json
-  { "message": { "ticket_types": [ "Bug", ... ], "priorities": [ "Low", ... ], "projects": [ ... ], "modules": [ ... ] } }
+  {
+    "message": {
+      "ticket_types": [
+        { "value": "bug", "label": "Bug" },
+        { "value": "support", "label": "Support" },
+        { "value": "feature_request", "label": "Feature Request" },
+        { "value": "training_request", "label": "Training Request" },
+        { "value": "question", "label": "Question" }
+      ],
+      "priorities": [
+        { "value": "emergency", "label": "Emergency" },
+        { "value": "urgent", "label": "Urgent" },
+        { "value": "normal", "label": "Normal" },
+        { "value": "low", "label": "Low" }
+      ],
+      "projects": [
+        { "name": "PROJ-0029", "title": "Hamza ERPNext Implementation", "kind": "implementation" }
+      ],
+      "modules": ["Accounting", "Stock"]
+    }
+  }
   ```
-  
+
+  **Response fields:**
+
+  | Field | Type | Notes |
+  | --- | --- | --- |
+  | `ticket_types[]` | `{value, label}` | Show `label`, send `value` as `ticket_type` to **Raise Ticket**. Values: `bug`, `support`, `feature_request`, `training_request`, `question`. |
+  | `priorities[]` | `{value, label}` | Show `label`, send `value` as `priority`. Values, in this order: `emergency`, `urgent`, `normal`, `low`. |
+  | `projects[]` | `{name, title, kind}` | The client's projects, most recently modified first. Cancelled and closed projects are left out. `kind`: `implementation` or `amc`. Send `name` as `project`. |
+  | `modules` | string[] | Module names from those projects, sorted A–Z, no duplicates. Send one as `module`. |
+
   **Errors:**
-  
-  - **401:** Token missing, expired or invalid. Refresh once and retry, else sign out.
-  - **403:** Not this client's record, or role not allowed.
+
+  - **401** (no error_code): token expired or invalid. Refresh once and retry, else sign out.
+  - **403** (no error_code): no Authorization header sent.
+  - **403 `no_client_linked`:** the signed-in user is not linked to any client company.
+  - **403 `not_permitted`:** `customer` was sent for a company the user is not linked to.
+  - **404 `not_found`:** `customer` was sent and does not exist.
 }

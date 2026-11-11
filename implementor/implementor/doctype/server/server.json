@@ -16,6 +16,8 @@
   "erpnext_version",
   "frappe_version",
   "backup_schedule",
+  "backup_frequency",
+  "backup_retention",
   "ssl_expiry",
   "last_restore_test",
   "status_checked_at"
@@ -76,6 +78,18 @@
    "label": "Backup Schedule"
   },
   {
+   "fieldname": "backup_frequency",
+   "fieldtype": "Data",
+   "label": "Backup Frequency",
+   "description": "e.g. Daily, 02:00 AST"
+  },
+  {
+   "fieldname": "backup_retention",
+   "fieldtype": "Data",
+   "label": "Backup Retention",
+   "description": "e.g. 14 days + weekly offsite"
+  },
+  {
    "fieldname": "ssl_expiry",
    "fieldtype": "Date",
    "label": "SSL Expiry"
@@ -95,7 +109,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-11-05 12:00:00.000000",
+ "modified": "2026-11-11 12:00:00.000000",
  "modified_by": "Administrator",
  "module": "Implementor",
  "name": "Server",

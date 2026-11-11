@@ -24,6 +24,10 @@ tests {
   test("has message", function () {
     expect(res.body).to.have.property("message");
   });
+
+  test("returns success", function () {
+    expect(res.body.message).to.eql({ success: true });
+  });
 }
 
 settings {
@@ -39,24 +43,29 @@ docs {
   
   > ⚠️ **Changes data** on the shared server. Use test records only.
   
-  **Permission:** Signed-in client user (Client User or Client Admin). Only records of the user's own client company are returned.
-  
+  **Permission:** Signed-in user linked to a client company. Only the signed-in user's own notifications can be marked.
+
+  **Method:** POST only. A GET is refused by Frappe with **403** and no `error_code`.
+
   **Body fields (form-encoded):**
-  
+
   | Field | Type | Required | Example | Notes |
   | --- | --- | --- | --- | --- |
-  | `name` | string | one of | `bbjqcbg636` | One notification. |
-  | `mark_all` | 1 | one of | `1` | All notifications. Send `name` or `mark_all`, not both. |
+  | `name` | string | one of | `bbjqcbg636` | One notification. Required when `mark_all` is not `1`. |
+  | `mark_all` | 0 / 1 | one of | `1` | Default `0`. `1` marks all of the user's unread notifications. If `mark_all=1` is sent, `name` is ignored. |
   | `customer` | string | no | `Hamza` | Not used by the app. The server picks the user's company. Disabled by default. |
-  
-  **Response (trimmed):**
-  
+
+  **Response:** the same for both modes, including a notification that was already read.
+
   ```json
   { "message": { "success": true } }
   ```
-  
+
   **Errors:**
-  
-  - **401:** Token missing, expired or invalid. Refresh once and retry, else sign out.
-  - **403:** Not this client's record, or role not allowed.
+
+  - **401** (no error_code): token expired or invalid. Refresh once and retry, else sign out.
+  - **403** (no error_code): no Authorization header sent.
+  - **403** `no_client_linked`: the user isn't linked to any client company.
+  - **403** `not_permitted`: `name` doesn't exist or belongs to another user (the API doesn't reveal which), or `customer` isn't the user's company.
+  - **417** `missing_parameter`: neither `name` nor `mark_all=1` was sent.
 }

@@ -12,6 +12,7 @@ post {
 
 body:form-urlencoded {
   todo: 12glqu2bo8
+  ~project: PROJ-0029
   ~customer: Hamza
 }
 
@@ -40,7 +41,7 @@ docs {
   Marks one action as done.
 
   **Endpoint:** `POST /api/method/implementor.client_api.complete_action`  
-  **Screen:** Waiting on you → Mark done / Review
+  **Screen:** Waiting on you → Mark done
 
   > ⚠️ **Changes data** on the shared server, and it **can't be undone** through the API. Use test records only.
 
@@ -51,9 +52,10 @@ docs {
   | Field | Type | Required | Example | Notes |
   | --- | --- | --- | --- | --- |
   | `todo` | string | yes | `12glqu2bo8` | `name` from Waiting for you. |
+  | `project` | string | no | `PROJ-0029` | Send it when Waiting on you was opened from a project: the reply then holds that project's open actions only. Must be the client's project. Disabled by default. |
   | `customer` | string | no | `Hamza` | Not used by the app. The server picks the user's company. Disabled by default. |
 
-  **Response:** the updated list of **open** actions, same items as Waiting for you, for all projects.
+  **Response:** the updated list of **open** actions, same items as Waiting for you: for `project` when it is sent, else for all projects.
 
   ```json
   { "message": [ ... open actions, without the one just completed ... ] }
@@ -66,12 +68,13 @@ docs {
 
   **Safe to repeat:** completing an action that is already done returns **200** with the current list.
 
-  **Which button uses this:** `cta` = `mark_done` or `review`. For `upload`, use Upload Action Attachment with `complete=1`. For `sign_off`, use Sign off Milestones, which closes the action by itself.
+  **Which button uses this:** `cta` = `mark_done`. For `upload`, use Upload Action Attachment with `complete=1`. For `sign_off`, use Sign off Milestones, which closes the action by itself.
 
-  **Errors:** every error has an `error_code`.
+  **Errors:** client API errors have an `error_code`; auth errors raised by Frappe don't.
 
-  - **401:** Token missing, expired or invalid. Refresh once and retry, else sign out.
-  - **403** `not_permitted`: the action doesn't exist, or isn't assigned to this user.
+  - **401** (no error_code): token expired or invalid. Refresh once and retry, else sign out.
+  - **403** (no error_code): no Authorization header sent.
+  - **403** `not_permitted`: the action doesn't exist, or isn't assigned to this user; or `project` isn't this client's project.
   - **403** `no_client_linked`: the user isn't linked to any client company.
   - **417** `missing_parameter`: `todo` left out.
 

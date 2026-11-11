@@ -1,0 +1,132 @@
+meta {
+  name: Projects
+  type: http
+  seq: 9
+}
+
+get {
+  url: {{baseUrl}}/api/method/implementor.client_api.get_projects
+  body: none
+  auth: inherit
+}
+
+params:query {
+  ~kind: implementation
+  ~customer: Hamza
+}
+
+tests {
+  test("returns 200", function () {
+    expect(res.status).to.equal(200);
+  });
+
+  test("message is an array", function () {
+    expect(res.body.message).to.be.an("array");
+  });
+
+  test("each item has a kind", function () {
+    res.body.message.forEach(function (p) {
+      expect(p.kind).to.be.oneOf(["implementation", "amc"]);
+    });
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}
+
+docs {
+  The client's projects, implementation and AMC, as summary cards.
+
+  **Endpoint:** `GET /api/method/implementor.client_api.get_projects`
+  **Screen:** Projects list (Services uses the same items, grouped)
+
+  **Permission:** Signed-in client user (Client User or Client Admin). Only records of the user's own client company are returned.
+
+  **Query parameters:**
+
+  | Field | Type | Required | Example | Notes |
+  | --- | --- | --- | --- | --- |
+  | `kind` | string | no | `implementation` | `implementation` or `amc`. Leave it out (or empty) for all. Any other value also returns all. |
+  | `customer` | string | no | `Hamza` | Not used by the app. The server picks the user's company. Disabled by default. |
+
+  **Response:** a list, most recently changed project first. Cancelled and closed projects are left out.
+
+  ```json
+  {
+    "message": [
+      {
+        "name": "PROJ-0029",
+        "title": "ERPNext Implementation - Hamza Trading",
+        "display_title": "ERPNext Implementation",
+        "kind": "implementation",
+        "status": "active",
+        "start_date": "2026-08-01",
+        "end_date": "2026-12-31",
+        "days_left": 55,
+        "project_manager": "Sahana",
+        "stage": "Data Migration",
+        "phase": { "index": 3, "count": 8, "name": "Data Migration" },
+        "health": "green",
+        "percent": 62,
+        "go_live_date": "2026-12-15",
+        "go_live_days_left": 39,
+        "next_milestone": { "title": "Configuration complete", "end_date": "2026-11-20", "days_left": 14, "status": "in_progress" }
+      },
+      {
+        "name": "PROJ-0030",
+        "title": "AMC - Hamza Trading",
+        "display_title": "AMC",
+        "kind": "amc",
+        "status": "amc",
+        "start_date": "2026-01-01",
+        "end_date": "2026-12-31",
+        "days_left": 55,
+        "project_manager": "Sahana",
+        "contract_status": "active",
+        "elapsed_percent": 85,
+        "hours_used": 18.5,
+        "hours_included": 40,
+        "tickets": { "open": 2, "closed": 9 }
+      }
+    ]
+  }
+  ```
+
+  **Fields on every item:**
+
+  - `name`: send this as `project` to Implementation, AMC or Milestones.
+  - `display_title`: show this, not `title` (the customer name suffix is removed).
+  - `kind`: `implementation` or `amc`. Decides which fields follow and which screen to open.
+  - `status`: project status code: `discovery`, `active`, `go_live`, `amc`, `hypercare` or `closed`.
+  - `end_date`: expected end date, or the deadline when no end date is set. `days_left`: days until it, negative when past, null without an end date.
+  - `project_manager`: full name. Can be null.
+
+  **Implementation items only:**
+
+  - `stage`: stage label as stored: `Discovery`, `Config`, `Data Migration`, `Integration`, `UAT`, `Training`, `Go-Live` or `Hypercare`.
+  - `phase`: `index` (1-based), `count` and `name`. Null when the stage isn't one of the known phases.
+  - `health`: `green`, `amber` or `red`. Null when not set.
+  - `percent`: overall progress, 0 to 100.
+  - `go_live_date`, `go_live_days_left`: go-live date (falls back to the deadline) and days until it; negative means overdue.
+  - `next_milestone`: first milestone of the project's contract type (see Milestones) still open or awaiting sign-off: `title`, `end_date`, `days_left` and `status` (`not_started`, `in_progress`, `partially_completed`, `on_hold`, `due` or `completed`). Null when none.
+
+  **AMC items only:**
+
+  - `contract_status`: `active`, `expiring` (30 days or less left) or `expired`. Null without an end date.
+  - `elapsed_percent`: how much of the contract period has passed, 0 to 100. Null without a start or end date.
+  - `hours_used`: hours logged on the contract's tasks. `hours_included`: contracted hours, null when not set.
+  - `tickets`: `open` and `closed` counts for the contract.
+
+  **Errors:** client API errors have an `error_code`; auth errors raised by Frappe don't.
+
+  - **401** (no error_code): token expired or invalid. Refresh once and retry, else sign out.
+  - **403** (no error_code): no Authorization header sent.
+  - **403** `no_client_linked`: the user isn't linked to any client company.
+
+  **Notes:**
+
+  - Implementation, AMC and Milestones still open a closed or cancelled project by its `name`; only this list leaves them out.
+  - Empty list: show "No projects yet".
+}

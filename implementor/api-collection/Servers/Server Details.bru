@@ -26,7 +26,7 @@ tests {
 
   test("specs come as fields and versions are flat", function () {
     const s = res.body.message;
-    ["cpu", "memory_gb", "storage_gb", "os"].forEach(function (k) {
+    ["cpu", "memory_gb", "storage_gb", "storage_type", "os"].forEach(function (k) {
       expect(s.specs).to.have.property(k);
     });
     expect(s).to.have.property("erpnext_version");
@@ -56,7 +56,7 @@ docs {
   | `server` | string | yes | `s6qivo97hn` | `name` from Servers. |
   | `customer` | string | no | `Hamza` | Not used by the app. The server picks the user's company. Disabled by default. |
 
-  **Response:** every field of a Servers item, plus the ones below.
+  **Response:** every field of a Servers item (including `backup_frequency` and `backup_retention`), plus the ones below.
 
   ```json
   {
@@ -72,15 +72,16 @@ docs {
         "cpu": "4 OCPU (Ampere A1)",
         "memory_gb": 24,
         "storage_gb": 200,
+        "storage_type": "Block Volume",
         "os": "Ubuntu 22.04 LTS"
       },
       "specs_text": "4 OCPU (Ampere A1)\n24 GB RAM\n200 GB Block Volume\nUbuntu 22.04 LTS",
       "activity": [
         {
-          "activity_type": "Restore",
+          "activity_type": "restore",
           "date": "2026-10-15T22:00:00+03:00",
           "downtime_window": "22:00–22:30",
-          "workflow_state": "Completed"
+          "workflow_state": "done"
         }
       ]
     }
@@ -89,22 +90,24 @@ docs {
 
   **Fields:**
 
-  - `erpnext_version`, `frappe_version`: flat fields. There is no `versions` object.
-  - `specs`: read from the server's spec text.
+  - `erpnext_version`, `frappe_version`: flat fields. There is no `versions` object. Either can be null.
+  - `specs`: read from the server's spec text. Always an object.
     - `cpu`: text, e.g. "4 OCPU (Ampere A1)".
-    - `memory_gb`, `storage_gb`: numbers in GB.
+    - `memory_gb`, `storage_gb`: numbers in GB (TB values are converted).
+    - `storage_type`: text after the size on the storage line, e.g. "Block Volume" from "200 GB Block Volume". Null when there is none.
     - `os`: text.
     - Any of them is null if it couldn't be read; show `specs_text` instead then.
-  - `specs_text`: the original text, with line breaks.
+  - `specs_text`: the original text, with line breaks. Null when no specs were entered (then every `specs` field is null).
   - `activity[]`: up to 20 recent events, newest first. Can be empty.
-    - `activity_type`: the kind of event as recorded by our team, e.g. `Restore`.
+    - `activity_type`: lowercase code: `provisioning`, `upgrade`, `update`, `restore` or `scaling`.
     - `date`: date-time with offset.
     - `downtime_window`: free text, e.g. "22:00–22:30". Can be null.
-    - `workflow_state`: the event's current state as recorded by our team, e.g. `Completed`.
+    - `workflow_state`: lowercase code: `requested`, `scheduled`, `in_maintenance`, `verified` or `done`. Can be null.
 
-  **Errors:** every error has an `error_code`.
+  **Errors:** client API errors have an `error_code`. Auth errors come from Frappe and have none.
 
-  - **401:** Token missing, expired or invalid. Refresh once and retry, else sign out.
+  - **401** (no error_code): token expired or invalid. Refresh once and retry, else sign out.
+  - **403** (no error_code): no Authorization header sent.
   - **403** `not_permitted`: not this client's server, or the server doesn't exist.
   - **403** `no_client_linked`: the user isn't linked to any client company.
   - **417** `missing_parameter`: `server` left out.

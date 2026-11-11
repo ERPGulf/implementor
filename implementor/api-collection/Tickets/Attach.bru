@@ -21,9 +21,13 @@ tests {
   test("returns 200", function () {
     expect(res.status).to.equal(200);
   });
-  
+
   test("has message", function () {
     expect(res.body).to.have.property("message");
+  });
+
+  test("returns name, file_name and file_size", function () {
+    expect(res.body.message).to.include.keys("name", "file_name", "file_size");
   });
 }
 
@@ -34,33 +38,45 @@ settings {
 
 docs {
   Uploads a screenshot or recording to a ticket.
-  
-  **Endpoint:** `POST /api/method/implementor.client_api.upload_ticket_attachment`  
+
+  **Endpoint:** `POST /api/method/implementor.client_api.upload_ticket_attachment`
   **Screen:** Raise Ticket / Ticket status
-  
+
   > ⚠️ **Changes data** on the shared server. Use test records only.
-  
-  **Permission:** Signed-in client user (Client User or Client Admin). Only records of the user's own client company are returned.
-  
-  **Body fields (form-encoded):**
-  
+
+  **Permission:** Signed-in client user (Client User or Client Admin). Only records of the user's own client company are returned. A **Client User** can only attach to tickets they raised.
+
+  **Body fields (form-encoded only, no multipart):**
+
   | Field | Type | Required | Example | Notes |
   | --- | --- | --- | --- | --- |
   | `ticket` | string | yes | `12h2sd9uia` |  |
-  | `filename` | string | yes | `screenshot.png` | With extension. |
-  | `filedata` | base64 | yes | `...` | Max 10 MB. |
+  | `filename` | string | yes | `screenshot.png` | With extension. Any file type is accepted. |
+  | `filedata` | base64 | yes | `...` | Base64 string. A `data:…;base64,` prefix is stripped. Max 10 MB after decoding. |
   | `customer` | string | no | `Hamza` | Not used by the app. The server picks the user's company. Disabled by default. |
-  
-  **Response (trimmed):**
-  
+
+  This call takes base64 only: a multipart `file` upload is not read here (unlike action uploads). The file is saved as private.
+
+  **Response:**
+
   ```json
-  { "message": { "name": "e890f3425b", "file_name": "screenshot.png" } }
+  { "message": { "name": "e890f3425b", "file_name": "stock_valuation_screenshot.png", "file_size": 70 } }
   ```
-  
+
+  `name` is the File ID for **Open attachment**. `file_size` is in bytes.
+
   **Errors:**
-  
-  - **401:** Token missing, expired or invalid. Refresh once and retry, else sign out.
-  - **403:** Not this client's record, or role not allowed.
-  - **417:** File too large or empty.
-  - **404:** Ticket not found.
+
+  - **401** (no error_code): token expired or invalid. Refresh once and retry, else sign out.
+  - **403** (no error_code): no Authorization header sent.
+  - **403 `no_client_linked`:** the signed-in user is not linked to any client company.
+  - **403 `not_permitted`:** another client company's ticket, a ticket raised by someone else (Client User), or `customer` sent for a company the user is not linked to.
+  - **404 `not_found`:** ticket not found (or `customer` sent and does not exist).
+  - **417 `missing_parameter`:** `ticket`, `filename` or `filedata` missing or empty. Checked before the ticket, so it comes first.
+  - **417 `invalid_file`:** `filedata` can't be decoded as base64 (e.g. bad padding). Stray non-base64 characters are dropped silently, not rejected.
+  - **417 `file_too_large`:** the decoded file is over 10 MB.
+
+  **Notes:**
+
+  - There is no empty-file check: `filedata` that decodes to nothing (e.g. only a `data:…;base64,` prefix) is saved as an empty file. Don't send empty files.
 }

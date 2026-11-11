@@ -8,21 +8,23 @@ docs {
 
   **Main flows**
 
+  - Project list → Projects (`get_projects`, optional `kind`)
   - Home → Implementation (`get_project`) → Milestones → Sign off (Client Admin only)
   - Home → AMC (`get_amc`) → Milestones (`get_milestones`) → Sign off (Client Admin only)
   - Home → Waiting for you → button by `cta`:
     - `upload` → Upload Action Attachment
     - `sign_off` → Milestones, at the milestone in `reference`
-    - `review`, `mark_done` → Complete Action
+    - `mark_done` → Complete Action
   - Tasks tab → Waiting for you with `status=open` and `status=done`
 
   **Rules for every request in this folder**
 
-  - Every error has an `error_code`. Match on it, never on the message text. Show the message from `_server_messages`.
-  - Unknown IDs and other clients' IDs both return **403** `not_permitted`, not 404. This hides which IDs exist.
+  - Every client API error has an `error_code`. Match on it, never on the message text. Show the message from `_server_messages`. Auth errors raised by Frappe (401 expired/invalid token, 403 no Authorization header) have no `error_code`; use the HTTP status.
+  - Unknown project and to-do IDs, and other clients' IDs, return **403** `not_permitted`, not 404. This hides which IDs exist. An unknown milestone on a project you can see returns **404** `not_found`.
   - A missing required parameter returns **417** `missing_parameter`.
   - Errors never include a traceback.
+  - Status-like values are lowercase codes (`active`, `green`, `in_progress`, `waiting_on_client`, `normal`). Each request lists its exact values.
   - Dates are `YYYY-MM-DD`. Date-times are ISO 8601 with an offset, e.g. `2026-10-28T15:13:48+03:00`.
-  - Every write (sign-off, complete, upload) is safe to repeat. A retry after a dropped connection returns 200 with the current state.
+  - Sign-off and Complete Action are safe to repeat: a retry after a dropped connection returns 200 with the current state. Upload Action Attachment is only safe to repeat once the action is done; a retried upload on an open action stores the file again.
   - Writes return fresh data. Re-render from the response; don't call the list again.
 }

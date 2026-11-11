@@ -85,13 +85,15 @@ docs {
 
   **Safe to repeat:** signing off a milestone that is already signed off returns **200** with the current state. A phone that retries after a dropped response gets success, not an error.
 
-  **Errors:** every error has an `error_code`.
+  **Errors:** client API errors have an `error_code`; auth errors raised by Frappe don't.
 
-  - **401:** Token missing, expired or invalid. Refresh once and retry, else sign out.
+  - **401** (no error_code): token expired or invalid. Refresh once and retry, else sign out.
+  - **403** (no error_code): no Authorization header sent.
   - **403** `not_client_admin`: the user is a Client User.
   - **403** `not_permitted`: not this client's project, or the project doesn't exist.
-  - **404** `not_found`: no such milestone on this project.
-  - **417** `not_ready_for_sign_off`: the milestone isn't Completed or Due yet.
+  - **403** `no_client_linked`: the user isn't linked to any client company.
+  - **404** `not_found`: no such milestone on this project, or it isn't of the project's contract type (an implementation-phase milestone on an AMC, or an AMC milestone on an implementation). Only milestones returned by Milestones can be signed off.
+  - **417** `not_ready_for_sign_off`: the milestone's `status` isn't `completed` or `due` yet.
   - **417** `missing_parameter`: `project` or `milestone` left out.
 
   **Notes:**

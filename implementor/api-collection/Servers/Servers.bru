@@ -26,7 +26,7 @@ tests {
   test("items have the SRV fields", function () {
     expect(res.body.message).to.be.an("array");
     res.body.message.forEach(function (s) {
-      ["status", "status_checked_at", "site_url", "last_backup", "overdue", "erpnext_version", "region_label", "backup_policy_name"].forEach(function (k) {
+      ["status", "status_checked_at", "site_url", "last_backup", "overdue", "erpnext_version", "region_label", "backup_policy_name", "backup_frequency", "backup_retention"].forEach(function (k) {
         expect(s).to.have.property(k);
       });
       expect(s.status).to.be.oneOf(["online", "degraded", "offline", null]);
@@ -70,6 +70,8 @@ docs {
         "status_checked_at": "2026-11-06T09:30:00+03:00",
         "erpnext_version": "v15.40.0",
         "backup_schedule": "Daily 02:00 AST, 14-day retention + weekly offsite",
+        "backup_frequency": "Daily, 02:00 AST",
+        "backup_retention": "14 days + weekly offsite",
         "backup_policy_name": "OCI Gold",
         "last_backup": { "at": "2026-11-06T02:00:12+03:00", "state": "confirmed" },
         "overdue": false,
@@ -86,21 +88,32 @@ docs {
   - `name`: send this as `server` to Server Details and Backups.
   - `server_name`: internal name. Show `site_url` on the card instead, when set.
   - `site_url`: the client's site, e.g. `erp.hamza.sa`. Null if not entered yet.
+  - `environment`: `Production`, `Staging` or `Dev`, as stored (not lowercased). Can be null.
+  - `provider`, `region`: free text, e.g. `OCI`, `me-jeddah-1`. Can be null.
   - `region_label`: city name for `region`. Null for a region we haven't labelled; show `region` then.
-  - `status`: `online`, `degraded` (slow or answering with errors) or `offline`. Null if never checked; hide the chip then.
-  - `status_checked_at`: when the status was last checked.
-  - `backup_schedule`: free text written by our team.
-  - `backup_policy_name`: the OCI policy name, e.g. "OCI Gold". Null when OCI isn't configured for this server.
+  - `status`: lowercase code: `online`, `degraded` (answered with an HTTP error or took more than 3 seconds) or `offline` (no answer within 10 seconds). Null if never checked (for example no `site_url`); hide the chip then.
+  - `status_checked_at`: when the status was last checked. Null if never checked.
+  - `erpnext_version`: text. Can be null.
+  - `backup_schedule`: free text written by our team. Can be null.
+  - `backup_frequency`: when backups run, short text written by our team, e.g. "Daily, 02:00 AST". Null until filled in.
+  - `backup_retention`: how long backups are kept, short text written by our team, e.g. "14 days + weekly offsite". Null until filled in.
+  - `backup_policy_name`: the OCI policy name, e.g. "OCI Gold". Null when no OCI policy is known: OCI isn't configured, the server has no backup policy, or there is no successful OCI read in the last 24 hours.
   - `last_backup`: for "Last backup today 02:00 · Confirmed". Null when there's no data.
+    - When a recent OCI read exists, this is the newest OCI run. It is null if OCI returned no runs, even when our team recorded a backup time.
+    - Otherwise it is the time recorded by our team, with `state` `recorded`. Null if none was recorded.
     - `at`: date-time of the newest backup.
-    - `state`: `confirmed`, `running`, `queued`, `failed`, `deleted`, or `recorded` (entered by our team, not read from OCI).
-  - `overdue`: true when there's no confirmed backup in the last 26 hours. Show the red alert. Null when unknown.
-  - `ssl_expiry`, `ssl_days_left`: SSL certificate expiry date and days left.
-  - `last_restore_test`: date of the last restore test. Can be null.
+    - `state`: `confirmed`, `running`, `queued`, `failed`, `deleted`, or `recorded` (entered by our team, not read from OCI). Any other OCI state is passed through in lowercase; show it as grey.
+  - `overdue`: show the red alert when true.
+    - With a recent OCI read: true when the server has an OCI backup policy and there's no confirmed backup in the last 26 hours. Always false when there's no policy.
+    - Without OCI data: true when `backup_schedule` is set and the recorded backup time is more than 26 hours old. False when `backup_schedule` is empty.
+    - Null when there's neither OCI data nor a recorded backup time.
+  - `ssl_expiry`, `ssl_days_left`: SSL certificate expiry date (`YYYY-MM-DD`) and days left (negative once expired). Both null when not entered.
+  - `last_restore_test`: date of the last restore test (`YYYY-MM-DD`). Can be null.
 
-  **Errors:** every error has an `error_code`.
+  **Errors:** client API errors have an `error_code`. Auth errors come from Frappe and have none.
 
-  - **401:** Token missing, expired or invalid. Refresh once and retry, else sign out.
+  - **401** (no error_code): token expired or invalid. Refresh once and retry, else sign out.
+  - **403** (no error_code): no Authorization header sent.
   - **403** `no_client_linked`: the user isn't linked to any client company.
 
   **Notes:**

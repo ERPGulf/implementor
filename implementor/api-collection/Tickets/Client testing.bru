@@ -33,6 +33,11 @@ tests {
   test("ratings are saved", function () {
     expect(res.body.message.ratings.rating_overall).to.equal(5);
   });
+
+  test("fixed=1 closes the ticket", function () {
+    expect(res.body.message.status).to.equal("closed");
+    expect(res.body.message.needs_confirmation).to.equal(false);
+  });
 }
 
 settings {
@@ -42,40 +47,42 @@ settings {
 
 docs {
   The client confirms whether a resolved ticket is fixed.
-  
-  **Endpoint:** `POST /api/method/implementor.client_api.confirm_fix`  
+
+  **Endpoint:** `POST /api/method/implementor.client_api.confirm_fix`
   **Screen:** Ticket status → It is fixed / Still an issue
-  
+
   > ⚠️ **Changes data** on the shared server. Use test records only.
-  
-  **Permission:** Signed-in client user (Client User or Client Admin). Only records of the user's own client company are returned.
-  
+
+  **Permission:** Signed-in client user (Client User or Client Admin). Only records of the user's own client company are returned. A **Client User** can only confirm tickets they raised.
+
   **Body fields (form-encoded):**
-  
+
   | Field | Type | Required | Example | Notes |
   | --- | --- | --- | --- | --- |
   | `ticket` | string | yes | `12ht7l2q84` |  |
-  | `fixed` | 1 / 0 | yes | `1` | 1 = It is fixed, 0 = Still an issue. |
+  | `fixed` | 1 / 0 | yes | `1` | 1 = It is fixed, 0 = Still an issue. Send exactly `1` or `0`: anything that isn't a number counts as 0. |
   | `comment` | string | when fixed=0 | `...` | Also saved when `fixed=1`: it is added to the "Client confirmed the fix." comment. |
   | `rating_overall` | int 1–5 | no | `5` | Stars. |
   | `rating_quality` | int 1–5 | no | `4` | Fix quality. |
   | `rating_communication` | int 1–5 | no | `5` | |
   | `rating_response_time` | int 1–5 | no | `3` | |
   | `customer` | string | no | `Hamza` | Not used by the app. The server picks the user's company. Disabled by default. |
-  
+
+  Ratings must be plain whole numbers `1`–`5` (`5.0` or `05` are rejected).
+
   **Response (trimmed):**
-  
+
   The updated ticket, in the same shape as **Ticket status**.
 
   ```json
   {
     "message": {
       "name": "12ht7l2q84",
-      "status": "Closed",
+      "status": "closed",
       "needs_confirmation": false,
       "ratings": { "rating_overall": 5, "rating_quality": 4, "rating_communication": 5, "rating_response_time": 3 },
       "comments": [
-        { "id": "...", "text": "Client confirmed the fix. Both users can see the Stock workspace now. Thanks!", "by": "Aisha Khan", "mine": true, "at": "..." }
+        { "id": "b7c8d9e0f1", "text": "Client confirmed the fix. Both users can see the Stock workspace now. Thanks!", "by": "Aisha Khan", "mine": true, "at": "2026-10-31T09:15:22+03:00" }
       ],
       ...
     }
@@ -84,15 +91,21 @@ docs {
 
   **Errors:**
 
-  - **401:** Token missing, expired or invalid. Refresh once and retry, else sign out.
-  - **403:** Not this client's record, or role not allowed.
-  - **404:** Ticket not found.
-  - **417:** Ticket not ready to confirm, comment missing when fixed=0, or a rating that isn't a whole number from 1 to 5.
+  - **401** (no error_code): token expired or invalid. Refresh once and retry, else sign out.
+  - **403** (no error_code): no Authorization header sent.
+  - **403 `no_client_linked`:** the signed-in user is not linked to any client company.
+  - **403 `not_permitted`:** another client company's ticket, a ticket raised by someone else (Client User), or `customer` sent for a company the user is not linked to.
+  - **404 `not_found`:** ticket not found (or `customer` sent and does not exist).
+  - **417 `missing_parameter`:** `ticket` or `fixed` missing or empty.
+  - **417 `not_waiting_for_confirmation`:** the ticket is not `resolved`.
+  - **417 `invalid_rating`:** a rating that isn't a whole number from 1 to 5.
+  - **417 `comment_required`:** `fixed=0` without a comment.
 
   **Notes:**
 
-  - Only works while the ticket is **Resolved** (`needs_confirmation: true`).
-  - `fixed=1` → status becomes **Closed**. `fixed=0` → status goes back to **In Progress**.
-  - Ratings are saved with either verdict. Leave a rating out (or empty) if the client skipped it; it comes back as `null`.
+  - Only works while the ticket is `resolved` (`needs_confirmation: true`).
+  - `fixed=1` → status becomes `closed`. `fixed=0` → status goes back to `in_progress`.
+  - Ratings are saved with either verdict. Leave a rating out (or empty) if the client skipped it; it comes back as `null`. Nothing is saved if the call fails.
   - The comment is posted on the ticket with either verdict, after "Client confirmed the fix." or "Client reports it is still an issue."
+  - `comments[].text` may contain HTML entities (e.g. `&amp;`); decode them before showing.
 }

@@ -26,6 +26,13 @@ tests {
     expect(res.body).to.have.property("message");
   });
 
+  test("has the server header fields", function () {
+    const m = res.body.message;
+    ["environment", "site_url", "last_backup", "overdue", "backup_schedule", "backup_frequency", "backup_retention"].forEach(function (k) {
+      expect(m).to.have.property(k);
+    });
+  });
+
   test("never sends oci.reason", function () {
     expect(res.body.message.oci).to.not.have.property("reason");
   });
@@ -61,8 +68,8 @@ docs {
   | Field | Type | Required | Example | Notes |
   | --- | --- | --- | --- | --- |
   | `server` | string | yes | `s6qivo97hn` | `name` from Servers. |
-  | `limit` | int | no | `10` | Number of runs. Default 10, max 50. **Leave it at 10:** the background job caches 10 runs, so any other value makes the request wait on OCI. |
-  | `refresh` | 0 / 1 | no | `0` | 1 reads OCI live. Pull-to-refresh only. At most once every 2 minutes per server; extra refreshes get the cached data. |
+  | `limit` | int | no | `10` | Number of runs in `oci.backups`. Default 10 (also used for `0`), max 50. Send a value from 1 to 10: these are served from the background job's 10-run cache. A value from 11 to 50 has its own cache, so the first request (and the first one after 15 minutes) waits on OCI. Negative values are not supported. |
+  | `refresh` | 0 / 1 | no | `0` | 1 reads OCI live. Pull-to-refresh only. At most once every 2 minutes per server; extra refreshes within that window get the cached data, or read OCI live if nothing is cached. |
   | `customer` | string | no | `Hamza` | Not used by the app. The server picks the user's company. Disabled by default. |
 
   **Response:**
@@ -72,10 +79,16 @@ docs {
     "message": {
       "server": "s6qivo97hn",
       "server_name": "hamza-erp-prod",
+      "environment": "Production",
+      "site_url": "erp.hamza.sa",
+      "last_backup": { "at": "2026-11-06T02:00:12+03:00", "state": "confirmed" },
+      "overdue": false,
       "backup_schedule": "Daily 02:00 AST, 14-day retention + weekly offsite",
+      "backup_frequency": "Daily, 02:00 AST",
+      "backup_retention": "14 days + weekly offsite",
       "last_restore_test": "2026-10-15",
       "restores": [
-        { "date": "2026-10-15T22:00:00+03:00", "workflow_state": "Completed", "downtime_window": "22:00–22:30" }
+        { "date": "2026-10-15T22:00:00+03:00", "workflow_state": "done", "downtime_window": "22:00–22:30" }
       ],
       "oci": {
         "available": true,
@@ -115,11 +128,14 @@ docs {
 
   **Top-level fields:**
 
-  - `backup_schedule`: free text written by our team. Show it only when `oci.available` is false or `oci.policy` is null.
-  - `last_restore_test`: date of the last restore test. Can be null.
+  - `environment`, `site_url`: as in Servers (`environment` is `Production`, `Staging` or `Dev` as stored; either can be null). For the screen header.
+  - `last_backup`, `overdue`: the same values and meaning as in Servers / Server Details, whether OCI is available or not: the newest OCI run when OCI data exists, else the time recorded by our team (`state` `recorded`). Read from this call's OCI data, so after `refresh=1` they can be newer than the Servers list.
+  - `backup_schedule`: free text written by our team. Can be null. Show it only when `oci.available` is false or `oci.policy` is null.
+  - `backup_frequency`, `backup_retention`: short text written by our team, e.g. "Daily, 02:00 AST" and "14 days + weekly offsite". Null until filled in.
+  - `last_restore_test`: date of the last restore test (`YYYY-MM-DD`). Can be null.
   - `restores[]`: up to 5 recent restores, newest first. Can be empty.
     - `date`: date-time with offset.
-    - `workflow_state`: the restore's state as recorded by our team, e.g. `Completed`.
+    - `workflow_state`: lowercase code: `requested`, `scheduled`, `in_maintenance`, `verified` or `done`. Can be null.
     - `downtime_window`: free text. Can be null.
 
   **`oci`:**
@@ -132,22 +148,23 @@ docs {
       - `frequency`: `hourly`, `daily`, `weekly`, `monthly` or `yearly`.
       - `type`: `incremental` or `full`.
       - `keep_value`, `keep_unit`: e.g. 2 + `weeks` → "Kept 2 weeks". `keep_unit` is `hours`, `days`, `weeks`, `months` or `years`.
-  - `backups[]`: recent runs, newest first.
-    - `at`, `expires_at`: date-times with offset.
-    - `frequency`: the policy rule it came from (`daily`, `weekly`, …), `manual` for a one-off backup, or null if unknown.
+  - `backups[]`: recent runs, newest first, at most `limit`.
+    - `at`, `expires_at`: date-times with offset. `expires_at` can be null.
+    - `frequency`: the policy rule it came from (`hourly`, `daily`, `weekly`, `monthly`, `yearly`), `manual` for a one-off backup, or null if unknown.
     - `type`: `incremental` or `full`.
-    - `state`: `confirmed` (green), `failed` (red), or `running`, `queued`, `deleted` (grey, with `state` as the label).
-    - `size_gb`: number.
-  - `errors[]`: one item per failed run in the list, newest first.
+    - `state`: `confirmed` (green), `failed` (red), or `running`, `queued`, `deleted` (grey, with `state` as the label). Any other OCI state is passed through in lowercase; show it as grey.
+    - `size_gb`: number, or null while the backup is still `running` or `queued`.
+  - `errors[]`: one item per failed run, newest first. Built from all runs read from OCI (at least the last 10), not only the ones in `backups[]`. So with `limit` below 10, an error can refer to a run that isn't in `backups[]`.
     - `at`: when the failed run started.
     - `message`: client-safe text. Show it as is.
     - `resolved_at`, `resolution`: when a later run was confirmed, and what fixed it. Both null while unresolved.
-  - `last_confirmed_at`: newest confirmed run, for "No confirmed backup for 30 hours". Null when none in the list.
-  - `overdue`: true when there's no confirmed backup in the last 26 hours. Show the red alert, even if `errors` is empty.
+  - `last_confirmed_at`: newest confirmed run, for "No confirmed backup for 30 hours". Like `errors`, taken from all runs read (at least the last 10), not only `backups[]`. Null when none of them is confirmed.
+  - `overdue`: true when the server has a backup policy (`policy` not null) and there's no confirmed backup in the last 26 hours. Always false when `policy` is null. Show the red alert when true, even if `errors` is empty.
 
-  **Errors:** every error has an `error_code`.
+  **Errors:** client API errors have an `error_code`. Auth errors come from Frappe and have none.
 
-  - **401:** Token missing, expired or invalid. Refresh once and retry, else sign out.
+  - **401** (no error_code): token expired or invalid. Refresh once and retry, else sign out.
+  - **403** (no error_code): no Authorization header sent.
   - **403** `not_permitted`: not this client's server, or the server doesn't exist.
   - **403** `no_client_linked`: the user isn't linked to any client company.
   - **417** `missing_parameter`: `server` left out.

@@ -400,7 +400,8 @@ def _project_summaries(ctx, kind=None):
 _SERVER_FIELDS = [
     "name", "server_name", "site_url", "environment", "provider", "region", "specs",
     "custom_status", "status_checked_at", "custom_last_backup",
-    "erpnext_version", "frappe_version", "backup_schedule", "ssl_expiry", "last_restore_test",
+    "erpnext_version", "frappe_version", "backup_schedule", "backup_frequency", "backup_retention",
+    "ssl_expiry", "last_restore_test",
 ]
 
 
@@ -431,6 +432,8 @@ def _server_summary(s):
         "status_checked_at": _iso(s.status_checked_at),
         "erpnext_version": s.erpnext_version,
         "backup_schedule": s.backup_schedule,
+        "backup_frequency": s.backup_frequency,
+        "backup_retention": s.backup_retention,
         "backup_policy_name": ((oci or {}).get("policy") or {}).get("name"),
         "last_backup": last_backup,
         "overdue": overdue,
@@ -527,13 +530,28 @@ def _milestone_state(r, signed_off, ready, is_admin):
     return "upcoming"
 
 
+def _milestone_is_amc(project):
+    """1 for an AMC project, 0 for an implementation, matching Payment Milestone.custom_is_amc."""
+    return 1 if frappe.db.get_value("Project", project, "imp_status") == "AMC" else 0
+
+
+def stamp_milestone_completion(doc, method=None):
+    """Project before_save: record when each Payment Milestone became Completed (cleared if reopened)."""
+    for m in doc.get("payment_milestone") or []:
+        if m.completion_status == "Completed":
+            if not m.get("completed_on"):
+                m.set("completed_on", now_datetime())
+        elif m.get("completed_on"):
+            m.set("completed_on", None)
+
+
 def _milestones(project, is_admin=False):
     rows = frappe.get_all(
         "Payment Milestone",
-        filters={"parent": project, "parenttype": "Project", "parentfield": "payment_milestone"},
+        filters={"parent": project, "parenttype": "Project", "parentfield": "payment_milestone","custom_is_amc": _milestone_is_amc(project)},
         fields=[
             "name", "idx", "m_title", "duration", "start_date", "end_date",
-            "completion_status", "milestone_completion_perc", "no_of_modules",
+            "completion_status", "milestone_completion_perc", "no_of_modules", "completed_on",
         ],
         order_by="idx asc",
     )
@@ -552,6 +570,7 @@ def _milestones(project, is_admin=False):
             "days_left": None if done else _days_left(r.end_date),
             "status": _code(r.completion_status),
             "display_state": _milestone_state(r, signed_off, ready, is_admin),
+            "completed_on": _iso(r.completed_on) if done else None,
             "percent": r.milestone_completion_perc,
             "modules": r.no_of_modules,
             "signed_off": signed_off,
@@ -581,7 +600,8 @@ def _next_milestone(project):
 def _modules(project):
     rows = frappe.get_all(
         "Project Module",
-        filters={"parent": project, "parenttype": "Project", "parentfield": "imp_modules"},
+        # out-of-scope modules are never shown to the client
+        filters={"parent": project, "parenttype": "Project", "parentfield": "imp_modules", "in_scope": 1},
         fields=["module_name", "in_scope", "module_status"],
         order_by="idx asc",
     )
@@ -682,7 +702,7 @@ def sign_off_milestone(project=None, milestone=None, remarks=None, customer=None
 
     row = frappe.db.get_value(
         "Payment Milestone",
-        {"name": milestone, "parent": project, "parenttype": "Project"},
+        {"name": milestone, "parent": project, "parenttype": "Project","custom_is_amc": _milestone_is_amc(project)},
         ["name", "m_title", "completion_status"],
         as_dict=True,
     )
@@ -733,7 +753,7 @@ def _close_signoff_actions(project, row):
     )
     for t in todos:
         if _signoff_target(t, {row.m_title: row.name}) == row.name:
-            frappe.db.set_value("ToDo", t.name, {"imp_done": 1, "status": "Closed"})
+            frappe.db.set_value("ToDo", t.name, {"imp_done": 1, "status": "Closed", "imp_completed_on": now_datetime()})
 
 
 # --------------------------------------------------------------------------
@@ -761,8 +781,9 @@ def _spec_gb(match):
 
 
 def _parse_specs(text):
-    """'4 OCPU (Ampere A1)\n24 GB RAM\n200 GB Block Volume\nUbuntu 22.04 LTS' → cpu, memory_gb, storage_gb, os."""
-    out = {"cpu": None, "memory_gb": None, "storage_gb": None, "os": None}
+    """'4 OCPU (Ampere A1)\n24 GB RAM\n200 GB Block Volume\nUbuntu 22.04 LTS'
+    → cpu, memory_gb, storage_gb, storage_type ('Block Volume'), os."""
+    out = {"cpu": None, "memory_gb": None, "storage_gb": None, "storage_type": None, "os": None}
     for line in (text or "").splitlines():
         line = line.strip()
         low = line.lower()
@@ -775,6 +796,7 @@ def _parse_specs(text):
             out["memory_gb"] = _spec_gb(size)
         elif size and out["storage_gb"] is None:
             out["storage_gb"] = _spec_gb(size)
+            out["storage_type"] = line[size.end():].strip(" -:,") or None
         elif not out["os"]:
             out["os"] = line
     return out
@@ -830,13 +852,22 @@ def get_backups(server=None, limit=10, refresh=0, customer=None):
     for r in restores:
         r["date"] = _iso(r.date)
         r["workflow_state"] = _code(r.workflow_state)
+    oci = _oci_backups(s, min(cint(limit) or OCI_CACHED_RUNS, 50), cint(refresh))
+    # same header and overdue values as get_server, whether OCI is on or off
+    last_backup, overdue = _last_backup(s, oci)
     return {
         "server": server,
         "server_name": s.server_name,
+        "environment": s.environment,
+        "site_url": s.site_url,
+        "last_backup": last_backup,
+        "overdue": overdue,
         "backup_schedule": s.backup_schedule,
+        "backup_frequency": s.backup_frequency,
+        "backup_retention": s.backup_retention,
         "last_restore_test": s.last_restore_test,
         "restores": restores,
-        "oci": _oci_backups(s, min(cint(limit) or OCI_CACHED_RUNS, 50), cint(refresh)),
+        "oci": oci,
     }
 
 
@@ -1049,31 +1080,37 @@ def _oci_backups(server, limit, refresh, scheduled=False):
 # --------------------------------------------------------------------------
 
 def _action_cta(todo, milestone):
-    """What the action asks for: upload, sign_off, review or mark_done. imp_cta wins when set."""
+    """What the action asks for: upload, sign_off or mark_done. imp_cta wins when set.
+    A "review" action is just marked done by the client, so it is sent as mark_done."""
     if todo.imp_cta:
-        return _code(todo.imp_cta)
+        cta = _code(todo.imp_cta)
+        return "mark_done" if cta == "review" else cta
     if milestone:
         return "sign_off"
     text = (_strip_html(todo.description) or "").strip().lower()
     if text.startswith(("upload", "share", "send", "attach", "provide")):
         return "upload"
-    if text.startswith(("review", "approve", "check", "verify")):
-        return "review"
     return "mark_done"
 
 
 def _my_todos(ctx, project=None, status="open"):
-    """status: open (default) | done (finished in the last DONE_ACTIONS_DAYS days)."""
-    fields = ["name", "description", "date", "reference_type", "reference_name", "imp_urgency", "imp_cta", "modified"]
+    """status: open (default) | done. Done = every finished action for `project` when it is sent,
+    else those finished in the last DONE_ACTIONS_DAYS days."""
+    fields = ["name", "description", "date", "reference_type", "reference_name", "imp_urgency", "imp_cta",
+              "modified", "imp_completed_on"]
     if status == "done":
+        filters = {"allocated_to": ctx.user, "status": ["!=", "Cancelled"]}
+        if not project:
+            filters["modified"] = [">=", add_to_date(now_datetime(), days=-DONE_ACTIONS_DAYS)]
         rows = frappe.get_all(
             "ToDo",
-            filters={"allocated_to": ctx.user, "status": ["!=", "Cancelled"],
-                     "modified": [">=", add_to_date(now_datetime(), days=-DONE_ACTIONS_DAYS)]},
+            filters=filters,
             or_filters={"imp_done": 1, "status": "Closed"},
             fields=fields,
             order_by="modified desc",
         )
+        # newest completion first; actions closed before imp_completed_on existed fall back to modified
+        rows.sort(key=lambda r: r.imp_completed_on or r.modified, reverse=True)
     else:
         rows = frappe.get_all(
             "ToDo",
@@ -1096,9 +1133,7 @@ def _my_todos(ctx, project=None, status="open"):
         if project and proj != project:
             continue
         if proj not in titles:
-            titles[proj] = dict(frappe.get_all(
-                "Payment Milestone", filters={"parent": proj, "parenttype": "Project"}, fields=["m_title", "name"], as_list=True
-            )) if proj else {}
+            titles[proj] = _milestone_titles(proj) if proj else {}
         milestone = _signoff_target(r, titles[proj])
         if milestone:
             reference = {"doctype": "Payment Milestone", "name": milestone}
@@ -1117,9 +1152,54 @@ def _my_todos(ctx, project=None, status="open"):
             "cta": _action_cta(r, milestone),
             "reference": reference,
             "status": "done" if done else "open",
-            "completed_on": _iso(r.modified) if done else None,
+            "completed_on": _iso(r.imp_completed_on or r.modified) if done else None,
         })
     return out
+
+
+def _milestone_titles(project):
+    """{m_title: id} for the milestones of the project's contract type (see _milestones)."""
+    return dict(frappe.get_all(
+        "Payment Milestone",
+        filters={"parent": project, "parenttype": "Project", "custom_is_amc": _milestone_is_amc(project)},
+        fields=["m_title", "name"],
+        as_list=True,
+    ))
+
+
+def validate_todo(doc, method=None):
+    """ToDo validate hook.
+
+    - Stamp imp_completed_on when the action is finished from the desk (client_api sets it itself,
+      since it closes actions with db.set_value).
+    - A milestone sign-off can only be done by a Client Admin, so it may not go to a client user without
+      that role (staff users are not affected).
+    """
+    finished = doc.get("imp_done") or doc.status == "Closed"
+    if finished and not doc.get("imp_completed_on"):
+        doc.set("imp_completed_on", now_datetime())
+    elif not finished and doc.get("imp_completed_on"):
+        doc.set("imp_completed_on", None)
+
+    if not doc.allocated_to or finished or doc.status == "Cancelled":
+        return
+    roles = frappe.get_roles(doc.allocated_to)
+    if CLIENT_USER not in roles or CLIENT_ADMIN in roles:
+        return
+    if doc.reference_type == "Payment Milestone":
+        project = frappe.db.get_value("Payment Milestone", doc.reference_name, "parent")
+    elif doc.reference_type == "Project":
+        project = doc.reference_name
+    else:
+        project = None
+    if (doc.reference_type == "Payment Milestone" and doc.reference_name) or (
+        project and _signoff_target(doc, _milestone_titles(project))
+    ):
+        frappe.throw(
+            _("Milestone sign-off actions can only be assigned to a Client Admin; {0} is a Client User.").format(
+                doc.allocated_to
+            )
+        )
 
 
 def _own_todo(ctx, todo):
@@ -1134,7 +1214,7 @@ def _own_todo(ctx, todo):
 def _complete_todo(todo, row):
     if row.imp_done:  # a repeat after a dropped response changes nothing
         return
-    frappe.db.set_value("ToDo", todo, {"imp_done": 1, "status": "Closed"})
+    frappe.db.set_value("ToDo", todo, {"imp_done": 1, "status": "Closed", "imp_completed_on": now_datetime()})
     if row.reference_type == "Task" and row.reference_name:
         from implementor.rollup import _recompute_task_progress
         _recompute_task_progress(row.reference_name)
@@ -1152,11 +1232,14 @@ def get_my_actions(customer=None, status="open", project=None):
 
 
 @frappe.whitelist(methods=["POST"])
-def complete_action(todo=None, customer=None):
+def complete_action(todo=None, project=None, customer=None):
+    """Replies with the open actions for `project` when sent, else for every project."""
     ctx = _ctx(customer)
     _require(todo=todo)
+    if project:
+        _check_project(ctx, project)
     _complete_todo(todo, _own_todo(ctx, todo))
-    return _my_todos(ctx)
+    return _my_todos(ctx, project)
 
 
 def _uploaded_file(filename, filedata):
@@ -1182,10 +1265,14 @@ def _uploaded_file(filename, filedata):
 
 
 @frappe.whitelist(methods=["POST"])
-def upload_action_attachment(todo=None, filename=None, filedata=None, note=None, complete=0, customer=None):
-    """Answer an action that asks for a file: one file per call, complete=1 on the last one."""
+def upload_action_attachment(todo=None, filename=None, filedata=None, note=None, complete=0, project=None,
+                             customer=None):
+    """Answer an action that asks for a file: one file per call, complete=1 on the last one.
+    Replies with the open actions for `project` when sent, else for every project."""
     ctx = _ctx(customer)
     _require(todo=todo)
+    if project:
+        _check_project(ctx, project)
     row = _own_todo(ctx, todo)
     if not row.imp_done:  # a retry on a finished action just returns the list
         filename, content = _uploaded_file(filename, filedata)
@@ -1213,7 +1300,7 @@ def upload_action_attachment(todo=None, filename=None, filedata=None, note=None,
             }).insert(ignore_permissions=True)
         if cint(complete):
             _complete_todo(todo, row)
-    return _my_todos(ctx)
+    return _my_todos(ctx, project)
 
 
 # --------------------------------------------------------------------------
@@ -1221,9 +1308,19 @@ def upload_action_attachment(todo=None, filename=None, filedata=None, note=None,
 # --------------------------------------------------------------------------
 
 _TICKET_FIELDS = [
-    "name", "subject", "project", "ticket_type", "priority", "status",
+    "name", "subject", "project", "server", "ticket_type", "priority", "status",
     "raised_by", "creation", "modified", "sla_due", "converted_task", "module",
 ]
+TICKET_SCOPES = {
+    "open": OPEN_TICKET_STATUSES,
+    "closed": CLOSED_TICKET_STATUSES,
+    "waiting": WAITING_TICKET_STATUSES,
+    "all": None,
+}
+
+
+def _server_name(server):
+    return frappe.db.get_value("Server", server, "server_name") if server else None
 _RATING_FIELDS = ["rating_overall", "rating_quality", "rating_communication", "rating_response_time"]
 RATING_STARS = 5
 
@@ -1248,13 +1345,14 @@ def get_ticket_options(customer=None):
 
 @frappe.whitelist()
 def get_tickets(scope="open", project=None, search=None, limit=30, offset=0, customer=None):
-    """scope: open | closed | all"""
+    """scope: open | closed | waiting (waiting on the client) | all"""
     ctx = _ctx(customer)
+    scope = scope or "open"
+    if scope not in TICKET_SCOPES:
+        _fail(_("scope must be open, closed, waiting or all"), "invalid_parameter")
     filters = {"customer": ctx.customer}
-    if scope == "open":
-        filters["status"] = ["in", OPEN_TICKET_STATUSES]
-    elif scope == "closed":
-        filters["status"] = ["in", CLOSED_TICKET_STATUSES]
+    if TICKET_SCOPES[scope]:
+        filters["status"] = ["in", TICKET_SCOPES[scope]]
     if project:
         _check_project(ctx, project)
         filters["project"] = project
@@ -1278,10 +1376,13 @@ def get_tickets(scope="open", project=None, search=None, limit=30, offset=0, cus
     frappe.response["has_more"] = len(rows) > page_size
     rows = rows[:page_size]
     for r in rows:
+        for f in ("creation", "modified", "sla_due"):
+            r[f] = _iso(r[f])
         r["created"] = r.creation
         proj = frappe.db.get_value("Project", r.project, ["imp_status", "project_name"], as_dict=True) if r.project else None
         r["project_title"] = proj.project_name if proj else None
         r["project_kind"] = _project_kind(proj.imp_status) if proj else None
+        r["server_name"] = _server_name(r.server)
         r["needs_you"] = r.status in WAITING_TICKET_STATUSES
         r["status"] = _code(r.status)
         r["priority"] = _code(r.priority)
@@ -1324,7 +1425,7 @@ def get_ticket(ticket=None, customer=None):
         reached[h["status"]] = h["at"]
     cur = TICKET_FLOW.index(t.status) if t.status in TICKET_FLOW else 0
     steps = [
-        {"status": _code(s), "at": reached.get(s), "done": i < cur, "current": i == cur}
+        {"status": _code(s), "at": _iso(reached.get(s)), "done": i < cur, "current": i == cur}
         for i, s in enumerate(TICKET_FLOW)
         if s != "Waiting on Client" or s in reached or t.status == s
     ]
@@ -1350,19 +1451,21 @@ def get_ticket(ticket=None, customer=None):
         "description": _strip_html(t.description),
         "project": t.project,
         "project_title": frappe.db.get_value("Project", t.project, "project_name") if t.project else None,
+        "server": t.server,
+        "server_name": _server_name(t.server),
         "module": t.module,
         "ticket_type": _code(t.ticket_type),
         "priority": _code(t.priority),
         "status": _code(t.status),
         "raised_by": _full_name(t.raised_by),
-        "created": t.creation,
-        "sla_due": t.sla_due,
+        "created": _iso(t.creation),
+        "sla_due": _iso(t.sla_due),
         "resolution_notes": _strip_html(t.resolution_notes),
         "assigned_to": assigned,
         "hours_logged": hours,
         "progress": progress,
         "steps": steps,
-        "history": [{"status": _code(h["status"]), "at": h["at"]} for h in history],
+        "history": [{"status": _code(h["status"]), "at": _iso(h["at"])} for h in history],
         "needs_confirmation": t.status == "Resolved",
         "ratings": {f: round(t[f] * RATING_STARS) if t[f] else None for f in _RATING_FIELDS},
         "comments": [
@@ -1371,21 +1474,24 @@ def get_ticket(ticket=None, customer=None):
                 "text": _strip_html(c.content),
                 "by": c.comment_by or _full_name(c.comment_email),
                 "mine": c.comment_email == ctx.user,
-                "at": c.creation,
+                "at": _iso(c.creation),
             }
             for c in comments
         ],
-        "attachments": frappe.get_all(
-            "File",
-            filters={"attached_to_doctype": "Support Ticket", "attached_to_name": ticket},
-            fields=["name", "file_name", "file_size", "creation"],
-        ),
+        "attachments": [
+            {**a, "creation": _iso(a.creation)}
+            for a in frappe.get_all(
+                "File",
+                filters={"attached_to_doctype": "Support Ticket", "attached_to_name": ticket},
+                fields=["name", "file_name", "file_size", "creation"],
+            )
+        ],
     }
 
 
 @frappe.whitelist(methods=["POST"])
 def create_ticket(subject=None, description=None, ticket_type=None, priority=None, project=None,
-                  module=None, reference=None, customer=None):
+                  module=None, reference=None, server=None, customer=None):
     """Raise a Support Ticket. ticket_type and priority take the code from get_ticket_options
     (older builds may still send the label). Module is saved on its own field and, for older app
     builds, also written into the description with the screen/document."""
@@ -1394,6 +1500,8 @@ def create_ticket(subject=None, description=None, ticket_type=None, priority=Non
         _fail(_("Subject is required"), "missing_parameter")
     if project:
         _check_project(ctx, project)
+    if server:
+        _check_server(ctx, server)
 
     type_option = _option_for("Support Ticket", "ticket_type", ticket_type) if ticket_type else "Support"
     if not type_option:
@@ -1416,6 +1524,7 @@ def create_ticket(subject=None, description=None, ticket_type=None, priority=Non
         "subject": subject.strip()[:140],
         "customer": ctx.customer,
         "project": project,
+        "server": server or None,
         "raised_by": ctx.user,
         "ticket_type": type_option,
         "priority": priority_option,

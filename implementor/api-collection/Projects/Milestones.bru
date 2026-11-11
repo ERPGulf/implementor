@@ -29,6 +29,8 @@ tests {
     expect(m.total).to.equal(m.milestones.length);
     m.milestones.forEach(function (x) {
       expect(x).to.have.property("id");
+      expect(x).to.have.property("completed_on");
+      if (x.status !== "completed") expect(x.completed_on).to.equal(null);
       expect(x.display_state).to.be.oneOf([
         "signed_off", "ready_for_sign_off", "awaiting_admin_sign_off",
         "in_progress", "overdue", "on_hold", "upcoming"
@@ -66,12 +68,13 @@ docs {
         {
           "id": "s6ri3u6d64",
           "title": "Configuration complete",
-          "duration": 14,
+          "duration": "14",
           "start_date": "2026-10-01",
           "end_date": "2026-10-15",
           "days_left": null,
-          "status": "Completed",
+          "status": "completed",
           "display_state": "signed_off",
+          "completed_on": "2026-10-15T17:42:10+03:00",
           "percent": 100,
           "modules": 3,
           "signed_off": {
@@ -94,10 +97,12 @@ docs {
 
   - `id`: send this as `milestone` to Sign off.
   - `title`: milestone name to show.
-  - `end_date`: planned date. `start_date` and `duration` (days) are also given.
-  - `days_left`: days until `end_date`, negative when past. Null once the milestone is completed.
-  - `status`: raw status: `Not Started`, `In Progress`, `Partially Completed`, `Due`, `Completed` or `On Hold`. Don't build the UI from it; use `display_state`.
-  - `percent`: completion, 0 to 100. `modules`: number of modules the milestone covers.
+  - `end_date`: planned date. `start_date` is also given.
+  - `duration`: free text as our team typed it (e.g. `"14"`), a **string** or null. Don't do date maths with it.
+  - `days_left`: days until `end_date`, negative when past. Null once the milestone is completed, or when there is no `end_date`.
+  - `status`: `not_started`, `in_progress`, `partially_completed`, `on_hold`, `due` or `completed`. Null when not set. Don't build the UI from it; use `display_state`.
+  - `completed_on`: date-time with offset when `status` became `completed`. Null when the milestone isn't completed. Approximate for milestones completed before 11 Nov 2026 (it was filled from the time the milestone row was last changed).
+  - `percent`: completion, 0 to 100 (may be fractional). `modules`: number of modules the milestone covers.
   - `signed_off`: null until signed off. Then `by` (full name), `on` (date-time with offset) and `remarks` (null if none were given).
   - `ready_for_sign_off`: true for everyone when the milestone is waiting for sign-off.
   - `can_sign_off`: true only when ready **and** the user is a Client Admin. Show the Sign off button only when this is true.
@@ -116,9 +121,12 @@ docs {
 
   **Counts:** `signed_off`, `completed` and `total` are for the header, e.g. "2 of 6 signed off".
 
-  **Errors:** every error has an `error_code`.
+  **Which milestones:** only those of the project's contract type. An AMC project returns only its AMC milestones; an implementation returns only its implementation milestones. Milestones from an AMC's implementation phase are never included, so an AMC with no AMC milestone returns an empty list (`total` 0).
 
-  - **401:** Token missing, expired or invalid. Refresh once and retry, else sign out.
+  **Errors:** client API errors have an `error_code`; auth errors raised by Frappe don't.
+
+  - **401** (no error_code): token expired or invalid. Refresh once and retry, else sign out.
+  - **403** (no error_code): no Authorization header sent.
   - **403** `not_permitted`: not this client's project, or the project doesn't exist.
   - **403** `no_client_linked`: the user isn't linked to any client company.
   - **417** `missing_parameter`: `project` left out.

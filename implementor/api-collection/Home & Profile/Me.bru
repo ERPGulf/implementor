@@ -73,7 +73,7 @@ docs {
 
   **Method:** GET only. A POST is refused by Frappe with **403** "Not permitted" and **no** `error_code`.
 
-  **Permission:** Signed-in client user (`Client User` or `Client Admin`).
+  **Permission:** Any signed-in user whose Contact is linked to a Customer. No role is checked: `Client User` / `Client Admin` only change `is_client_admin` and what the user sees.
 
   **Query parameters:**
 
@@ -111,17 +111,25 @@ docs {
   | `customer_name` | string \| null | Yes | Client company name. Show this, not `customer`. |
   | `is_client_admin` | boolean | Yes | See below. |
 
-  **`is_client_admin`:**
+  **`is_client_admin`:** true when the user has the `Client Admin` role, and also for ERPGulf staff (Administrator, `System Manager` or `Project Overseer`).
 
   - `true`: the user sees every ticket for the company, and can sign off milestones.
   - `false`: the user sees only tickets they raised. Milestones show "Awaiting admin sign-off" with no button.
 
-  **How the server finds the client company:** through the user's Contact. The Contact is matched by its User field, or else by the user's verified email or mobile number, and must be linked to a Customer.
+  **How the server finds the client company:** through the user's Contact, which must be linked to a Customer. The Contact is matched in this order:
 
-  **Errors:** every error from this API has an `error_code`, except the wrong-method case above.
+  1. Contact's User field = the signed-in user.
+  2. Else a Contact email equal to the User's email.
+  3. Else a Contact phone equal to the User's mobile number or the linked Employee's `cell_number` (employee_app signs in with it), first exactly, then by the last 9 digits.
 
-  - **401:** Token missing, expired, or invalid. Refresh once and retry; otherwise sign out.
+  If several Customers match, the first one is used.
+
+  **Errors:** every error from this API has an `error_code`, except the cases marked "no error_code".
+
+  - **401** (no error_code): token expired or invalid. Refresh once and retry, else sign out.
+  - **403** (no error_code): no Authorization header sent.
+  - **403** (no error_code): wrong HTTP method (see above).
   - **403 / `no_client_linked`:** The user isn't linked to any client company. Show a clear support/contact message, not a blank Home screen.
-  - **403 / `not_permitted`:** `customer` was sent and isn't the user's company.
-  - **404 / `not_found`:** `customer` was sent and doesn't exist.
+  - **403 / `not_permitted`:** `customer` was sent and isn't the user's company (including a `customer` that doesn't exist).
+  - **404 / `not_found`:** `customer` was sent and doesn't exist. ERPGulf staff only; client users get `not_permitted` above.
 }

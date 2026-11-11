@@ -11,10 +11,11 @@ post {
 }
 
 body:multipart-form {
-  todo: PUT_TODO_NAME_HERE
+  todo: 12glqu2bo8
   file: @file(/path/to/vat-certificate.pdf)
   ~note: VAT certificate, valid until 2027
   ~complete: 1
+  ~project: PROJ-0029
   ~customer: Hamza
 }
 
@@ -55,13 +56,14 @@ docs {
   | `file` | file | yes* | `vat-certificate.pdf` | PDF, JPG or PNG. 10 MB max. |
   | `note` | string | no | `Valid until 2027` | Saved as a comment beside the file. |
   | `complete` | 0 or 1 | no | `1` | Send `1` with the **last** file to finish the action. |
+  | `project` | string | no | `PROJ-0029` | Send it when Waiting on you was opened from a project: the reply then holds that project's open actions only. Must be the client's project. Disabled by default. |
   | `customer` | string | no | `Hamza` | Not used by the app. The server picks the user's company. Disabled by default. |
 
   \* Instead of a multipart `file`, you can send `filename` plus base64 `filedata` (the same way ticket attachments work).
 
   **Several files:** call once per file. Send `complete=1` only on the last call.
 
-  **Response:** the updated list of **open** actions, same items as Waiting for you.
+  **Response:** the updated list of **open** actions, same items as Waiting for you: for `project` when it is sent, else for all projects.
 
   ```json
   { "message": [ ... open actions ... ] }
@@ -70,16 +72,21 @@ docs {
   **What the server does:**
 
   - Attaches the file privately to the record the action is about (`reference`), or to the action itself if it has none.
+  - Saves `note` (if given) as a comment on that same record.
   - With `complete=1`, marks the action done and notifies our team.
 
-  **Safe to repeat:** a call on an action that is already done uploads nothing and returns **200** with the current list. A retry after a dropped connection is safe.
+  **Repeating a call:**
 
-  **Errors:** every error has an `error_code`.
+  - On an action that is already done, the call uploads nothing and returns **200** with the current list, so a retry of the `complete=1` call is safe.
+  - On an action that is still open (`complete` left out or `0`), every call stores the file again. A retry after a dropped connection creates a **duplicate** attachment (and note).
 
-  - **401:** Token missing, expired or invalid. Refresh once and retry, else sign out.
-  - **403** `not_permitted`: the action doesn't exist, or isn't assigned to this user.
+  **Errors:** client API errors have an `error_code`; auth errors raised by Frappe don't.
+
+  - **401** (no error_code): token expired or invalid. Refresh once and retry, else sign out.
+  - **403** (no error_code): no Authorization header sent.
+  - **403** `not_permitted`: the action doesn't exist, or isn't assigned to this user; or `project` isn't this client's project.
   - **403** `no_client_linked`: the user isn't linked to any client company.
-  - **417** `missing_parameter`: `todo`, or the file, left out.
+  - **417** `missing_parameter`: `todo` left out; or no multipart `file` and `filedata` or `filename` left out.
   - **417** `invalid_file_type`: not a PDF, JPG or PNG.
   - **417** `file_too_large`: over 10 MB.
   - **417** `invalid_file`: empty file or bad base64.

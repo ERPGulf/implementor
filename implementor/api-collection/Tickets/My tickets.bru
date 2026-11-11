@@ -14,8 +14,8 @@ params:query {
   scope: open
   project: PROJ-0029
   limit: 20
-  ~offset: 
-  ~search: 
+  ~offset:
+  ~search:
   ~customer: Hamza
 }
 
@@ -23,7 +23,7 @@ tests {
   test("returns 200", function () {
     expect(res.status).to.equal(200);
   });
-  
+
   test("has message", function () {
     expect(res.body).to.have.property("message");
   });
@@ -34,7 +34,16 @@ tests {
 
   test("rows have created, module and project_title", function () {
     if (res.body.message.length) {
-      expect(res.body.message[0]).to.include.keys("created", "module", "project_title");
+      expect(res.body.message[0]).to.include.keys("created", "module", "project_title", "server", "server_name");
+    }
+  });
+
+  test("status, priority and ticket_type are lowercase codes", function () {
+    if (res.body.message.length) {
+      const r = res.body.message[0];
+      expect(r.status).to.match(/^[a-z0-9_]+$/);
+      if (r.priority) expect(r.priority).to.match(/^[a-z0-9_]+$/);
+      if (r.ticket_type) expect(r.ticket_type).to.match(/^[a-z0-9_]+$/);
     }
   });
 }
@@ -46,49 +55,98 @@ settings {
 
 docs {
   Lists the client's tickets, with filters and paging.
-  
-  **Endpoint:** `GET /api/method/implementor.client_api.get_tickets`  
+
+  **Endpoint:** `GET /api/method/implementor.client_api.get_tickets`
   **Screen:** My Tickets
-  
-  **Permission:** Signed-in client user (Client User or Client Admin). Only records of the user's own client company are returned.
-  
+
+  **Permission:** Signed-in client user (Client User or Client Admin). Only records of the user's own client company are returned. A **Client User** sees only the tickets they raised; a **Client Admin** sees all of the company's tickets.
+
   **Query parameters:**
-  
+
   | Field | Type | Required | Example | Notes |
   | --- | --- | --- | --- | --- |
-  | `scope` | open / closed / all | no | `open` |  |
-  | `project` | string | no | `PROJ-0029` |  |
-  | `search` | string | no |  |  |
-  | `limit` | int | no | `20` |  |
-  | `offset` | int | no | `0` |  |
+  | `scope` | open / closed / waiting / all | no | `open` | Default `open` (also used when empty) = `new`, `triaged`, `in_progress`, `waiting_on_client`, `resolved`. `closed` = `closed`. `waiting` = `waiting_on_client`, `resolved` (tickets waiting for the client); combine with `project` for one project's. `all` = every status. Any other value returns 417 `invalid_parameter`. |
+  | `project` | string | no | `PROJ-0029` | Only this project's tickets. An unknown or another client's project returns 403 `not_permitted`. |
+  | `search` | string | no |  | Case-insensitive "contains" match on `subject` or `name`. |
+  | `limit` | int | no | `20` | Page size. Default 30, maximum 100. `0` or empty means 30. |
+  | `offset` | int | no | `0` | Rows to skip. Default 0. |
   | `customer` | string | no | `Hamza` | Not used by the app. The server picks the user's company. Disabled by default. |
-  
-  **Response (trimmed):**
-  
+
+  Rows are sorted newest first (`creation` descending).
+
+  **Response:**
+
   ```json
   {
     "message": [
       {
-        "name": "12hnuea73s", "subject": "...", "status": "Resolved",
-        "project": "PROJ-0029", "project_title": "Hamza ERPNext Implementation", "project_kind": "Implementation",
-        "module": "Stock", "ticket_type": "Bug", "priority": "Normal",
-        "created": "2026-10-28 15:41:40.112233", "needs_you": true
+        "name": "12hnuea73s",
+        "subject": "Stock valuation report is blank",
+        "project": "PROJ-0029",
+        "server": null,
+        "ticket_type": "bug",
+        "priority": "normal",
+        "status": "resolved",
+        "raised_by": "aisha@hamza.example",
+        "creation": "2026-10-28T15:41:40+03:00",
+        "modified": "2026-10-30T11:20:45+03:00",
+        "sla_due": "2026-10-30T15:41:40+03:00",
+        "converted_task": "TASK-2026-00412",
+        "module": "Stock",
+        "created": "2026-10-28T15:41:40+03:00",
+        "project_title": "Hamza ERPNext Implementation",
+        "project_kind": "implementation",
+        "server_name": null,
+        "needs_you": true
       }
     ],
     "has_more": false
   }
   ```
 
+  **Response fields:**
+
+  | Field | Type | Notes |
+  | --- | --- | --- |
+  | `status` | string | `new`, `triaged`, `in_progress`, `waiting_on_client`, `resolved`, `closed`. |
+  | `priority` | string / null | `emergency`, `urgent`, `normal`, `low`. |
+  | `ticket_type` | string / null | `bug`, `support`, `feature_request`, `training_request`, `question`. |
+  | `project`, `project_title` | string / null | `null` when the ticket has no project. |
+  | `project_kind` | string / null | `implementation` or `amc`. `null` when the ticket has no project. |
+  | `module` | string / null | Module picked on Raise Ticket. |
+  | `server`, `server_name` | string / null | Server ID (as in Servers) and its name. `null` when the ticket isn't linked to a server. |
+  | `raised_by` | string | The raiser's **user ID** (usually their email), not a display name. `get_ticket` returns the display name in the same key. |
+  | `created` | datetime | The raise date (same key as `get_ticket`). |
+  | `creation` | datetime | Same value as `created`. Still sent for older app builds. |
+  | `modified` | datetime | Last change to the ticket. |
+  | `sla_due` | datetime / null | Response due time set by the team. |
+  | `converted_task` | string / null | Internal task ID once the team turns the ticket into a task. The app doesn't need to show it. |
+  | `needs_you` | bool | `true` when `status` is `waiting_on_client` or `resolved`. |
+
   - `has_more` sits beside `message`, not inside it. `true` = ask for the next page (`offset + limit`); `false` = this is the last page.
-  - `created` is the raise date (same key as `get_ticket`). `creation` is also still sent for older app builds.
-  
+  - Date-times (`created`, `creation`, `modified`, `sla_due`) are ISO 8601 with the server's offset, e.g. `2026-10-28T15:41:40+03:00`. `sla_due` can be null.
+
   **Errors:**
-  
-  - **401:** Token missing, expired or invalid. Refresh once and retry, else sign out.
-  - **403:** Not this client's record, or role not allowed.
-  
+
+  - **401** (no error_code): token expired or invalid. Refresh once and retry, else sign out.
+  - **403** (no error_code): no Authorization header sent.
+  - **403 `no_client_linked`:** the signed-in user is not linked to any client company.
+  - **403 `not_permitted`:** `project` is unknown or belongs to another client, or `customer` was sent for a company the user is not linked to.
+  - **404 `not_found`:** `customer` was sent and does not exist.
+  - **417 `invalid_parameter`:** `scope` isn't `open`, `closed`, `waiting` or `all`.
+
   **Notes:**
-  
-  - Labels: New → Submitted, Triaged → Under review, In Progress → In progress (blue); Waiting on Client → Waiting on you (amber); Resolved → Ready for your testing (maroon); Closed (green).
+
+  - Labels by `status` code:
+
+    | Code | Label | Colour |
+    | --- | --- | --- |
+    | `new` | Submitted | blue |
+    | `triaged` | Under review | blue |
+    | `in_progress` | In progress | blue |
+    | `waiting_on_client` | Waiting on you | amber |
+    | `resolved` | Ready for your testing | maroon |
+    | `closed` | Closed | green |
+
   - `name` is a short random code: show it small and grey, lead with `subject`.
 }

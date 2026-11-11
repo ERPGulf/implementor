@@ -26,8 +26,26 @@ tests {
 
   test("has every tab's data", function () {
     const p = res.body.message;
-    ["phases", "modules", "milestones", "training", "integrations", "my_actions", "tickets_waiting_for_you"].forEach(function (k) {
+    ["phases", "modules", "training", "integrations", "my_actions", "tickets_waiting_for_you"].forEach(function (k) {
       expect(p[k]).to.be.an("array");
+    });
+  });
+
+  test("milestones are not included (use Milestones)", function () {
+    expect(res.body.message).to.not.have.property("milestones");
+  });
+
+  test("status values are lowercase codes", function () {
+    const p = res.body.message;
+    expect(p.status).to.be.oneOf(["discovery", "active", "go_live", "amc", "hypercare", "closed", null]);
+    p.tickets_waiting_for_you.forEach(function (t) {
+      expect(t.status).to.be.oneOf(["waiting_on_client", "resolved"]);
+    });
+  });
+
+  test("modules are in scope only", function () {
+    res.body.message.modules.forEach(function (m) {
+      expect(m.in_scope).to.equal(1);
     });
   });
 
@@ -45,7 +63,7 @@ settings {
 }
 
 docs {
-  One project with everything its three tabs need: Overview, Milestones and Tasks.
+  One project with what its Overview and Tasks tabs need. The Milestones tab is loaded separately with the Milestones request.
 
   **Endpoint:** `GET /api/method/implementor.client_api.get_project`  
   **Screen:** Implementation (Overview, Milestones, Tasks tabs)
@@ -68,36 +86,40 @@ docs {
       "title": "ERPNext Implementation - Hamza Trading",
       "display_title": "ERPNext Implementation",
       "kind": "implementation",
-      "status": "In Progress",
+      "status": "active",
       "start_date": "2026-08-01",
       "end_date": "2026-12-31",
       "days_left": 55,
       "project_manager": "Sahana",
       "stage": "Data Migration",
       "phase": { "index": 3, "count": 8, "name": "Data Migration" },
-      "health": "Green",
+      "health": "green",
       "percent": 62,
       "go_live_date": "2026-12-15",
       "go_live_days_left": 39,
-      "next_milestone": { "title": "Configuration complete", "end_date": "2026-11-20", "days_left": 14, "status": "In Progress" },
+      "next_milestone": { "title": "Configuration complete", "end_date": "2026-11-20", "days_left": 14, "status": "in_progress" },
       "phases": [
-        { "name": "Kick-off", "state": "done" },
+        { "name": "Discovery", "state": "done" },
+        { "name": "Config", "state": "done" },
         { "name": "Data Migration", "state": "current" },
-        { "name": "Go-live", "state": "upcoming" }
+        { "name": "Integration", "state": "upcoming" },
+        { "name": "UAT", "state": "upcoming" },
+        { "name": "Training", "state": "upcoming" },
+        { "name": "Go-Live", "state": "upcoming" },
+        { "name": "Hypercare", "state": "upcoming" }
       ],
       "modules": [
-        { "module": "Accounting", "in_scope": 1, "status": "In Progress", "percent": 60 }
+        { "module": "Accounting", "in_scope": 1, "status": "in_progress", "percent": 60 }
       ],
-      "milestones": [ ... same items as Milestones ... ],
       "training": [
         { "name": "TRN-0004", "topic": "Selling basics", "trainer": "Sahana", "schedule": "2026-11-12T10:00:00+03:00" }
       ],
       "integrations": [
-        { "name": "INT-0002", "integration_name": "ZATCA e-invoicing", "type": "Government", "vendor": "ZATCA", "status": "Live" }
+        { "name": "INT-0002", "integration_name": "ZATCA e-invoicing", "type": "ZATCA", "vendor": "ZATCA", "status": "in_progress" }
       ],
       "my_actions": [ ... same items as Waiting for you, this project only ... ],
       "tickets_waiting_for_you": [
-        { "name": "TCK-0112", "subject": "Wrong VAT on credit note", "status": "Resolved" }
+        { "name": "TCK-0112", "subject": "Wrong VAT on credit note", "status": "resolved" }
       ]
     }
   }
@@ -106,31 +128,37 @@ docs {
   **Overview tab:**
 
   - `display_title`: show this, not `title`.
-  - `health`: `Green`, `Amber` or `Red` → On track, Needs attention, At risk.
+  - `status`: project status code: `discovery`, `active`, `go_live`, `amc`, `hypercare` or `closed`.
+  - `end_date`: the project's expected end date, or its deadline when no end date is set.
+  - `health`: `green`, `amber` or `red` → On track, Needs attention, At risk. Null when not set.
+  - `stage`: current stage label as stored: `Discovery`, `Config`, `Data Migration`, `Integration`, `UAT`, `Training`, `Go-Live` or `Hypercare`. Display text, not a code.
   - `phase`: "Phase 3 of 8 · Data Migration". Null when the stage isn't one of the known phases; hide that line then.
+  - `percent`: overall progress, 0 to 100 (may be fractional).
   - `go_live_days_left`: negative means overdue, e.g. -3 → "3 days overdue".
-  - `next_milestone`: first milestone not yet completed, or completed and waiting for sign-off. Null when none.
+  - `next_milestone`: first milestone (of this project's contract type, see Milestones) not yet completed, or completed and waiting for sign-off. Null when none. `status` uses the milestone codes: `not_started`, `in_progress`, `partially_completed`, `on_hold`, `due` or `completed`.
   - `project_manager`: full name.
-  - `tickets_waiting_for_you`: tickets on this project waiting for the client. `status` is `Waiting on Client` (we need an answer) or `Resolved` (please confirm the fix).
+  - `tickets_waiting_for_you`: tickets on this project waiting for the client. `status` is `waiting_on_client` (we need an answer) or `resolved` (please confirm the fix). A Client User only sees tickets they raised.
   - `training[].schedule`: date-time with offset. `trainer` is a full name.
-  - `integrations[]`: `status` is the integration's status as set by our team.
+  - `integrations[].status`: `not_started`, `in_progress`, `blocked` or `done`. `type` is display text as stored: `Biometric`, `Bank Gateway`, `ZATCA`, `Payment`, `SMS`, `Government` or `Other`.
 
   **Milestones tab:**
 
-  - `milestones[]`: same items as the Milestones request. Use `display_state` for the label and button.
+  - Not in this response any more: `milestones` was removed. Call Milestones (`get_milestones`) with the same `project`, then use `display_state` for the label and button.
 
   **Tasks tab:**
 
-  - `phases[].state`: `done`, `current` or `upcoming`. Phases use `name`, not `title`.
-  - `modules[].percent`: average task progress for that module. Can be null; show `status` instead.
-  - `modules[].in_scope`: 1 or 0.
+  - `phases[].state`: `done`, `current` or `upcoming`. Phases use `name`, not `title`. `name` is the stage label as stored (see `stage`).
+  - `modules[].status`: `not_started`, `in_progress` or `completed`. Null when not set.
+  - `modules[].percent`: average task progress for that module. With no tasks it is 100 for `completed`, 0 for `not_started`, else null; show `status` then.
+  - `modules[]`: in-scope modules only; out-of-scope modules are never returned, so `in_scope` is always 1.
   - `my_actions[]`: open actions for this project only. For the Done list, call Waiting for you with `status=done&project=...`.
 
-  **AMC projects:** this call also works for an AMC, but use AMC instead. For an AMC, `phases` is empty and there is no `phase`, `stage`, `health`, `percent` or `next_milestone`. `modules` may still be filled; the AMC screen doesn't show it.
+  **AMC projects:** this call also works for an AMC, but use AMC instead. For an AMC, `phases` is empty and there is no `phase`, `stage`, `health`, `percent`, `go_live_date`, `go_live_days_left` or `next_milestone`. Instead it carries the AMC fields (`contract_status`, `elapsed_percent`, `hours_used`, `hours_included`, `tickets`), as described in AMC. `modules` may still be filled; the AMC screen doesn't show it.
 
-  **Errors:** every error has an `error_code`.
+  **Errors:** client API errors have an `error_code`; auth errors raised by Frappe don't.
 
-  - **401:** Token missing, expired or invalid. Refresh once and retry, else sign out.
+  - **401** (no error_code): token expired or invalid. Refresh once and retry, else sign out.
+  - **403** (no error_code): no Authorization header sent.
   - **403** `not_permitted`: not this client's project, or the project doesn't exist.
   - **403** `no_client_linked`: the user isn't linked to any client company.
   - **417** `missing_parameter`: `project` left out.

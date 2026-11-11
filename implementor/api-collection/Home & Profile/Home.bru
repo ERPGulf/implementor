@@ -33,6 +33,15 @@ tests {
     expect(m).to.not.have.property("amc");
     expect(m).to.not.have.property("servers");
   });
+
+  test("action urgency and cta are lowercase codes", function () {
+    const isCode = (v) => v === null || /^[a-z0-9_]+$/.test(v);
+    res.body.message.my_actions.forEach(function (a) {
+      expect(a.urgency).to.satisfy(isCode);
+      expect(a.cta).to.be.oneOf(["upload", "sign_off", "mark_done"]);
+      expect(a.status).to.equal("open");
+    });
+  });
 }
 
 settings {
@@ -75,7 +84,7 @@ docs {
           "text": "Upload VAT registration certificate and CR copy",
           "due": "2026-11-10",
           "days_left": 4,
-          "urgency": "Normal",
+          "urgency": "normal",
           "project": "PROJ-0029",
           "cta": "upload",
           "reference": { "doctype": "Project", "name": "PROJ-0029" },
@@ -94,12 +103,20 @@ docs {
   - `tickets.open`: open tickets. A Client User sees only the tickets they raised; a Client Admin sees all of the company's.
   - `tickets.waiting_for_you`: tickets in Waiting on Client or Resolved (waiting for the client to confirm the fix).
   - `my_actions`: a list, not a count. Same items as `get_my_actions`: open actions only, oldest due date first. Use its length for the badge.
-  - `my_actions[].cta`: `upload`, `sign_off`, `review` or `mark_done`.
-  - `unread_notifications`: count for the bell badge.
+  - `my_actions[].cta`: `upload`, `sign_off` or `mark_done` (`review` is no longer sent; such actions come as `mark_done`). `sign_off` actions only reach Client Admins.
+  - `my_actions[].urgency`: `emergency`, `urgent`, `normal`, `low`, or null when not set.
+  - `my_actions[].due`: `YYYY-MM-DD`, or null when the action has no due date (then `days_left` is null too). Actions without a due date sort first.
+  - `my_actions[].project`: the project ID, or null when the action isn't linked to a Project, Task or milestone. Such unlinked actions are still returned.
+  - `my_actions[].reference`: `{ "doctype": "Payment Milestone", "name": "<milestone row id>" }` for a sign-off action, otherwise the record the to-do points at (`Project`, `Task`, ...), or null when it points at nothing.
+  - `my_actions[].status` is always `open` here and `completed_on` is always null.
+  - `unread_notifications`: count of the user's unread notifications, for the bell badge.
 
-  **Errors:** every error has an `error_code`.
+  **Method:** GET. The server does not refuse a POST, but use GET.
 
-  - **401:** Token missing, expired or invalid. Refresh once and retry, else sign out.
+  **Errors:**
+
+  - **401** (no error_code): token expired or invalid. Refresh once and retry, else sign out.
+  - **403** (no error_code): no Authorization header sent.
   - **403** `no_client_linked`: the user isn't linked to any client company.
-  - **403** `not_permitted`: role not allowed.
+  - **403** `not_permitted`: `customer` was sent and isn't the user's company.
 }

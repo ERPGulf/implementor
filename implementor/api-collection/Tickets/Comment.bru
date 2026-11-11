@@ -20,9 +20,14 @@ tests {
   test("returns 200", function () {
     expect(res.status).to.equal(200);
   });
-  
+
   test("has message", function () {
     expect(res.body).to.have.property("message");
+  });
+
+  test("comment is in the returned ticket", function () {
+    const c = res.body.message.comments;
+    expect(c[c.length - 1].mine).to.equal(true);
   });
 }
 
@@ -33,32 +38,51 @@ settings {
 
 docs {
   Adds a comment to a ticket.
-  
-  **Endpoint:** `POST /api/method/implementor.client_api.add_ticket_comment`  
+
+  **Endpoint:** `POST /api/method/implementor.client_api.add_ticket_comment`
   **Screen:** Ticket status → Comment
-  
+
   > ⚠️ **Changes data** on the shared server. Use test records only.
-  
-  **Permission:** Signed-in client user (Client User or Client Admin). Only records of the user's own client company are returned.
-  
+
+  **Permission:** Signed-in client user (Client User or Client Admin). Only records of the user's own client company are returned. A **Client User** can only comment on tickets they raised.
+
   **Body fields (form-encoded):**
-  
+
   | Field | Type | Required | Example | Notes |
   | --- | --- | --- | --- | --- |
   | `ticket` | string | yes | `12hnuea73s` |  |
-  | `text` | string | yes | `Testing Ticket comment` |  |
+  | `text` | string | yes | `Testing Ticket comment` | Trimmed. Saved as plain text (HTML-escaped). |
   | `customer` | string | no | `Hamza` | Not used by the app. The server picks the user's company. Disabled by default. |
-  
+
   **Response (trimmed):**
-  
+
+  The updated ticket, in the same shape as **Ticket status**. The new comment is last in `comments[]`, with `mine: true`.
+
   ```json
-  { "message": { ... updated ticket ... } }
+  {
+    "message": {
+      "name": "12hnuea73s",
+      "status": "in_progress",
+      "comments": [
+        { "id": "f4e5d6c7b8", "text": "Testing Ticket comment", "by": "Aisha Khan", "mine": true, "at": "2026-10-31T10:02:11+03:00" }
+      ],
+      ...
+    }
+  }
   ```
-  
+
   **Errors:**
-  
-  - **401:** Token missing, expired or invalid. Refresh once and retry, else sign out.
-  - **403:** Not this client's record, or role not allowed.
-  - **417:** Empty comment.
-  - **404:** Ticket not found.
+
+  - **401** (no error_code): token expired or invalid. Refresh once and retry, else sign out.
+  - **403** (no error_code): no Authorization header sent.
+  - **403 `no_client_linked`:** the signed-in user is not linked to any client company.
+  - **403 `not_permitted`:** another client company's ticket, a ticket raised by someone else (Client User), or `customer` sent for a company the user is not linked to.
+  - **404 `not_found`:** ticket not found (or `customer` sent and does not exist).
+  - **417 `missing_parameter`:** `ticket` missing or empty.
+  - **417 `comment_required`:** `text` is empty or only spaces.
+
+  **Notes:**
+
+  - If the ticket is `waiting_on_client`, commenting moves it back to `in_progress`. Other statuses don't change.
+  - `comments[].text` may contain HTML entities (e.g. `&amp;`); decode them before showing.
 }

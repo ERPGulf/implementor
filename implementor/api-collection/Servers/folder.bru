@@ -12,12 +12,17 @@ docs {
 
   **Where the data comes from**
 
-  - Server status (`online`, `degraded`, `offline`) is checked by the server every 5 minutes. `status_checked_at` says when.
-  - Backup data is read from OCI every 10 minutes and cached. Requests never wait on OCI unless `refresh=1` is sent.
+  - Server status (`online`, `degraded`, `offline`) is checked by the server every 5 minutes, for servers that have a `site_url`. A server without `site_url` keeps `status` null. `status_checked_at` says when it was last checked.
+  - Backup data is read from OCI every 10 minutes (10 runs per server) and cached, when OCI is configured on our side.
+  - Servers and Server Details never wait on OCI: they use the last successful OCI read (kept for 24 hours).
+  - Backups usually reads the cache too, but waits on OCI when:
+    - `refresh=1` is sent (at most once every 2 minutes per server),
+    - `limit` is above 10,
+    - nothing is cached yet, for example because the last OCI read failed.
 
   **Rules for every request in this folder**
 
-  - Every error has an `error_code`. Match on it, never on the message text.
+  - Client API errors have an `error_code`. Match on it, never on the message text. Auth errors come from Frappe and have none: **401** for an expired or invalid token, **403** when no Authorization header is sent.
   - Unknown server IDs and other clients' server IDs both return **403** `not_permitted`, not 404. This hides which IDs exist.
   - A missing required parameter returns **417** `missing_parameter`.
   - Dates are `YYYY-MM-DD`. Date-times are ISO 8601 with an offset, e.g. `2026-11-06T02:00:12+03:00`.

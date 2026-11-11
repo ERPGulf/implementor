@@ -20,6 +20,10 @@ tests {
     expect(res.status).to.equal(404);
   });
 
+  test("error_code is not_found", function () {
+    expect(res.body.error_code).to.equal("not_found");
+  });
+
   test("no Python traceback in the body", function () {
     expect(res.body).to.not.have.property("exc");
   });
@@ -42,7 +46,7 @@ docs {
 
   **Expected:**
 
-  - **404** with `_server_messages` ("Ticket … not found").
+  - **404 `not_found`**, with `_server_messages` ("Ticket … not found").
   - No `exc` key: client API errors never include the Python traceback.
-  - Another client company's ticket returns **403** instead.
+  - Another client company's ticket (or, for a Client User, a ticket someone else raised) returns **403 `not_permitted`** instead.
 }

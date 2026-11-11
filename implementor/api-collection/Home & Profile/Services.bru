@@ -30,6 +30,21 @@ tests {
     expect(m.hosting).to.be.an("array");
     expect(m).to.not.have.property("backup");
   });
+
+  test("project status and health are lowercase codes", function () {
+    const m = res.body.message;
+    const isCode = (v) => v === null || /^[a-z0-9_]+$/.test(v);
+    m.implementation.concat(m.amc).forEach(function (p) {
+      expect(p.status).to.satisfy(isCode);
+      if (p.kind === "implementation") {
+        expect(p.health).to.satisfy(isCode);
+      }
+    });
+    m.amc.forEach(function (p) {
+      expect(p).to.have.property("hours_included");
+      expect(p).to.not.have.property("next_milestone");
+    });
+  });
 }
 
 settings {
@@ -68,18 +83,18 @@ docs {
           "title": "ERPNext Implementation - Hamza Trading",
           "display_title": "ERPNext Implementation",
           "kind": "implementation",
-          "status": "In Progress",
+          "status": "active",
           "start_date": "2026-08-01",
           "end_date": "2026-12-31",
           "days_left": 55,
           "project_manager": "Sahana",
           "stage": "Data Migration",
           "phase": { "index": 3, "count": 8, "name": "Data Migration" },
-          "health": "Green",
+          "health": "green",
           "percent": 40,
           "go_live_date": "2026-12-15",
           "go_live_days_left": 39,
-          "next_milestone": { "title": "Configuration complete", "end_date": "2026-11-20", "days_left": 14, "status": "In Progress" }
+          "next_milestone": { "title": "Configuration complete", "end_date": "2026-11-20", "days_left": 14, "status": "in_progress" }
         }
       ],
       "amc": [
@@ -88,7 +103,7 @@ docs {
           "title": "AMC - Hamza Trading",
           "display_title": "AMC",
           "kind": "amc",
-          "status": "AMC",
+          "status": "amc",
           "start_date": "2026-01-01",
           "end_date": "2026-12-31",
           "days_left": 55,
@@ -96,6 +111,7 @@ docs {
           "contract_status": "active",
           "elapsed_percent": 85,
           "hours_used": 12.5,
+          "hours_included": 40,
           "tickets": { "open": 2, "closed": 9 }
         }
       ],
@@ -112,6 +128,8 @@ docs {
           "status_checked_at": "2026-11-06T09:30:00+03:00",
           "erpnext_version": "v15.40.0",
           "backup_schedule": "Daily 02:00 AST, 14-day retention",
+          "backup_frequency": "Daily, 02:00 AST",
+          "backup_retention": "14 days + weekly offsite",
           "backup_policy_name": "OCI Gold",
           "last_backup": { "at": "2026-11-06T02:00:12+03:00", "state": "confirmed" },
           "overdue": false,
@@ -127,18 +145,31 @@ docs {
   **Field notes:**
 
   - `display_title`: `title` without the customer name. Show this one.
+  - `status` (projects): lowercase code of the project's implementation status: `discovery`, `active`, `go_live`, `hypercare`, `closed` (implementation) or `amc` (AMC). Null when not set.
+  - `end_date`: the project's expected end date, else its deadline. `days_left` is counted from it (negative when past, null when no date).
+  - `stage`: raw label (e.g. `"Data Migration"`), not a code. `phase.name` is the same label.
   - `phase`: null when the project's stage isn't one of the known phases.
-  - `next_milestone`: first milestone not yet completed, or completed and waiting for sign-off. Null when none.
-  - `contract_status` (AMC only): `active`, `expiring` (30 days or less left) or `expired`.
-  - AMC items have no `stage`, `phase`, `health` or `percent`.
+  - `health`: `green`, `amber`, `red`, or null.
+  - `go_live_date`: the go-live date, else the project deadline. Null when neither is set.
+  - `next_milestone`: first milestone (in table order, of the project's contract type) not yet completed, or completed and waiting for sign-off. Null when none. Its `status` is a code: `not_started`, `in_progress`, `partially_completed`, `on_hold`, `due` or `completed`; its `days_left` is null once completed.
+  - `contract_status` (AMC only): `active`, `expiring` (30 days or less left) or `expired`. Null when the project has no end date.
+  - `elapsed_percent` (AMC only): 0-100 share of the contract period gone. Null when start or end date is missing.
+  - `hours_used` (AMC only): sum of actual hours on the project's tasks. `hours_included` (AMC only): hours in the contract, null when not set (or 0).
+  - AMC items have no `stage`, `phase`, `health`, `percent`, `go_live_date`, `go_live_days_left` or `next_milestone`.
   - `status` (hosting): `online`, `degraded`, `offline`, or null if never checked.
-  - `last_backup.state`: `confirmed`, `running`, `queued`, `failed`, `deleted`, or `recorded` (entered by hand, not read from OCI). `last_backup` is null when there's no data.
-  - `overdue`: true when there's no confirmed backup in the last 26 hours. Null when unknown.
+  - `environment` (hosting): raw label (`Production`, `Staging`, `Dev`). `region_label` is null for regions it doesn't know.
+  - `backup_frequency`, `backup_retention` (hosting): short text written by our team, e.g. `"Daily, 02:00 AST"` and `"14 days + weekly offsite"`. Null until filled in. `backup_schedule` is still sent (free text).
+  - `backup_policy_name`: null when there's no OCI data for the server.
+  - `last_backup.state`: `confirmed`, `running`, `queued`, `failed`, `deleted`, or `recorded` (entered by hand, not read from OCI). Any other OCI state is passed through in lowercase, so treat unknown values as "unknown". `last_backup` is null when there's no data.
+  - `overdue`: true when there's no confirmed backup in the last 26 hours **and** the server has a backup policy (OCI) or a `backup_schedule` (recorded backups). It is `false`, not null, for a server with no policy or schedule. Null only when there's no OCI data and no recorded backup at all.
   - Date fields are `YYYY-MM-DD`. Datetime fields are ISO 8601 with an offset.
 
-  **Errors:** every error has an `error_code`.
+  **Method:** GET. The server does not refuse a POST, but use GET.
 
-  - **401:** Token missing, expired or invalid. Refresh once and retry, else sign out.
+  **Errors:**
+
+  - **401** (no error_code): token expired or invalid. Refresh once and retry, else sign out.
+  - **403** (no error_code): no Authorization header sent.
   - **403** `no_client_linked`: the user isn't linked to any client company.
-  - **403** `not_permitted`: not this client's record, or role not allowed.
+  - **403** `not_permitted`: `customer` was sent and isn't the user's company.
 }

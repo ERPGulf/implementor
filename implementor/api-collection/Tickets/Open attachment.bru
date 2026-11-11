@@ -32,28 +32,31 @@ settings {
 
 docs {
   Downloads a ticket attachment.
-  
-  **Endpoint:** `GET /api/method/implementor.client_api.download_attachment`  
+
+  **Endpoint:** `GET /api/method/implementor.client_api.download_attachment`
   **Screen:** Ticket status → attachment
-  
-  **Permission:** Signed-in client user (Client User or Client Admin). Only records of the user's own client company are returned.
-  
+
+  **Permission:** Signed-in client user (Client User or Client Admin). Only records of the user's own client company are returned. A **Client User** can only open files on tickets they raised.
+
   **Query parameters:**
-  
+
   | Field | Type | Required | Example | Notes |
   | --- | --- | --- | --- | --- |
   | `file` | string | yes | `e890f3425b` | From `get_ticket.attachments[].name`. |
   | `customer` | string | no | `Hamza` | Not used by the app. The server picks the user's company. Disabled by default. |
-  
-  **Response:** The file bytes (not JSON), with `Content-Disposition: attachment; filename="…"; filename*=UTF-8''…`. Read `filename*` for names with spaces or non-ASCII characters.
-  
-  **Errors:**
-  
-  - **401:** Token missing, expired or invalid. Refresh once and retry, else sign out.
-  - **403:** Not this client's record, or role not allowed.
-  - **404:** File not found.
-  
+
+  **Response:** The file bytes (not JSON), with `Content-Disposition: attachment; filename="…"; filename*=UTF-8''…`. Read `filename*` for names with spaces or non-ASCII characters. `Content-Type` is guessed from the file name (`application/octet-stream` if unknown).
+
+  **Errors** (JSON, like other calls):
+
+  - **401** (no error_code): token expired or invalid. Refresh once and retry, else sign out.
+  - **403** (no error_code): no Authorization header sent.
+  - **403 `no_client_linked`:** the signed-in user is not linked to any client company.
+  - **403 `not_permitted`:** the file ID doesn't exist, isn't attached to a ticket, belongs to another client's ticket or (Client User) to a ticket someone else raised, or `customer` was sent for a company the user is not linked to. Unknown and forbidden files answer the same, so IDs can't be probed.
+  - **404 `not_found`:** the file's ticket no longer exists (or `customer` sent and does not exist).
+  - **417 `missing_parameter`:** `file` missing or empty.
+
   **Notes:**
-  
+
   - Attachments are private. Always open them through this call, never through `file_url`.
 }

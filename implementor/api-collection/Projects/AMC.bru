@@ -27,6 +27,8 @@ tests {
   test("has AMC fields only", function () {
     const a = res.body.message;
     expect(a.kind).to.equal("amc");
+    expect(a.status).to.equal("amc");
+    expect(a).to.have.property("hours_included");
     expect(a.contract_status).to.be.oneOf(["active", "expiring", "expired", null]);
     expect(a.tickets).to.have.property("open");
     expect(a).to.not.have.property("stage");
@@ -64,14 +66,15 @@ docs {
       "title": "AMC - Hamza Trading",
       "display_title": "AMC",
       "kind": "amc",
-      "status": "AMC",
+      "status": "amc",
       "start_date": "2026-01-01",
       "end_date": "2026-12-31",
       "days_left": 55,
       "project_manager": "Sahana",
       "contract_status": "active",
       "elapsed_percent": 85,
-      "hours_used": 18,
+      "hours_used": 18.5,
+      "hours_included": 40,
       "tickets": { "open": 2, "closed": 9 }
     }
   }
@@ -81,18 +84,21 @@ docs {
 
   - `display_title`: show this, not `title`.
   - `contract_status`: drives the chip. `active`, `expiring` (30 days or less left) or `expired`. Null when the contract has no end date.
-  - `status`: always `AMC`. Don't use it for the chip.
-  - `days_left`: days until `end_date`. Negative once expired.
-  - `elapsed_percent`: how much of the contract period has passed, 0 to 100. Use it for the period bar.
-  - `hours_used`: hours logged on the contract's tasks.
-  - `tickets`: `open` and `closed` counts for this contract, across the whole company.
-  - There is no `stage`, `phase`, `health` or `percent` for an AMC.
+  - `status`: always `amc`. Don't use it for the chip.
+  - `end_date`: the contract's expected end date, or its deadline when no end date is set.
+  - `days_left`: days until `end_date`. Negative once expired. Null when there is no end date.
+  - `elapsed_percent`: how much of the contract period has passed, 0 to 100. Use it for the period bar. Null without a start or end date.
+  - `hours_used`: hours logged on the contract's tasks (number, up to 2 decimals).
+  - `hours_included`: contracted hours. Null when not set (or 0).
+  - `tickets`: `open` and `closed` counts for this contract, across the whole company. `open` includes resolved tickets waiting for confirmation.
+  - There is no `stage`, `phase`, `health`, `percent`, `go_live_date` or `next_milestone` for an AMC.
 
-  **Payment milestones:** not in this response. Call Milestones with the same `project`. It returns the AMC's milestones with `display_state` and `can_sign_off`, the same as for implementations.
+  **Payment milestones:** not in this response. Call Milestones with the same `project`. It returns milestones with `display_state` and `can_sign_off`, the same as for implementations. Only the AMC's own milestones are returned, never those from its implementation phase; an AMC with no AMC milestone returns an empty list.
 
-  **Errors:** every error has an `error_code`.
+  **Errors:** client API errors have an `error_code`; auth errors raised by Frappe don't.
 
-  - **401:** Token missing, expired or invalid. Refresh once and retry, else sign out.
+  - **401** (no error_code): token expired or invalid. Refresh once and retry, else sign out.
+  - **403** (no error_code): no Authorization header sent.
   - **403** `not_permitted`: not this client's project, or the project doesn't exist.
   - **403** `no_client_linked`: the user isn't linked to any client company.
   - **417** `not_amc_project`: the project is an implementation. Open it with Implementation instead.
@@ -100,5 +106,5 @@ docs {
 
   **Notes:**
 
-  - No contracted-hours total yet: show "18 hrs used" alone, with no used/total bar.
+  - Hours: when `hours_included` is set, show a used/included bar ("18.5 of 40 hrs"). When it is null, show "18.5 hrs used" alone.
 }

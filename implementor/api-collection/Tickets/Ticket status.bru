@@ -19,13 +19,20 @@ tests {
   test("returns 200", function () {
     expect(res.status).to.equal(200);
   });
-  
+
   test("has message", function () {
     expect(res.body).to.have.property("message");
   });
 
   test("has module, created and ratings", function () {
-    expect(res.body.message).to.include.keys("module", "created", "ratings");
+    expect(res.body.message).to.include.keys("module", "created", "ratings", "server", "server_name");
+  });
+
+  test("status and steps use lowercase codes", function () {
+    const m = res.body.message;
+    expect(m.status).to.match(/^[a-z0-9_]+$/);
+    expect(m.steps[0].status).to.equal("new");
+    expect(m.history[0].status).to.equal("new");
   });
 }
 
@@ -36,59 +43,60 @@ settings {
 
 docs {
   Returns one ticket with its timeline, comments and attachments.
-  
-  **Endpoint:** `GET /api/method/implementor.client_api.get_ticket`  
+
+  **Endpoint:** `GET /api/method/implementor.client_api.get_ticket`
   **Screen:** Ticket status
-  
-  **Permission:** Signed-in client user (Client User or Client Admin). Only records of the user's own client company are returned.
-  
+
+  **Permission:** Signed-in client user (Client User or Client Admin). Only records of the user's own client company are returned. A **Client User** can only open tickets they raised.
+
   **Query parameters:**
-  
+
   | Field | Type | Required | Example | Notes |
   | --- | --- | --- | --- | --- |
   | `ticket` | string | yes | `12hnuea73s` | Ticket `name`. |
   | `customer` | string | no | `Hamza` | Not used by the app. The server picks the user's company. Disabled by default. |
-  
-  **Response (trimmed):**
-  
+
+  **Response:**
+
   ```json
   {
     "message": {
-      "name": "12h2sd9uia",
+      "name": "12hnuea73s",
       "subject": "Stock valuation report is blank",
       "description": "Module: Stock\nScreen or document: Stock Ledger\n\nThe report shows no rows.",
       "project": "PROJ-0029",
       "project_title": "Hamza ERPNext Implementation",
+      "server": null,
+      "server_name": null,
       "module": "Stock",
-      "ticket_type": "Bug",
-      "priority": "Normal",
-      "status": "Resolved",
+      "ticket_type": "bug",
+      "priority": "normal",
+      "status": "resolved",
       "raised_by": "Aisha Khan",
-      "created": "2026-10-28 15:41:40.112233",
-      "sla_due": "2026-10-30 15:41:40",
+      "created": "2026-10-28T15:41:40+03:00",
+      "sla_due": "2026-10-30T15:41:40+03:00",
       "resolution_notes": "Valuation method was missing on the item group.",
       "assigned_to": ["Mohammed Ali"],
       "hours_logged": 2.5,
       "progress": 100,
       "steps": [
-        { "status": "New", "at": "2026-10-28 15:41:40.112233", "done": true, "current": false },
-        { "status": "Triaged", "at": null, "done": true, "current": false },
-        { "status": "In Progress", "at": "2026-10-29 09:12:03.000000", "done": true, "current": false },
-        { "status": "Resolved", "at": "2026-10-30 11:20:45.000000", "done": false, "current": true },
-        { "status": "Closed", "at": null, "done": false, "current": false }
+        { "status": "new", "at": "2026-10-28T15:41:40+03:00", "done": true, "current": false },
+        { "status": "triaged", "at": null, "done": true, "current": false },
+        { "status": "in_progress", "at": null, "done": true, "current": false },
+        { "status": "resolved", "at": "2026-10-30T11:20:45+03:00", "done": false, "current": true },
+        { "status": "closed", "at": null, "done": false, "current": false }
       ],
       "history": [
-        { "status": "New", "at": "2026-10-28 15:41:40.112233" },
-        { "status": "In Progress", "at": "2026-10-29 09:12:03.000000" },
-        { "status": "Resolved", "at": "2026-10-30 11:20:45.000000" }
+        { "status": "new", "at": "2026-10-28T15:41:40+03:00" },
+        { "status": "resolved", "at": "2026-10-30T11:20:45+03:00" }
       ],
       "needs_confirmation": true,
       "ratings": { "rating_overall": null, "rating_quality": null, "rating_communication": null, "rating_response_time": null },
       "comments": [
-        { "id": "a1b2c3d4e5", "text": "Please check again now.", "by": "Mohammed Ali", "mine": false, "at": "2026-10-30 11:21:00.000000" }
+        { "id": "a1b2c3d4e5", "text": "Please check again now &amp; confirm.", "by": "Mohammed Ali", "mine": false, "at": "2026-10-30T11:21:00+03:00" }
       ],
       "attachments": [
-        { "name": "e890f3425b", "file_name": "stock_valuation_screenshot.png", "file_size": 70, "creation": "2026-10-28 15:41:45.380698" }
+        { "name": "e890f3425b", "file_name": "stock_valuation_screenshot.png", "file_size": 70, "creation": "2026-10-28T15:41:45+03:00" }
       ]
     }
   }
@@ -98,27 +106,40 @@ docs {
 
   | Field | Type | Notes |
   | --- | --- | --- |
+  | `status` | string | `new`, `triaged`, `in_progress`, `waiting_on_client`, `resolved`, `closed`. |
+  | `priority` | string / null | `emergency`, `urgent`, `normal`, `low`. |
+  | `ticket_type` | string / null | `bug`, `support`, `feature_request`, `training_request`, `question`. |
+  | `description` | string | Plain text (HTML tags removed). Older tickets and tickets raised with `module`/`reference` start with `Module: …` / `Screen or document: …` lines. |
   | `module` | string / null | Module picked on Raise Ticket. Use this, not the `Module:` line in `description`. |
-  | `project_title` | string / null | Project name for `project`. |
-  | `raised_by` | string | Display name of the user who raised it. |
+  | `project`, `project_title` | string / null | Project ID and name. `null` when the ticket has no project. |
+  | `server`, `server_name` | string / null | Server ID (as in Servers) and its name. `null` when the ticket isn't linked to a server. |
+  | `raised_by` | string | Display name of the user who raised it (in `get_tickets` this key is the user ID). |
   | `created` | datetime | When the ticket was raised. Same key as in `get_tickets`. |
+  | `sla_due` | datetime / null | Response due time set by the team. |
   | `resolution_notes` | string / null | Plain text, filled when the team resolves it. |
   | `assigned_to` | string[] | Display names (full name) of the team members working on it, e.g. `["Mohammed Ali"]`. `[]` = not assigned yet. |
   | `hours_logged`, `progress` | number / null | From the linked task. `null` until the ticket becomes a task. |
-  | `steps[]` | `{status, at, done, current}` | The timeline. `status` is the ticket status, `done` = passed, `current` = where it is now. |
-  | `history[]` | `{status, at}` | Only the status changes that really happened, oldest first. |
-  | `ratings` | object | The client's 1–5 stars from `confirm_fix`, or `null` per rating if not given. |
+  | `steps[]` | `{status, at, done, current}` | The timeline, in flow order: `new`, `triaged`, `in_progress`, `waiting_on_client`, `resolved`, `closed`. `waiting_on_client` is only listed while it is the current status. `done` = passed, `current` = where it is now. |
+  | `history[]` | `{status, at}` | At most 2 entries: `new` at the raise time, then the current status at the ticket's last-modified time (only `new` while the ticket is still new). |
+  | `needs_confirmation` | bool | `true` when `status` is `resolved`. |
+  | `ratings` | object | `rating_overall`, `rating_quality`, `rating_communication`, `rating_response_time`: the client's 1–5 stars from `confirm_fix` (integers), or `null` per rating if not given. |
+  | `comments[]` | `{id, text, by, mine, at}` | All comments, oldest first, from the client and the team. `text` is plain text but may contain HTML entities (`&amp;`, `&lt;`, `&gt;`, `&quot;`, `&apos;`): decode them before showing. `by` = display name, `mine` = written by the signed-in user. |
   | `attachments[]` | `{name, file_name, file_size, creation}` | `name` is the File ID for **Open attachment**. `file_size` is in bytes. |
+
+  All date-times (`created`, `sla_due`, `steps[].at`, `history[].at`, `comments[].at`, `attachments[].creation`) are ISO 8601 with the server's offset, e.g. `2026-10-28T15:41:40+03:00`. Null when not set.
 
   **Errors:**
 
-  - **401:** Token missing, expired or invalid. Refresh once and retry, else sign out.
-  - **403:** Another client company's ticket, or a ticket raised by someone else (Client User), or role not allowed.
-  - **404:** Ticket not found.
+  - **401** (no error_code): token expired or invalid. Refresh once and retry, else sign out.
+  - **403** (no error_code): no Authorization header sent.
+  - **403 `no_client_linked`:** the signed-in user is not linked to any client company.
+  - **403 `not_permitted`:** another client company's ticket, a ticket raised by someone else (Client User), or `customer` sent for a company the user is not linked to.
+  - **404 `not_found`:** ticket not found (or `customer` sent and does not exist).
+  - **417 `missing_parameter`:** `ticket` missing or empty.
 
   **Notes:**
 
   - Timeline: `done` green check, `current` maroon ring, others grey.
-  - A step can be `done: true` with `at: null`. The ticket skipped it (for example it went from New straight to In Progress, past Triaged), so there is no time to show. This is expected, not an error.
+  - Steps between `new` and the current one have `at: null`: status-change history isn't tracked on tickets, so only the raise time and the current status's time are known. This is expected, not an error.
   - `needs_confirmation` true: show "It is fixed" and "Still an issue".
 }

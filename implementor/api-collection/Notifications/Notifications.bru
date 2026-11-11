@@ -24,6 +24,18 @@ tests {
   test("has message", function () {
     expect(res.body).to.have.property("message");
   });
+
+  test("returns unread notifications with the documented fields", function () {
+    const list = res.body.message;
+    expect(list).to.be.an("array");
+    expect(list.length).to.be.at.most(4);
+    list.forEach(function (n) {
+      ["name", "subject", "document_type", "document_name", "read", "creation"].forEach(function (k) {
+        expect(n).to.have.property(k);
+      });
+      expect(n.read).to.equal(0);
+    });
+  });
 }
 
 settings {
@@ -37,24 +49,45 @@ docs {
   **Endpoint:** `GET /api/method/implementor.client_api.get_notifications`  
   **Screen:** Notifications
   
-  **Permission:** Signed-in client user (Client User or Client Admin). Only records of the user's own client company are returned.
-  
+  **Permission:** Signed-in user linked to a client company. Returns the notifications addressed to the signed-in user (not filtered by company).
+
+  **Method:** GET. The server does not refuse a POST, but use GET.
+
   **Query parameters:**
-  
+
   | Field | Type | Required | Example | Notes |
   | --- | --- | --- | --- | --- |
-  | `unread_only` | 0 / 1 | no | `1` |  |
-  | `limit` | int | no | `4` |  |
+  | `unread_only` | 0 / 1 | no | `1` | Default `0` (all). `1` returns only unread ones. |
+  | `limit` | int | no | `4` | Default `30`, maximum `100`. `0` or an invalid value means 30. |
   | `customer` | string | no | `Hamza` | Not used by the app. The server picks the user's company. Disabled by default. |
-  
-  **Response (trimmed):**
-  
+
+  **Response:** a list, newest first. No paging beyond `limit`.
+
   ```json
-  { "message": [ { "name": "bbjqcbg636", "subject": "...", "read": 0, "creation": "..." } ] }
+  {
+    "message": [
+      {
+        "name": "bbjqcbg636",
+        "subject": "Client completed: Upload VAT registration certificate",
+        "document_type": "ToDo",
+        "document_name": "ee1p51uomd",
+        "read": 0,
+        "creation": "2026-11-06 09:30:12.345678"
+      }
+    ]
+  }
   ```
-  
+
+  **Field notes:**
+
+  - `document_type` / `document_name`: the record the notification is about (e.g. `Support Ticket` + ticket ID, `ToDo` + action ID). Either can be null.
+  - `read`: integer `0` (unread) or `1` (read), not a boolean.
+  - `creation`: server format **without** an offset (`YYYY-MM-DD HH:MM:SS.ffffff`, server time zone), not ISO 8601. Not converted yet.
+
   **Errors:**
-  
-  - **401:** Token missing, expired or invalid. Refresh once and retry, else sign out.
-  - **403:** Not this client's record, or role not allowed.
+
+  - **401** (no error_code): token expired or invalid. Refresh once and retry, else sign out.
+  - **403** (no error_code): no Authorization header sent.
+  - **403** `no_client_linked`: the user isn't linked to any client company.
+  - **403** `not_permitted`: `customer` was sent and isn't the user's company.
 }

@@ -1008,6 +1008,7 @@ def toggle_todo_done(todo):
     frappe.db.set_value("ToDo", todo, {
         "imp_done": new_value,
         "status": "Closed" if new_value else "Open",
+        "imp_completed_on": frappe.utils.now_datetime() if new_value else None,
     })
 
     from implementor.rollup import _recompute_task_progress

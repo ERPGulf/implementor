@@ -165,10 +165,16 @@ doc_events = {
         "validate": "implementor.api.validate"
     },
     "ToDo": {
-        "validate": "implementor.api.validate"
+        "validate": [
+            "implementor.api.validate",
+            "implementor.client_api.validate_todo",
+        ]
     },
-        "Project": {
-        "before_save": "implementor.amc.create_amc_milestone",
+    "Project": {
+        "before_save": [
+            "implementor.amc.create_amc_milestone",
+            "implementor.client_api.stamp_milestone_completion",
+        ],
     },
 }
 # doc_events = {

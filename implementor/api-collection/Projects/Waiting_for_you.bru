@@ -27,8 +27,9 @@ tests {
 
   test("each action has cta and status", function () {
     res.body.message.forEach(function (a) {
-      expect(a.cta).to.be.oneOf(["upload", "sign_off", "review", "mark_done"]);
+      expect(a.cta).to.be.oneOf(["upload", "sign_off", "mark_done"]);
       expect(a.status).to.be.oneOf(["open", "done"]);
+      expect(a.urgency).to.be.oneOf(["emergency", "urgent", "normal", "low", null]);
     });
   });
 }
@@ -39,7 +40,7 @@ settings {
 }
 
 docs {
-  Actions the ERPGulf team assigned to this user: open ones, or ones finished in the last 30 days.
+  Actions the ERPGulf team assigned to this user: open ones, or finished ones (the last 30 days, or all of one project's).
 
   **Endpoint:** `GET /api/method/implementor.client_api.get_my_actions`  
   **Screens:** Waiting on you, Implementation → Tasks tab
@@ -50,11 +51,11 @@ docs {
 
   | Field | Type | Required | Example | Notes |
   | --- | --- | --- | --- | --- |
-  | `status` | string | no | `done` | `open` (default) or `done`. `done` returns actions finished in the last 30 days. |
+  | `status` | string | no | `done` | `open` (default) or `done`. `done` with `project` returns **every** finished action for that project; `done` without `project` returns actions finished in the last 30 days. |
   | `project` | string | no | `PROJ-0029` | Only this project's actions. Use it when Waiting on you is opened from a project. |
   | `customer` | string | no | `Hamza` | Not used by the app. The server picks the user's company. Disabled by default. |
 
-  **Response:** open actions are sorted by due date, earliest first. Done actions are sorted by most recently finished.
+  **Response:** open actions are sorted by due date, earliest first. Done actions are sorted by `completed_on`, newest first.
 
   ```json
   {
@@ -64,7 +65,7 @@ docs {
         "text": "Upload VAT registration certificate and CR copy",
         "due": "2026-11-10",
         "days_left": 4,
-        "urgency": "Normal",
+        "urgency": "normal",
         "project": "PROJ-0029",
         "cta": "upload",
         "reference": { "doctype": "Project", "name": "PROJ-0029" },
@@ -79,23 +80,24 @@ docs {
 
   - `name`: send this as `todo` to Complete Action or Upload Action Attachment.
   - `text`: what we're asking for, plain text.
-  - `due`, `days_left`: due date and days until it. `days_left` is negative when overdue, and null for done actions.
-  - `urgency`: `Emergency`, `Urgent`, `Normal` or `Low`.
+  - `due`, `days_left`: due date and days until it. `days_left` is negative when overdue, and null for done actions. Both are null when the action has no due date.
+  - `urgency`: `emergency`, `urgent`, `normal` or `low` (`normal` by default). Null when not set.
   - `project`: the project the action belongs to. Can be null.
   - `cta`: which button to show:
     - `upload` → Upload, opens Upload Action Attachment
-    - `sign_off` → Sign off, opens Milestones at the milestone in `reference`
-    - `review` → Review, then Complete Action
+    - `sign_off` → Sign off, opens Milestones at the milestone in `reference`. Only Client Admins get these: a milestone sign-off action can't be assigned to a Client User.
     - `mark_done` → Mark done, calls Complete Action
+    - `review` is no longer sent: review-type actions come as `mark_done`.
   - `reference`: the record the action is about, e.g. `{ "doctype": "Payment Milestone", "name": "s6ri3u6d64" }` for a sign-off. Can be null.
   - `status`: `open` or `done`.
-  - `completed_on`: when it was finished (date-time with offset). Null for open actions.
+  - `completed_on`: when it was finished (date-time with offset). Null for open actions. For actions finished before 11 Nov 2026 it falls back to the action's last change, so it is approximate.
 
-  **Tasks tab summary ("2 of 6 tasks done"):** call with `status=done` and with `status=open`, both with `project`. Done = length of the done list; total = done + open.
+  **Tasks tab summary ("2 of 6 tasks done"):** call with `status=done` and with `status=open`, both with `project`. Done = length of the done list (all of the project's finished actions, no 30-day limit); total = done + open.
 
-  **Errors:** every error has an `error_code`.
+  **Errors:** client API errors have an `error_code`; auth errors raised by Frappe don't.
 
-  - **401:** Token missing, expired or invalid. Refresh once and retry, else sign out.
+  - **401** (no error_code): token expired or invalid. Refresh once and retry, else sign out.
+  - **403** (no error_code): no Authorization header sent.
   - **403** `not_permitted`: `project` isn't this client's project.
   - **403** `no_client_linked`: the user isn't linked to any client company.
   - **417** `invalid_parameter`: `status` isn't `open` or `done`.

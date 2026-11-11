@@ -9,6 +9,7 @@
  "field_order": [
   "duration",
   "completion_status",
+  "completed_on",
   "payment_",
   "payment_status",
   "m_title",
@@ -31,6 +32,14 @@
    "fieldtype": "Select",
    "label": "Completion status",
    "options": "Not Started\nIn Progress\nPartially Completed\nOn Hold\nDue\nCompleted"
+  },
+  {
+   "fieldname": "completed_on",
+   "fieldtype": "Datetime",
+   "label": "Completed On",
+   "read_only": 1,
+   "no_copy": 1,
+   "description": "Set automatically when Completion status becomes Completed"
   },
   {
    "fieldname": "payment_",
@@ -77,7 +86,7 @@
  "index_web_pages_for_search": 1,
  "istable": 1,
  "links": [],
- "modified": "2026-11-09 11:42:40.750411",
+ "modified": "2026-11-11 12:00:00.000000",
  "modified_by": "Administrator",
  "module": "Implementor",
  "name": "Payment Milestone",

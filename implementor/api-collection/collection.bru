@@ -32,9 +32,11 @@ docs {
   - Success data is inside `message`. Unwrap it in one place. Some list calls add keys beside it, for example `has_more` in **My tickets**.
   - `customer` is not used by the app: the server picks the signed-in user's company. It is disabled in every request by default.
   - Plain dates are `YYYY-MM-DD` (e.g. `due`, `end_date`, `go_live_date`, `ssl_expiry`).
-  - Date-times in the services endpoints (Home & Profile, Projects, Servers) are ISO 8601 with the server's offset, e.g. `2026-10-28T15:13:48+03:00`: milestone `signed_off.on`, training `schedule`, server activity and restore `date`, action `completed_on`, `status_checked_at`, `last_backup.at`, and every backup time (`at`, `expires_at`, `fetched_at`, `last_confirmed_at`, `resolved_at`). Parse them with a normal ISO 8601 parser.
-  - **Ticket endpoints are not converted yet.** `created`, `sla_due`, `steps[].at`, `history[].at`, `comments[].at`, `attachments[].creation` and the like still use the server format without an offset (`2026-10-28 15:41:40.112233`), in the server time zone.
-  - Enum values keep their current casing. Nothing was renamed. Values stored in Frappe select fields stay as stored (`"Waiting on Client"`, `"Green"`, `"Due"`, `"Urgent"`). Values the API computes are lowercase (`"online"`, `"expiring"`, `"ready_for_sign_off"`, `"confirmed"`, `"sign_off"`). Each request lists its exact values.
+  - Date-times in the services endpoints (Home & Profile, Projects, Servers) are ISO 8601 with the server's offset, e.g. `2026-10-28T15:13:48+03:00`: milestone `signed_off.on` and `completed_on`, training `schedule`, server activity and restore `date`, action `completed_on`, `status_checked_at`, `last_backup.at`, and every backup time (`at`, `expires_at`, `fetched_at`, `last_confirmed_at`, `resolved_at`). Parse them with a normal ISO 8601 parser.
+  - Ticket endpoints use the same ISO 8601 format since 11 Nov 2026 (NEW-1): `created`, `creation`, `modified`, `sla_due`, `steps[].at`, `history[].at`, `comments[].at`, `attachments[].creation`. Older app builds that parse both forms keep working.
+  - **Not converted yet:** notification `creation` (**Notifications**) still uses the server format without an offset (`2026-10-28 15:41:40.112233`), in the server time zone.
+  - All status-like values are lowercase snake_case codes made by the server from the stored option (`"Waiting on Client"` → `"waiting_on_client"`, `"Green"` → `"green"`, `"Due"` → `"due"`, `"Urgent"` → `"urgent"`, `"Go-Live"` → `"go_live"`). This covers project `status` and `health`, milestone and module `status`, action `urgency` and `cta`, ticket `status`, `priority` and `ticket_type`, integration `status`, server `status` and activity fields, and computed values (`"online"`, `"expiring"`, `"ready_for_sign_off"`, `"confirmed"`, `"sign_off"`). Map each code to your own label; never compare against desk labels. Each request lists its exact values.
+  - Exceptions, sent as the raw label: project `stage`, `phase.name` and `phases[].name` (e.g. `"Data Migration"`), server `environment` (e.g. `"Production"`), server `region` (e.g. `"me-jeddah-1"`; use `region_label` to display) and integration `type`.
   - Requests marked ⚠️ change data on the shared server.
   - Requests in **Auth** belong to **employee_app**, a different app.
 
@@ -42,35 +44,40 @@ docs {
 
   | HTTP | Meaning | What the app does |
   | --- | --- | --- |
-  | 401 | Token expired or invalid | Refresh once, retry, else sign out |
-  | 403 | Not this client's record, unknown project/server/to-do ID, or role not allowed | Show the message, go back |
-  | 404 | Ticket, milestone or customer not found | Show the message, go back |
+  | 401 | Token expired or invalid (no `error_code`) | Refresh once, retry, else sign out |
+  | 403 without `error_code` | No `Authorization` header sent (request runs as Guest), or wrong HTTP method | Send the token; treat as signed out |
+  | 403 with `error_code` | Not this client's record, unknown project/server/to-do/notification/file ID, or user not linked to a company | Show the message, go back |
+  | 404 | Ticket or milestone not found (or, for ERPGulf staff only, `customer` not found) | Show the message, go back |
   | 417 | Validation: missing or invalid parameter, empty comment, bad file ... | Show the message, stay on screen |
   | 5xx | Server problem | Generic error, allow retry |
 
-  Every error raised by `implementor.client_api` has a top-level `error_code` beside `_server_messages`. Branch on `error_code`, never on the message text (it can be reworded or translated). Show the text from `_server_messages` (a JSON string holding a JSON list of JSON strings). Client API errors never include `exc` (the Python traceback).
+  Every error raised by `implementor.client_api` has a top-level `error_code` beside `_server_messages`. Branch on `error_code`, never on the message text (it can be reworded or translated). Show the text from `_server_messages` (a JSON string holding a JSON list of JSON strings). Client API errors never include `exc` (the Python traceback) or `exception`; `exc_type` is always `"ClientAPIError"`.
 
   ```json
   {
-    "exception": "frappe.exceptions.ValidationError: project is required",
+    "exc_type": "ClientAPIError",
     "error_code": "missing_parameter",
     "_server_messages": "[\"{\\\"message\\\": \\\"project is required\\\", ...}\"]"
   }
   ```
 
-  Errors raised by Frappe before the client API code runs (expired or invalid token, wrong HTTP method on a POST-only call) have no `error_code`. Use the HTTP status for those.
+  Errors raised by Frappe before the client API code runs have no `error_code`. Use the HTTP status for those:
+
+  - **401:** the bearer token is expired or invalid.
+  - **403:** no `Authorization` header was sent, so the request runs as Guest and Frappe refuses it ("Method Not Allowed").
+  - **403:** wrong HTTP method on a GET-only or POST-only call.
 
   ### Error codes
 
   | `error_code` | HTTP | When |
   | --- | --- | --- |
-  | `not_logged_in` | 401 | No signed-in user (Guest session). |
-  | `not_permitted` | 403 | The record belongs to another client; the project, server or to-do ID does not exist; a Client User opens a ticket someone else raised; or `customer` is a company the user is not linked to. |
+  | `not_logged_in` | 401 | Never returned in practice: no endpoint allows Guest, so Frappe refuses a Guest request first (403 without `error_code`). |
+  | `not_permitted` | 403 | The record belongs to another client; the project, server, to-do, notification or attachment file ID does not exist; a Client User opens a ticket someone else raised; or `customer` is a company the user is not linked to (or does not exist). |
   | `no_client_linked` | 403 | The signed-in user (mobile or email) is not linked to any client company. Show a clear "not linked to a company yet" message, not a blank Home. |
   | `not_client_admin` | 403 | The action needs a Client Admin (milestone sign-off). |
-  | `not_found` | 404 | Ticket not found, milestone not found in the project, or `customer` does not exist. |
+  | `not_found` | 404 | Ticket not found, or milestone not found in the project. Also when `customer` does not exist, but only for ERPGulf staff (System Manager / Project Overseer); a client user gets 403 `not_permitted` instead. |
   | `missing_parameter` | 417 | A required parameter is missing or empty. This used to be a 500. |
-  | `invalid_parameter` | 417 | A parameter is outside its allowed values (e.g. `status` on **Waiting for you**). |
+  | `invalid_parameter` | 417 | A parameter is outside its allowed values (e.g. `status` on **Waiting for you**, `scope` on **My tickets**). |
   | `not_ready_for_sign_off` | 417 | The milestone is not Completed or Due. |
   | `not_amc_project` | 417 | `get_amc` was called with an implementation project. |
   | `invalid_file` | 417 | Upload is empty, or `filedata` is not valid base64. |
@@ -84,7 +91,7 @@ docs {
 
   ### Unknown IDs
 
-  For **projects, servers and to-dos**, an ID that does not exist and an ID that belongs to another client both return **403 `not_permitted`**. This is deliberate: the API does not reveal which IDs exist. **Tickets and milestones** return **404 `not_found`** when they don't exist (another client's ticket is still 403).
+  For **projects, servers, to-dos, notifications and ticket attachment files**, an ID that does not exist and an ID that belongs to another client both return **403 `not_permitted`**. This is deliberate: the API does not reveal which IDs exist. **Tickets and milestones** return **404 `not_found`** when they don't exist (another client's ticket is still 403).
 
   See the *ERPGulf Client App: Mobile UI Developer Guide* for screens, labels and empty states.
 }
