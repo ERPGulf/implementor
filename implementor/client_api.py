@@ -654,7 +654,7 @@ def get_project(project=None, customer=None):
             for i, ph in enumerate(phases)
         ],
         "modules": _modules(project),
-        "milestones": _milestones(project, ctx.is_client_admin),
+        # "milestones": _milestones(project, ctx.is_client_admin),
         "training": training,
         "integrations": integrations,
         "my_actions": _my_todos(ctx, project),
