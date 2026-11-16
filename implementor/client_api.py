@@ -44,7 +44,7 @@ import json
 import mimetypes
 import os
 import re
-from urllib.parse import quote
+from urllib.parse import quote, unquote
 from zoneinfo import ZoneInfo
 
 import frappe
@@ -1246,7 +1246,8 @@ def _uploaded_file(filename, filedata):
     """A multipart `file`, or `filename` + base64 `filedata` (as upload_ticket_attachment takes)."""
     upload = frappe.request.files.get("file") if frappe.request and frappe.request.files else None
     if upload:
-        filename, content = upload.filename, upload.stream.read()
+        # the app's fetch percent-encodes the multipart file name ("VAT%20certificate.pdf")
+        filename, content = unquote(upload.filename or ""), upload.stream.read()
     else:
         _require(file=filedata, filename=filename)
         if "," in filedata and filedata.strip().startswith("data:"):

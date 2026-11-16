@@ -61,6 +61,8 @@ docs {
 
   \* Instead of a multipart `file`, you can send `filename` plus base64 `filedata` (the same way ticket attachments work).
 
+  A percent-encoded multipart file name is decoded, so `VAT%20certificate.pdf` is saved as `VAT certificate.pdf`. The app can send real file names.
+
   **Several files:** call once per file. Send `complete=1` only on the last call.
 
   **Response:** the updated list of **open** actions, same items as Waiting for you: for `project` when it is sent, else for all projects.
