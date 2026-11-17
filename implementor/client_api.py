@@ -1322,6 +1322,25 @@ TICKET_SCOPES = {
 
 def _server_name(server):
     return frappe.db.get_value("Server", server, "server_name") if server else None
+
+
+def sync_employee_token(doc, method=None):
+    """Employee on_update: copy Employee.custom_token to every Support Ticket raised by that
+    employee's user, so a ticket always carries the user's current device token.
+
+    Written with db.set_value so the tickets' modified time, hooks and notifications are untouched.
+    """
+    if not doc.user_id:
+        return
+    if not (doc.has_value_changed("custom_token") or doc.has_value_changed("user_id")):
+        return
+    frappe.db.set_value(
+        "Support Ticket",
+        {"raised_by": doc.user_id},
+        "custom_token",
+        doc.get("custom_token") or None,
+        update_modified=False,
+    )
 _RATING_FIELDS = ["rating_overall", "rating_quality", "rating_communication", "rating_response_time"]
 RATING_STARS = 5
 
@@ -1707,3 +1726,5 @@ def mark_notification_read(name=None, mark_all=0, customer=None):
         _fail(_("Not permitted"), "not_permitted", frappe.PermissionError)
     frappe.db.set_value("Notification Log", name, "read", 1, update_modified=False)
     return {"success": True}
+
+

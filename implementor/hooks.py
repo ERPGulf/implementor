@@ -176,6 +176,9 @@ doc_events = {
             "implementor.client_api.stamp_milestone_completion",
         ],
     },
+    "Employee": {
+        "on_update": "implementor.client_api.sync_employee_token",
+    },
 }
 # doc_events = {
 # 	"Employee": {
