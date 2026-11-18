@@ -168,16 +168,27 @@ doc_events = {
         "validate": [
             "implementor.api.validate",
             "implementor.client_api.validate_todo",
-        ]
+        ],
+        "on_update": "implementor.client_notifications.on_todo_update",
     },
     "Project": {
         "before_save": [
             "implementor.amc.create_amc_milestone",
             "implementor.client_api.stamp_milestone_completion",
         ],
+        "on_update": "implementor.client_notifications.on_project_update",
     },
     "Employee": {
         "on_update": "implementor.client_api.sync_employee_token",
+    },
+    "Support Ticket": {
+        "on_update": "implementor.client_notifications.on_ticket_update",
+    },
+    "Comment": {
+        "after_insert": "implementor.client_notifications.on_comment_insert",
+    },
+    "Training Session": {
+        "on_update": "implementor.client_notifications.on_training_update",
     },
 }
 # doc_events = {
@@ -229,6 +240,7 @@ scheduler_events = {
             "implementor.client_api.refresh_oci_backups"
         ],
         "*/5 * * * *": ["implementor.client_api.check_server_status"],
+        "0 8 * * *": ["implementor.client_notifications.daily_reminders"],
     }
 }
 

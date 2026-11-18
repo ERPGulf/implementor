@@ -30,7 +30,7 @@ tests {
     expect(list).to.be.an("array");
     expect(list.length).to.be.at.most(4);
     list.forEach(function (n) {
-      ["name", "subject", "document_type", "document_name", "read", "creation"].forEach(function (k) {
+      ["name", "kind", "subject", "document_type", "document_name", "read", "creation"].forEach(function (k) {
         expect(n).to.have.property(k);
       });
       expect(n.read).to.equal(0);
@@ -68,7 +68,8 @@ docs {
     "message": [
       {
         "name": "bbjqcbg636",
-        "subject": "Client completed: Upload VAT registration certificate",
+        "kind": "action_assigned",
+        "subject": "Upload VAT registration certificate (due 23-11-2026)",
         "document_type": "ToDo",
         "document_name": "ee1p51uomd",
         "read": 0,
@@ -80,9 +81,50 @@ docs {
 
   **Field notes:**
 
+  - `kind`: what the notification is about, so the app can pick the icon and the screen to open. One of the codes below, or `null` for older and system notifications (open nothing special, just show `subject`).
+
+    | `kind` | Sent when | Sent to | `document_type` / `document_name` | Open |
+    | --- | --- | --- | --- | --- |
+    | `ticket_waiting_on_client` | Our team sets the ticket to Waiting on Client | Ticket raiser | `Support Ticket` / ticket ID | Ticket detail |
+    | `ticket_resolved` | Our team marks the ticket Resolved | Ticket raiser | `Support Ticket` / ticket ID | Ticket detail (confirm fix + rate) |
+    | `ticket_status_changed` | Our team changes the ticket to any other status | Ticket raiser | `Support Ticket` / ticket ID | Ticket detail |
+    | `ticket_reply` | Our team comments on the ticket | Ticket raiser | `Support Ticket` / ticket ID | Ticket detail |
+    | `action_assigned` | An action (to-do) is assigned to the user | That user | `ToDo` / action ID | Actions |
+    | `action_due_soon` | Daily, 8 AM: an open action is due tomorrow | That user | `ToDo` / action ID | Actions |
+    | `action_overdue` | Daily, 8 AM: an open action was due yesterday | That user | `ToDo` / action ID | Actions |
+    | `milestone_ready` | A milestone becomes ready for sign-off | The company's Client Admins | `Project` / project ID | Project → Milestones |
+    | `project_status_changed` | The project status changes (e.g. Active → Go-Live) | All the company's client users | `Project` / project ID | Project |
+    | `payment_due` | A milestone's payment is set to Pending | The company's Client Admins | `Project` / project ID | Project → Milestones |
+    | `payment_overdue` | A milestone's payment is set to Overdue | The company's Client Admins | `Project` / project ID | Project → Milestones |
+    | `amc_expiring` | Daily, 8 AM: the AMC ends in 30 or 7 days | The company's Client Admins | `Project` / project ID | AMC |
+    | `amc_expired` | Daily, 8 AM: the AMC ended yesterday | The company's Client Admins | `Project` / project ID | AMC |
+    | `server_down` | The 5-minute status check finds the server Offline | All the company's client users | `Server` / server ID | Server detail |
+    | `server_up` | The server is Online again after being Offline | All the company's client users | `Server` / server ID | Server detail |
+    | `backup_overdue` | No confirmed backup in the last 26 hours | All the company's client users | `Server` / server ID | Backups |
+    | `backup_failed` | The newest backup run failed | All the company's client users | `Server` / server ID | Backups |
+    | `training_scheduled` | A training session is added or its time changes | All the company's client users | `Training Session` / session ID | Project → Training |
+    | `training_reminder` | Daily, 8 AM: a training session is tomorrow | All the company's client users | `Training Session` / session ID | Project → Training |
+
+    The user is never notified about their own actions (their own comment, status change or sign-off). Server and backup notifications are sent once when the state changes, not on every check. Daily ones are sent at most once a day per record. Server, backup and daily checks use the Asia/Riyadh time zone.
+  - `subject`: ready-to-show text in English, e.g. `Ticket ST-0012: Login issue is waiting for your reply.`
   - `document_type` / `document_name`: the record the notification is about (e.g. `Support Ticket` + ticket ID, `ToDo` + action ID). Either can be null.
   - `read`: integer `0` (unread) or `1` (read), not a boolean.
   - `creation`: server format **without** an offset (`YYYY-MM-DD HH:MM:SS.ffffff`, server time zone), not ISO 8601. Not converted yet.
+
+  **Push notifications:** every notification with a `kind` is also sent as a Firebase push to the device token on the user's Employee record. The push `data` carries strings only:
+
+  ```json
+  {
+    "type": "notification",
+    "screen": "Notification",
+    "kind": "ticket_reply",
+    "notification": "bbjqcbg636",
+    "document_type": "Support Ticket",
+    "document_name": "q4sf1md4lh"
+  }
+  ```
+
+  `notification` is the `name` above, so the app can call **Mark read** when the push is tapped.
 
   **Errors:**
 

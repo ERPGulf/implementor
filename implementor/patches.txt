@@ -6,3 +6,4 @@
 # Patches added in this section will be executed after doctypes are migrated
 implementor.patches.backfill_support_ticket_module
 implementor.patches.backfill_milestone_completed_on
+implementor.patches.clear_backfilled_milestone_completed_on

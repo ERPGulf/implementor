@@ -727,6 +727,9 @@ def assign_todo(todo, user,act):
     if act == "assignto":
         old_user = frappe.db.get_value("ToDo", todo, "allocated_to")
         frappe.db.set_value("ToDo", todo, "allocated_to", user)
+        if user != old_user:
+            from implementor.client_notifications import action_assigned
+            action_assigned(todo)
     else:
         old_user = frappe.db.get_value("ToDo", todo, "assigned_by")
         frappe.db.set_value("ToDo", todo, "assigned_by", user)

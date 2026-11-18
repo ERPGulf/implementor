@@ -906,8 +906,11 @@ def refresh_oci_backups():
 def check_server_status():
     """Scheduler (every 5 minutes): ping each server's site and save Online, Degraded or Offline."""
     servers = frappe.get_all(
-        "Server", filters={"customer": ["is", "set"], "site_url": ["is", "set"]}, fields=["name", "site_url"]
+        "Server", filters={"customer": ["is", "set"], "site_url": ["is", "set"]},
+        fields=["name", "site_url", "custom_status"],
     )
+    from implementor.client_notifications import server_status_changed
+
     for s in servers:
         url = s.site_url.strip()
         url = url if url.startswith("http") else f"https://{url}"
@@ -922,6 +925,10 @@ def check_server_status():
             {"custom_status": status, "status_checked_at": now_datetime()},
             update_modified=False,
         )
+        try:
+            server_status_changed(s.name, s.custom_status, status)
+        except Exception:
+            frappe.log_error(title=f"Client notifications: server status {s.name}")
     frappe.db.commit()
 
 
@@ -1067,8 +1074,14 @@ def _oci_backups(server, limit, refresh, scheduled=False):
             "last_confirmed_at": _iso(last_ok),
             "overdue": overdue,
         }
+        previous = _oci_cached(server.name)
         frappe.cache().set_value(key, result, expires_in_sec=900)
         frappe.cache().set_value(f"implementor_oci_latest:{server.name}", result, expires_in_sec=86400)
+        try:
+            from implementor.client_notifications import backup_checked
+            backup_checked(server, previous, result)
+        except Exception:
+            frappe.log_error(title=f"Client notifications: backup check {server.name}")
         return _first_runs(result, limit)
     except Exception:
         frappe.log_error(frappe.get_traceback(), "client_api: OCI backup lookup failed")
@@ -1708,7 +1721,7 @@ def get_notifications(unread_only=0, limit=30, customer=None):
     return frappe.get_all(
         "Notification Log",
         filters=filters,
-        fields=["name", "subject", "document_type", "document_name", "read", "creation"],
+        fields=["name", "imp_kind as kind", "subject", "document_type", "document_name", "read", "creation"],
         order_by="creation desc",
         limit_page_length=min(cint(limit) or 30, 100),
     )
