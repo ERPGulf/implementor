@@ -51,7 +51,7 @@ docs {
 
   | Field | Type | Required | Example | Notes |
   | --- | --- | --- | --- | --- |
-  | `name` | string | one of | `bbjqcbg636` | One notification. Required when `mark_all` is not `1`. |
+  | `name` | string | one of | `bbjqcbg636` | One notification: a `name` from **Notifications**, or `notification_log` from a tapped push's data. Required when `mark_all` is not `1`. |
   | `mark_all` | 0 / 1 | one of | `1` | Default `0`. `1` marks all of the user's unread notifications. If `mark_all=1` is sent, `name` is ignored. |
   | `customer` | string | no | `Hamza` | Not used by the app. The server picks the user's company. Disabled by default. |
 

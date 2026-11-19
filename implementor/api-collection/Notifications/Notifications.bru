@@ -119,12 +119,18 @@ docs {
     "screen": "Notification",
     "kind": "ticket_reply",
     "notification": "bbjqcbg636",
+    "notification_log": "bbjqcbg636",
     "document_type": "Support Ticket",
     "document_name": "q4sf1md4lh"
   }
   ```
 
-  `notification` is the `name` above, so the app can call **Mark read** when the push is tapped.
+  `notification_log` is the `name` above. When the push is tapped, send it as `name` to **Mark read** so the row stops counting as unread. `notification` carries the same value and is kept only for older builds; use `notification_log`.
+
+  Delivery settings:
+
+  - **Android:** high priority, default sound, notification channel `general`. The app must create a channel with the id `general`, or Android puts the push in a fallback channel.
+  - **iOS:** priority 10 (immediate), default sound. **No `badge` is sent**, so the push never changes the app icon's number. For an unread count, use `unread_notifications` from **Home** (the bell badge); if the app shows a number on the icon, it sets and clears it itself.
 
   **Errors:**
 

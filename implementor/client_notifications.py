@@ -37,8 +37,11 @@ kind codes (sent as `kind` in get_notifications and in the push data):
 Daily checks: daily_reminders(), cron "0 8 * * *" in hooks.py.
 """
 
+import json
+
 import frappe
 from firebase_admin import credentials, messaging
+from firebase_admin.exceptions import InvalidArgumentError
 
 from implementor.api import _strip_html
 from implementor.implementor.auth import is_admin
@@ -115,36 +118,33 @@ def notify_client(users, kind, title, body, doctype=None, name=None, skip_actor=
                 "screen": "Notification",
                 "kind": kind,
                 "notification": log.name,
+                "notification_log": log.name,
                 "document_type": doctype or "",
                 "document_name": name or "",
             },
         )
 
 
-def _firebase_ready():
-    if not frappe.db.exists("DocType", "Whatsapp Saudi"):
-        return False
-    ws = frappe.get_single("Whatsapp Saudi")
-    if not ws.firebase_notification:
-        return False
+FIREBASE_APP = "implementor_client"
+
+def _firebase_app():
+    """The client app's own Firebase connection (Implementor Settings), separate from
+    whatsapp_saudi's default one. None when client push is off or not set up."""
     import firebase_admin
 
+    settings = frappe.get_single("Implementor Settings")
+    if not settings.enable_client_push:
+        return None
     try:
-        firebase_admin.get_app()
+        return firebase_admin.get_app(FIREBASE_APP)
     except ValueError:
-        firebase_admin.initialize_app(credentials.Certificate({
-            "type": ws.type,
-            "project_id": ws.project_id,
-            "private_key_id": ws.private_key_id,
-            "private_key": ws.private_key.replace("\\n", "\n") if ws.private_key else "",
-            "client_email": ws.client_email,
-            "client_id": ws.client_id,
-            "auth_uri": ws.auth_uri,
-            "token_uri": ws.token_uri,
-            "auth_provider_x509_cert_url": ws.auth_provider_x509_cert_url,
-            "client_x509_cert_url": ws.client_x509_cert_url,
-        }))
-    return True
+        pass
+    raw = settings.get_password("firebase_service_account", raise_exception=False)
+    if not raw:
+        return None
+    info = json.loads(raw)
+    return firebase_admin.initialize_app(credentials.Certificate(info), name=FIREBASE_APP)
+
 
 
 def send_push(user, title, body, data=None):
@@ -153,7 +153,8 @@ def send_push(user, title, body, data=None):
     if not token:
         return
     try:
-        if not _firebase_ready():
+        app = _firebase_app()
+        if not app:
             return
         messaging.send(messaging.Message(
             token=token,
@@ -161,17 +162,45 @@ def send_push(user, title, body, data=None):
             data={str(k): str(v) for k, v in (data or {}).items()},
             android=messaging.AndroidConfig(
                 priority="high",
-                notification=messaging.AndroidNotification(sound="default", channel_id="default", priority="high"),
+                notification=messaging.AndroidNotification(sound="default", channel_id="general", priority="high"),
             ),
             apns=messaging.APNSConfig(
                 headers={"apns-priority": "10"},
                 payload=messaging.APNSPayload(aps=messaging.Aps(
-                    alert=messaging.ApsAlert(title=title, body=body), sound="default", badge=1,
+                    alert=messaging.ApsAlert(title=title, body=body), sound="default",
                 )),
-            ),
+            ),app=app
         ))
+    except (messaging.UnregisteredError, InvalidArgumentError) as e:
+        # FCM rejects the token itself (app uninstalled, or not a token): stop sending to it
+        _clear_token(user, token)
+        frappe.log_error(
+            title="Client push failed",
+            message=f"User: {user}\nFCM rejected the device token ({e.code}); it was cleared.\n\n{frappe.get_traceback()}",
+        )
     except Exception:
         frappe.log_error(title="Client push failed", message=f"User: {user}\n\n{frappe.get_traceback()}")
+
+
+@frappe.whitelist(methods=["POST"])
+def clear_device_token():
+    """Client app sign-out: forget the signed-in user's push token so no more pushes go to that device.
+    Called before the session is dropped. Always 200; cleared is false when there was nothing to clear.
+    No customer check, so sign-out never fails for a user without a client link."""
+    user = frappe.session.user  # Guest is refused by @frappe.whitelist before this runs
+    token = frappe.db.get_value("Employee", {"user_id": user}, "custom_token")
+    if token:
+        _clear_token(user, token)
+    return {"success": True, "cleared": bool(token)}
+
+
+def _clear_token(user, token):
+    """Empty a rejected token on the Employee and on the Support Tickets that copied it
+    (sync_employee_token). Only where it is still this token, in case the app registered a new one."""
+    frappe.db.set_value("Employee", {"user_id": user, "custom_token": token}, "custom_token", None,
+                        update_modified=False)
+    frappe.db.set_value("Support Ticket", {"raised_by": user, "custom_token": token}, "custom_token", None,
+                        update_modified=False)
 
 
 def _client_admins(customer):

@@ -219,7 +219,6 @@ doc_events = {
 
 #     },
 # }
-# 
 # scheduler_events = {
 #     "cron": {
 #         "*/15 * * * *": [

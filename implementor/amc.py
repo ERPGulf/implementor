@@ -17,7 +17,7 @@ def create_amc_milestone(doc, method=None):
 
     start, end = doc.expected_start_date, doc.imp_deadline
     doc.append("payment_milestone", {
-        "m_title": "AMC – 1 year",
+        "m_title": "AMC – 1 year",  # noqa: RUF001
         "payment_": 100,
         "start_date": start,
         "end_date": end,
@@ -26,3 +26,4 @@ def create_amc_milestone(doc, method=None):
         "payment_status": "Pending",
         "custom_is_amc": 1,
     })
+

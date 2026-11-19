@@ -561,8 +561,8 @@ def get_servers(client=None):
         fields=["name", "server_name", "customer", "environment", "provider",
                 "erpnext_version", "frappe_version", "ssl_expiry", "last_restore_test"],
     )
- 
- 
+
+
 @frappe.whitelist()
 def get_detail(doctype, name):
     if doctype not in ("Project", "Task", "ToDo", "Support Ticket"):

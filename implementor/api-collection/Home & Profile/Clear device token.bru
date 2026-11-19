@@ -1,0 +1,63 @@
+meta {
+  name: Clear device token
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/api/method/implementor.client_notifications.clear_device_token
+  body: none
+  auth: inherit
+}
+
+tests {
+  test("returns 200", function () {
+    expect(res.status).to.equal(200);
+  });
+
+  test("has message", function () {
+    expect(res.body).to.have.property("message");
+  });
+
+  test("returns success and cleared", function () {
+    expect(res.body.message.success).to.equal(true);
+    expect(res.body.message.cleared).to.be.a("boolean");
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}
+
+docs {
+  Forgets the signed-in user's push (FCM) device token, so the server stops sending pushes to this device.
+
+  **Endpoint:** `POST /api/method/implementor.client_notifications.clear_device_token`
+  **Screen:** Sign out
+
+  > ⚠️ **Changes data** on the shared server. Running it stops pushes to the user's device until the app registers its token again (on the next sign-in, via `get_or_update_employee_token`).
+
+  **When to call:** on sign-out, **before** dropping the session, because it needs the user's bearer token. Then delete the FCM token on the device.
+
+  **Note the module:** this endpoint is in `implementor.client_notifications`, not `implementor.client_api`.
+
+  **Permission:** any signed-in user. There is no company check, so it works even for a user not linked to a client company.
+
+  **Method:** POST only. A GET is refused by Frappe with **403** and no `error_code`.
+
+  **Body:** none.
+
+  **Response:** always 200 for a signed-in user, also when there was nothing to clear.
+
+  ```json
+  { "message": { "success": true, "cleared": true } }
+  ```
+
+  - `cleared`: `true` when a token was removed, `false` when the user had no token saved (or no Employee record). Either way, sign-out can continue.
+
+  **Errors:**
+
+  - **401** (no error_code): token expired or invalid. Sign out anyway; nothing more to do.
+  - **403** (no error_code): no Authorization header sent.
+}

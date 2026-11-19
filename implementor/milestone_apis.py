@@ -1,6 +1,7 @@
 import frappe
 from frappe.utils import date_diff
 
+
 def _timeline_label(start_date, delivery_date):
     if not start_date or not delivery_date:
         return "—"
@@ -106,7 +107,7 @@ def get_milestone_dashboard(project_type="ongoing"):
             "quote_no": p.quote_no or "—",
             "client": p.client,
             "product": p.product,
-            "modules": modules, 
+            "modules": modules,
             "start_date": p.start_date,
             "delivery_date": p.delivery_date,
             "project_status": p.project_status,
@@ -125,3 +126,4 @@ def get_milestone_dashboard(project_type="ongoing"):
         })
 
     return result
+
