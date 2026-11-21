@@ -169,8 +169,8 @@ def send_push(user, title, body, data=None):
                 payload=messaging.APNSPayload(aps=messaging.Aps(
                     alert=messaging.ApsAlert(title=title, body=body), sound="default",
                 )),
-            ),app=app
-        ))
+            )
+        ),app=app)
     except (messaging.UnregisteredError, InvalidArgumentError) as e:
         # FCM rejects the token itself (app uninstalled, or not a token): stop sending to it
         _clear_token(user, token)

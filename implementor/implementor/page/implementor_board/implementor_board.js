@@ -1078,6 +1078,57 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		if (today <= start) return 0;
 		return Math.floor((today - start) / (expiry - start) * 100);
 	}
+	// AMC card header (right column): "● AMC · Active" pill, big contract length in months,
+	// calendar + start → end dates, and a "23 days left" pill. Colours follow the time left:
+	// green (more than 30 days), amber (30 days or less), red (expired).
+	var AMC_ICON_CALENDAR = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>';
+	var AMC_ICON_CLOCK = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>';
+
+	function amcPill(tone, inner) {
+		return `<span style="display:inline-flex; align-items:center; gap:6px; padding:3px 10px; border-radius:999px; font-size:11px; font-weight:600; white-space:nowrap; background:var(--bg-${tone}); color:var(--text-${tone});">${inner}</span>`;
+	}
+
+	function amcPeriodBlock(p) {
+		var wrap = function (inner) {
+			return `<div style="display:flex; flex-direction:column; align-items:flex-end; gap:6px; flex-shrink:0;">${inner}</div>`;
+		};
+		if (!p.start_date || !p.delivery_date) {
+			return wrap(amcPill("success", "AMC") + `<div style="font-size:12px; color:var(--text-muted);">Contract dates not set</div>`);
+		}
+		var today = new Date(); today.setHours(0, 0, 0, 0);
+		var start = parseLocalDate(p.start_date); start.setHours(0, 0, 0, 0);
+		var expiry = parseLocalDate(p.delivery_date); expiry.setHours(0, 0, 0, 0);
+		var daysLeft = Math.round((expiry - today) / 86400000);
+		var tone = daysLeft < 0 ? "danger" : daysLeft <= 30 ? "warning" : "success";
+		var state = daysLeft < 0 ? "Expired" : daysLeft <= 30 ? "Expiring" : today < start ? "Upcoming" : "Active";
+
+		// same rounding as milestone_apis._timeline_label, so the number matches "Duration" elsewhere
+		var totalDays = Math.round((expiry - start) / 86400000);
+		var months = Math.round(totalDays / 30);
+		var length = months > 0
+			? { n: months, unit: months === 1 ? "month" : "months" }
+			: { n: Math.max(totalDays, 0), unit: totalDays === 1 ? "day" : "days" };
+
+		var left = daysLeft < 0 ? "Expired " + Math.abs(daysLeft) + (Math.abs(daysLeft) === 1 ? " day" : " days") + " ago"
+			: daysLeft === 0 ? "Ends today"
+			: daysLeft > 60 ? Math.round(daysLeft / 30.44) + " months left"
+			: daysLeft + (daysLeft === 1 ? " day left" : " days left");
+
+		return wrap(`
+			${amcPill(tone, `<span style="width:6px; height:6px; border-radius:50%; background:currentColor;"></span>AMC · ${state}`)}
+			<div style="display:flex; align-items:baseline; gap:5px; line-height:1; margin-top:2px;">
+				<span style="font-size:26px; font-weight:700; color:var(--text-primary); letter-spacing:-0.5px;">${length.n}</span>
+				<span style="font-size:13px; color:var(--text-secondary);">${length.unit}</span>
+			</div>
+			<div style="display:flex; align-items:center; gap:6px; font-size:12px; color:var(--text-secondary); white-space:nowrap;">
+				<span style="display:inline-flex; color:var(--text-muted);">${AMC_ICON_CALENDAR}</span>
+				${fmtDate(p.start_date, true)}
+				<span style="color:var(--text-muted);">→</span>
+				${fmtDate(p.delivery_date, true)}
+			</div>
+			${amcPill(tone, AMC_ICON_CLOCK + left)}`);
+	}
+
 	function deriveAmcWorkStatus(p) {
 		return amcElapsedPercent(p) >= 100
 			? { label: "Work done", kind: "success" }
@@ -1543,7 +1594,7 @@ ${legendDot("#450A0A", "Both overdue")}
 	<span style="height:22px; border-radius:999px; display:inline-flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; ${workPillStyle(m.work.kind).replace(/padding:[^;]*;/, "")}">${m.index}</span>
 	<span class="d-meta" style="font-weight:600;">${m.weightLabel}</span>
 	<span title="${escapeHtml(m.description)}" style="font-size:13px; font-weight:500; color:var(--text-primary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${m.description}</span>
-	<span style="display:flex; gap:6px; justify-content:flex-end;">
+	<span style="display:flex; gap:12px; justify-content:flex-end;">
 		<span style="${workPillStyle(m.work.kind)}">${m.work.label}</span>
 		<span style="${paymentPillStyle(m.payment.kind)}">${m.payment.label}</span>
 	</span>
@@ -1607,24 +1658,19 @@ ${legendDot("#450A0A", "Both overdue")}
 			}).join("")}
 					</div>
 				</div>
+				${isAmc ? amcPeriodBlock(p) : `
 				<div style="display:flex; flex-direction:column; align-items:flex-end; gap:8px; flex-shrink:0;">
 					<div style="display:flex; gap:16px;">
 						<div style="display:flex; align-items:center; gap:6px;">
 							<span style="font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.6px; color:var(--text-muted);">Status</span>
 							${chip(p.project_status)}
 						</div>
-						${!isAmc ? `
 						<div style="display:flex; align-items:center; gap:6px;">
 							<span style="font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.6px; color:var(--text-muted);">Phase</span>
 							${chip(p.current_phase)}
-						</div>` : ""}
+						</div>
 					</div>
-					${isAmc ? `
-					<div style="text-align:right;">
-						<div style="font-size:14px; font-weight:600; color:var(--text-primary);">${p.timeline}</div>
-						<div style="font-size:12px; color:var(--text-secondary); margin-top:2px;">${fmtDate(p.start_date, true)} → ${fmtDate(p.delivery_date, true)}</div>
-					</div>` : ""}
-				</div>
+				</div>`}
 			</div>
 
 			${isAmc ? "" : `
