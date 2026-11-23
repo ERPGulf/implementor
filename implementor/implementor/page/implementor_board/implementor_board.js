@@ -1078,19 +1078,20 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		if (today <= start) return 0;
 		return Math.floor((today - start) / (expiry - start) * 100);
 	}
-	// AMC card header (right column): "● AMC · Active" pill, big contract length in months,
-	// calendar + start → end dates, and a "23 days left" pill. Colours follow the time left:
-	// green (more than 30 days), amber (30 days or less), red (expired).
-	var AMC_ICON_CALENDAR = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>';
-	var AMC_ICON_CLOCK = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>';
-
+	// AMC card header (right column), right-aligned:
+	//              ● AMC · Active
+	//   ╭───────────────────────────────╮
+	//   │ 1 Jul 2026  →  30 Jun 2027    │   small bordered box, no fill
+	//   ╰───────────────────────────────╯
+	//                   [7 months left]   rounded-square tag, outside the box
+	// Pill: green / amber (30 days or less) / red (expired). Time left: blue / amber / red.
 	function amcPill(tone, inner) {
 		return `<span style="display:inline-flex; align-items:center; gap:6px; padding:3px 10px; border-radius:999px; font-size:11px; font-weight:600; white-space:nowrap; background:var(--bg-${tone}); color:var(--text-${tone});">${inner}</span>`;
 	}
 
 	function amcPeriodBlock(p) {
 		var wrap = function (inner) {
-			return `<div style="display:flex; flex-direction:column; align-items:flex-end; gap:6px; flex-shrink:0;">${inner}</div>`;
+			return `<div style="display:flex; flex-direction:column; align-items:flex-end; gap:8px; flex-shrink:0;">${inner}</div>`;
 		};
 		if (!p.start_date || !p.delivery_date) {
 			return wrap(amcPill("success", "AMC") + `<div style="font-size:12px; color:var(--text-muted);">Contract dates not set</div>`);
@@ -1102,31 +1103,21 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 		var tone = daysLeft < 0 ? "danger" : daysLeft <= 30 ? "warning" : "success";
 		var state = daysLeft < 0 ? "Expired" : daysLeft <= 30 ? "Expiring" : today < start ? "Upcoming" : "Active";
 
-		// same rounding as milestone_apis._timeline_label, so the number matches "Duration" elsewhere
-		var totalDays = Math.round((expiry - start) / 86400000);
-		var months = Math.round(totalDays / 30);
-		var length = months > 0
-			? { n: months, unit: months === 1 ? "month" : "months" }
-			: { n: Math.max(totalDays, 0), unit: totalDays === 1 ? "day" : "days" };
-
 		var left = daysLeft < 0 ? "Expired " + Math.abs(daysLeft) + (Math.abs(daysLeft) === 1 ? " day" : " days") + " ago"
 			: daysLeft === 0 ? "Ends today"
 			: daysLeft > 60 ? Math.round(daysLeft / 30.44) + " months left"
 			: daysLeft + (daysLeft === 1 ? " day left" : " days left");
 
+		var timeTone = daysLeft < 0 ? "danger" : daysLeft <= 30 ? "warning" : "info";
+
 		return wrap(`
 			${amcPill(tone, `<span style="width:6px; height:6px; border-radius:50%; background:currentColor;"></span>AMC · ${state}`)}
-			<div style="display:flex; align-items:baseline; gap:5px; line-height:1; margin-top:2px;">
-				<span style="font-size:26px; font-weight:700; color:var(--text-primary); letter-spacing:-0.5px;">${length.n}</span>
-				<span style="font-size:13px; color:var(--text-secondary);">${length.unit}</span>
+			<div style="display:flex; align-items:center; gap:10px; box-sizing:border-box; padding:7px 12px; border:1px solid var(--border); border-radius:8px; font-size:12px; font-weight:600; color:var(--text-primary); white-space:nowrap;">
+				<span>${fmtDate(p.start_date, true)}</span>
+				<svg width="16" height="8" viewBox="0 0 16 8" aria-hidden="true" style="flex-shrink:0;"><path d="M0 4 H14 M10.5 1 L14 4 L10.5 7" fill="none" stroke="var(--text-muted)" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+				<span>${fmtDate(p.delivery_date, true)}</span>
 			</div>
-			<div style="display:flex; align-items:center; gap:6px; font-size:12px; color:var(--text-secondary); white-space:nowrap;">
-				<span style="display:inline-flex; color:var(--text-muted);">${AMC_ICON_CALENDAR}</span>
-				${fmtDate(p.start_date, true)}
-				<span style="color:var(--text-muted);">→</span>
-				${fmtDate(p.delivery_date, true)}
-			</div>
-			${amcPill(tone, AMC_ICON_CLOCK + left)}`);
+			<span style="display:inline-block; padding:2px 8px; border-radius:6px; font-size:11px; font-weight:600; white-space:nowrap; background:var(--bg-${timeTone}); color:var(--text-${timeTone});">${left}</span>`);
 	}
 
 	function deriveAmcWorkStatus(p) {
@@ -1410,7 +1401,8 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 
 		var rows = projects.map(function (p, i) {
 			var y0 = plotTop + i * rowHeight;
-			var workY = y0 + 10, payY = y0 + 23;
+			// the two bars sit close together, centred in the row (4px apart)
+			var workY = y0 + 12, payY = y0 + 22;
 			var workPct = amcElapsedPercent(p);
 			var pay = paymentBreakdown(p);
 			var name = escapeHtml(p.client || p.product || p.name);
@@ -1440,9 +1432,9 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 			var payText = !pay.total ? "No plan" : pay.allFree ? "Free" : pay.pct + "% paid";
 
 			return zebra + workBar + payBar
-				+ '<text x="' + (plotLeft - 8) + '" y="' + (y0 + 22) + '" font-size="11" font-weight="600" fill="var(--text-primary)" text-anchor="end" data-tip="' + name + '">' + chartLabel(p) + '</text>'
-				+ '<text x="' + (plotRight + 8) + '" y="' + (workY + barH) + '" font-size="10" fill="var(--text-secondary)" font-family="var(--font-mono)">Work ' + workPct + '%</text>'
-				+ '<text x="' + (plotRight + 8) + '" y="' + (payY + barH) + '" font-size="10" fill="' + (pay.late ? "#92400E" : "var(--text-secondary)") + '" font-family="var(--font-mono)">' + payText + '</text>';
+				+ '<text x="' + (plotLeft - 8) + '" y="' + (y0 + rowHeight / 2) + '" dominant-baseline="middle" font-size="11" font-weight="600" fill="var(--text-primary)" text-anchor="end" data-tip="' + name + '">' + chartLabel(p) + '</text>'
+				+ '<text x="' + (plotRight + 8) + '" y="' + (workY + barH / 2) + '" dominant-baseline="middle" font-size="10" fill="var(--text-secondary)" font-family="var(--font-mono)">Work ' + workPct + '%</text>'
+				+ '<text x="' + (plotRight + 8) + '" y="' + (payY + barH / 2) + '" dominant-baseline="middle" font-size="10" fill="' + (pay.late ? "#92400E" : "var(--text-secondary)") + '" font-family="var(--font-mono)">' + payText + '</text>';
 		}).join("");
 
 		return '<svg viewBox="0 0 ' + (plotRight + 110) + ' ' + (plotBottom + 10) + '" style="width:100%; min-width:560px; height:auto; display:block;">' + grid + rows + '</svg>';
