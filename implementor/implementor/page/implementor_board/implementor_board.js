@@ -1081,9 +1081,9 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 	// AMC card header (right column), right-aligned:
 	//              ● AMC · Active
 	//   ╭───────────────────────────────╮
-	//   │ 1 Jul 2026  →  30 Jun 2027    │   small bordered box, no fill
+	//   │ 1 Jul 2026  →  30 Jun 2027    │   compact box, soft violet fill, no border
 	//   ╰───────────────────────────────╯
-	//                   [7 months left]   rounded-square tag, outside the box
+	//                   (7 months left)   capsule, outside the box
 	// Pill: green / amber (30 days or less) / red (expired). Time left: blue / amber / red.
 	function amcPill(tone, inner) {
 		return `<span style="display:inline-flex; align-items:center; gap:6px; padding:3px 10px; border-radius:999px; font-size:11px; font-weight:600; white-space:nowrap; background:var(--bg-${tone}); color:var(--text-${tone});">${inner}</span>`;
@@ -1112,12 +1112,12 @@ frappe.pages['implementor_board'].on_page_load = function (wrapper) {
 
 		return wrap(`
 			${amcPill(tone, `<span style="width:6px; height:6px; border-radius:50%; background:currentColor;"></span>AMC · ${state}`)}
-			<div style="display:flex; align-items:center; gap:10px; box-sizing:border-box; padding:7px 12px; border:1px solid var(--border); border-radius:8px; font-size:12px; font-weight:600; color:var(--text-primary); white-space:nowrap;">
+			<div style="display:flex; align-items:center; gap:8px; box-sizing:border-box; padding:4px 10px; border-radius:7px; background:color-mix(in srgb, var(--lvl-project) 9%, var(--surface-2)); font-size:12px; font-weight:600; color:var(--text-primary); white-space:nowrap;">
 				<span>${fmtDate(p.start_date, true)}</span>
-				<svg width="16" height="8" viewBox="0 0 16 8" aria-hidden="true" style="flex-shrink:0;"><path d="M0 4 H14 M10.5 1 L14 4 L10.5 7" fill="none" stroke="var(--text-muted)" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+				<svg width="16" height="8" viewBox="0 0 16 8" aria-hidden="true" style="flex-shrink:0;"><path d="M0 4 H14 M10.5 1 L14 4 L10.5 7" fill="none" stroke="var(--lvl-project)" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
 				<span>${fmtDate(p.delivery_date, true)}</span>
 			</div>
-			<span style="display:inline-block; padding:2px 8px; border-radius:6px; font-size:11px; font-weight:600; white-space:nowrap; background:var(--bg-${timeTone}); color:var(--text-${timeTone});">${left}</span>`);
+			<span style="display:inline-block; padding:2px 10px; border-radius:999px; font-size:11px; font-weight:600; white-space:nowrap; background:var(--bg-${timeTone}); color:var(--text-${timeTone});">${left}</span>`);
 	}
 
 	function deriveAmcWorkStatus(p) {
